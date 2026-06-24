@@ -106,7 +106,22 @@ async function refreshGit() {
   }
 }
 
-// 提交历史
+// 作者头像配色（名字哈希 → 稳定色相）
+function authorColor(name) {
+  let h = 0;
+  for (const ch of (name || "?")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${h % 360} 48% 46%)`;
+}
+function authorInitial(name) {
+  const t = (name || "").trim();
+  return t ? t[0].toUpperCase() : "?";
+}
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// 提交历史（Git Graph）
 async function refreshLog() {
   const logEl = document.querySelector("#git-log");
   if (!logEl) return;
@@ -115,16 +130,26 @@ async function refreshLog() {
   if (!commits.length) { logEl.innerHTML = ""; return; }
   logEl.innerHTML = "";
   commits.forEach((c, i) => {
-    const last = i === commits.length - 1;
+    const first = i === 0, last = i === commits.length - 1;
+    const color = authorColor(c.author);
+    const refsHTML = (c.refs || []).map(r =>
+      `<span class="glog-ref ${r.kind}">${r.kind === "tag" ? svgIcon("file", 10) : svgIcon("branch", 10)}<span>${escapeHtml(r.name)}</span></span>`
+    ).join("");
     const row = document.createElement("div");
-    row.className = "scm-commit-row";
+    row.className = "glog-row";
     row.dataset.hash = c.hash;
     row.innerHTML = `
-      <span class="scm-graph"><span class="dot${i === 0 ? " head" : ""}"></span>${last ? "" : '<span class="line"></span>'}</span>
-      <span class="scm-commit-main">
-        <span class="scm-commit-msg">${c.subject}</span>
-        <span class="scm-commit-sub"><span class="hash">${c.hash}</span> ${c.author} · ${c.when}</span>
-      </span>`;
+      <div class="glog-lane">
+        <span class="glog-track${first ? " is-first" : ""}${last ? " is-last" : ""}"></span>
+        <span class="glog-avatar" style="background:${color}" title="${escapeHtml(c.author)}">${authorInitial(c.author)}</span>
+      </div>
+      <div class="glog-body">
+        <div class="glog-top">
+          <span class="glog-msg">${escapeHtml(c.subject)}</span>
+          ${refsHTML}
+        </div>
+        <div class="glog-meta"><span class="glog-hash">${c.hash}</span><span class="glog-dot">·</span>${escapeHtml(c.when)}</div>
+      </div>`;
     attachCommitHover(row);
     logEl.appendChild(row);
   });

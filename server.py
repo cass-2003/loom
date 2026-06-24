@@ -308,14 +308,29 @@ class Handler(BaseHTTPRequestHandler):
         if repo is None:
             return
         code, out, err = run_git(
-            ["log", "-20", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s"], repo)
+            ["log", "-30", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D"], repo)
         commits = []
         if code == 0:
             for line in out.splitlines():
                 parts = line.split("\x1f")
-                if len(parts) == 4:
+                if len(parts) >= 4:
+                    refs = []
+                    refs_raw = parts[4] if len(parts) > 4 else ""
+                    for r in refs_raw.split(","):
+                        r = r.strip()
+                        if not r or r == "HEAD":
+                            continue
+                        if r.startswith("HEAD -> "):
+                            r = r[len("HEAD -> "):]
+                            refs.insert(0, {"name": r, "kind": "head"})
+                        elif r.startswith("tag: "):
+                            refs.append({"name": r[len("tag: "):], "kind": "tag"})
+                        elif r.startswith("origin/") or "/" in r and r.split("/")[0] in ("origin", "upstream"):
+                            refs.append({"name": r, "kind": "remote"})
+                        else:
+                            refs.append({"name": r, "kind": "branch"})
                     commits.append({"hash": parts[0], "author": parts[1],
-                                    "when": parts[2], "subject": parts[3]})
+                                    "when": parts[2], "subject": parts[3], "refs": refs})
         return self._json({"commits": commits})
 
     def _api_git_show(self, rel, h):
