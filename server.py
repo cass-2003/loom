@@ -160,7 +160,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/git/diff":
             return self._api_git_diff(qs.get("path", [""])[0])
         if path == "/api/git/log":
-            return self._api_git_log(qs.get("path", [""])[0])
+            return self._api_git_log(qs.get("path", [""])[0], qs.get("ref", [""])[0])
+        if path == "/api/git/branches":
+            return self._api_git_branches(qs.get("path", [""])[0])
         if path == "/api/git/show":
             return self._api_git_show(qs.get("path", [""])[0], qs.get("hash", [""])[0])
         if path == "/api/git/commit_files":
@@ -357,12 +359,30 @@ class Handler(BaseHTTPRequestHandler):
             out = out2
         return self._json({"diff": out, "path": rel})
 
-    def _api_git_log(self, rel):
+    def _api_git_branches(self, rel):
         repo = self._resolve_repo(rel)
         if repo is None:
             return
-        code, out, err = run_git(
-            ["log", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"], repo)
+        cur = ""
+        code, out, _ = run_git(["rev-parse", "--abbrev-ref", "HEAD"], repo)
+        if code == 0:
+            cur = out.strip()
+        branches = []
+        code, out, _ = run_git(["branch", "--format=%(refname:short)"], repo)
+        if code == 0:
+            branches = [b.strip() for b in out.splitlines() if b.strip()]
+        return self._json({"current": cur, "branches": branches})
+
+    def _api_git_log(self, rel, ref=""):
+        repo = self._resolve_repo(rel)
+        if repo is None:
+            return
+        args = ["log", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"]
+        if ref == "__all__":
+            args.append("--all")
+        elif ref and re.fullmatch(r"[\w./-]+", ref):
+            args.append(ref)
+        code, out, err = run_git(args, repo)
         commits = []
         if code == 0:
             for line in out.splitlines():

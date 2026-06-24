@@ -178,20 +178,9 @@ function hideAllViews() {
   $("#welcome").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
   $("#diff-view").classList.add("hidden");
-  $("#graph-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
 }
-
-// 打开提交图（主内容区宽幅视图）
-window.openGraphView = function () {
-  ++state.openSeq;   // 作废在途的 openFile
-  revokeImage();
-  hideAllViews();
-  $("#graph-view").classList.remove("hidden");
-  $("#crumb").textContent = "提交图";
-  if (window.loadGraph) window.loadGraph();
-};
 
 // 在中间区域显示 diff (源代码管理点文件时调用)
 window.showDiffView = function (name, diffText) {
@@ -293,6 +282,33 @@ document.querySelectorAll(".act").forEach(btn => {
 
 $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
 
+// ---------- 侧栏宽度拖动 ----------
+function initSidebarResize() {
+  const sidebar = $("#sidebar"), handle = $("#sidebar-resizer");
+  const MIN = 200, MAX = 620;
+  const saved = parseInt(localStorage.getItem("wb-sidebar-w") || "", 10);
+  if (saved >= MIN && saved <= MAX) sidebar.style.width = saved + "px";
+  let dragging = false;
+  handle.addEventListener("mousedown", (e) => {
+    dragging = true; e.preventDefault();
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    let w = e.clientX - sidebar.getBoundingClientRect().left;
+    w = Math.max(MIN, Math.min(MAX, w));
+    sidebar.style.width = w + "px";
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    localStorage.setItem("wb-sidebar-w", parseInt(sidebar.style.width, 10));
+  });
+}
+
 // ---------- 杂项 ----------
 let msgTimer = null;
 function setMsg(text, cls = "") {
@@ -336,4 +352,5 @@ hydrateIcons();   // 把 data-icon 占位换成 SVG
 initTree();
 initTools();
 initGit();
+initSidebarResize();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏

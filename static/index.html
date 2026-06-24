@@ -46,7 +46,6 @@
         <div class="side-head">
           <span>源代码管理</span>
           <div class="head-actions">
-            <button id="git-graph-open" class="icon-btn" data-icon="git" title="打开提交图"></button>
             <button id="git-push" class="icon-btn" data-icon="upload" title="推送"></button>
             <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
           </div>
@@ -86,6 +85,17 @@
             </div>
             <div id="git-files" class="scm-list"></div>
           </div>
+
+          <div class="scm-section" id="scm-graph">
+            <div class="scm-section-head">
+              <span class="scm-twist" data-icon="chevron"></span>
+              <span class="scm-title">图形</span>
+              <span class="scm-head-extra">
+                <select id="git-branch-sel" class="git-branch-sel" title="选择要查看的分支"></select>
+              </span>
+            </div>
+            <div id="git-log" class="scm-list git-graph"></div>
+          </div>
         </div>
       </div>
 
@@ -96,6 +106,9 @@
         <div id="tool-body"></div>
       </div>
     </aside>
+
+    <!-- 侧栏宽度拖动条 -->
+    <div id="sidebar-resizer" title="拖动调节侧栏宽度"></div>
 
     <!-- 中：编辑 / 预览 / diff -->
     <section id="content">
@@ -117,18 +130,6 @@
       <div id="diff-view" class="hidden">
         <div class="diff-head" id="diff-head"></div>
         <pre id="diff-body" class="git-diff"></pre>
-      </div>
-      <div id="graph-view" class="hidden">
-        <div class="gv-head">
-          <span class="gv-title"><span class="i" data-icon="git"></span>提交图</span>
-          <span class="gv-branch" id="gv-branch"></span>
-          <span class="gv-spacer"></span>
-          <button id="gv-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
-        </div>
-        <div class="gv-main">
-          <div class="gv-table" id="gv-table"></div>
-          <div class="gv-detail hidden" id="gv-detail"></div>
-        </div>
       </div>
       <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
       <div id="binary-view" class="hidden">

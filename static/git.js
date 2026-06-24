@@ -7,7 +7,7 @@ const gpost = (url, obj) => gjson(url, {
 
 function gitCurPath() { return (window.state && window.state.current) || ""; }
 
-const gitState = { staged: 0, branch: null };
+const gitState = { staged: 0, branch: null, ref: "" };
 
 const G_CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
   "c","cpp","h","css","scss","html","htm","xml","yaml","yml","toml","sh",
@@ -67,8 +67,6 @@ async function refreshGit() {
   if (d.ahead) chip += ` ↑${d.ahead}`;
   if (d.behind) chip += ` ↓${d.behind}`;
   stBranch.innerHTML = svgIcon("branch", 12) + `<span>${chip}</span>`;
-  const gvBranch = document.querySelector("#gv-branch");
-  if (gvBranch) gvBranch.innerHTML = svgIcon("branch", 12) + `<span>${chip}</span>`;
 
   const staged = d.staged || [], unstaged = d.unstaged || [];
   gitState.staged = staged.length;
@@ -101,8 +99,9 @@ async function refreshGit() {
     filesEl.innerHTML = staged.length ? "" : `<div class="scm-empty">✓ 没有更改</div>`;
   }
 
-  // 若提交图正开着，刷新它
-  if (!document.querySelector("#graph-view").classList.contains("hidden")) loadGraph();
+  // 侧栏提交图
+  populateBranches(branch);
+  renderSidebarGraph();
 }
 
 function renderFileRow(f, group) {
@@ -157,11 +156,10 @@ function renderFileRow(f, group) {
   return row;
 }
 
-/* ============ 提交图（宽幅视图） ============ */
-const ROW_H = 30, LANE_W = 14, PAD_X = 16, NODE_R = 4;
+/* ============ 提交图（侧栏紧凑图形，仿 Cursor 源代码管理「图形」区） ============ */
+const ROW_H = 26, LANE_W = 13, PAD_X = 11, NODE_R = 4;
 const LANE_COLORS = ["#2f81f7", "#3fb950", "#d29922", "#a371f7",
   "#ec6a5e", "#56b6c2", "#e879f9", "#fb923c"];
-let graphCommits = [];
 
 function computeLanes(commits) {
   const rowOf = {};
@@ -221,85 +219,118 @@ function buildGraphSvg(commits, lay) {
       ? `<circle cx="${x1}" cy="${y1}" r="${NODE_R + 1}" fill="var(--bg2)" stroke="${col}" stroke-width="2.5"/>`
       : `<circle cx="${x1}" cy="${y1}" r="${NODE_R}" fill="${col}"/>`;
   });
-  return { svg: `<svg class="gv-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${paths}${nodes}</svg>`, w };
+  return { svg: `<svg class="ggraph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${paths}${nodes}</svg>`, w };
 }
 
-async function loadGraph() {
-  const table = document.querySelector("#gv-table");
-  const d = await gjson(`/api/git/log?path=${encodeURIComponent(gitCurPath())}`);
+let branchesLoaded = "";   // 已填充的分支列表签名，避免重复重建 <select>
+async function populateBranches(current) {
+  const sel = document.querySelector("#git-branch-sel");
+  if (!sel) return;
+  const d = await gjson(`/api/git/branches?path=${encodeURIComponent(gitCurPath())}`);
+  const branches = d.branches || [];
+  const sig = (d.current || "") + "|" + branches.join(",");
+  if (sig === branchesLoaded) return;   // 列表没变，保留当前选择
+  branchesLoaded = sig;
+  if (!gitState.ref) gitState.ref = d.current || "";
+  let html = `<option value="__all__">所有分支</option>`;
+  for (const b of branches) {
+    html += `<option value="${escapeHtml(b)}">${escapeHtml(b)}${b === d.current ? " ✓" : ""}</option>`;
+  }
+  sel.innerHTML = html;
+  sel.value = gitState.ref || d.current || "__all__";
+}
+
+async function renderSidebarGraph() {
+  const logEl = document.querySelector("#git-log");
+  if (!logEl) return;
+  const ref = gitState.ref && gitState.ref !== "__all__" ? gitState.ref : (gitState.ref || "");
+  const d = await gjson(`/api/git/log?path=${encodeURIComponent(gitCurPath())}&ref=${encodeURIComponent(ref)}`);
   const commits = d.commits || [];
-  graphCommits = commits;
-  if (!commits.length) { table.innerHTML = `<div class="scm-empty">暂无提交</div>`; return; }
+  if (!commits.length) { logEl.innerHTML = `<div class="scm-empty">暂无提交</div>`; return; }
   const lay = computeLanes(commits);
   const { svg, w } = buildGraphSvg(commits, lay);
 
   let rows = "";
   commits.forEach(c => {
     const refsHTML = (c.refs || []).map(r =>
-      `<span class="gv-ref ${r.kind}">${svgIcon(r.kind === "tag" ? "tag" : "branch", 11)}<span>${escapeHtml(r.name)}</span></span>`
-    ).join("");
-    rows += `<div class="gv-row" data-hash="${c.hash}" style="height:${ROW_H}px">
-      <div class="gv-desc"><span class="gv-msg">${escapeHtml(c.subject)}</span>${refsHTML}</div>
-      <div class="gv-author">${escapeHtml(c.author)}</div>
-      <div class="gv-when">${escapeHtml(c.when)}</div>
-      <div class="gv-hash">${escapeHtml(c.hash)}</div>
-    </div>`;
+      `<span class="ggraph-ref ${r.kind}">${escapeHtml(r.name)}</span>`).join("");
+    rows += `<div class="ggraph-row" data-hash="${c.hash}" style="height:${ROW_H}px" title="${escapeHtml(c.subject)}">`
+      + `<span class="ggraph-msg">${escapeHtml(c.subject)}</span>${refsHTML}</div>`;
   });
-  table.innerHTML =
-    `<div class="gv-graphcol" style="width:${w}px">${svg}</div><div class="gv-rows">${rows}</div>`;
+  logEl.innerHTML =
+    `<div class="ggraph-col" style="width:${w}px">${svg}</div><div class="ggraph-rows">${rows}</div>`;
 
-  table.querySelectorAll(".gv-row").forEach(row => {
-    row.onclick = () => selectCommit(row.dataset.hash, row);
-  });
+  logEl.querySelectorAll(".ggraph-row").forEach(row => attachCommitHover(row));
 }
 
-async function selectCommit(hash, row) {
-  document.querySelectorAll(".gv-row.sel").forEach(e => e.classList.remove("sel"));
-  if (row) row.classList.add("sel");
-  const c = graphCommits.find(x => x.hash === hash) || { hash, subject: "", author: "", when: "" };
-  const detail = document.querySelector("#gv-detail");
-  detail.classList.remove("hidden");
-  detail.innerHTML = `<div class="gd-loading">加载中…</div>`;
-  const r = await gjson(`/api/git/commit_files?path=${encodeURIComponent(gitCurPath())}&hash=${encodeURIComponent(hash)}`);
-  const files = r.files || [];
-  const refsHTML = (c.refs || []).map(rf =>
-    `<span class="gv-ref ${rf.kind}">${svgIcon(rf.kind === "tag" ? "tag" : "branch", 11)}<span>${escapeHtml(rf.name)}</span></span>`
-  ).join("");
-  detail.innerHTML = `
-    <div class="gd-head">
-      <span class="gd-subject">${escapeHtml(c.subject)}</span>
-      <button class="gd-close" title="关闭">${svgIcon("close", 15)}</button>
+/* ===== 提交悬浮详情卡（鼠标停在某条提交上弹出） ===== */
+const commitCache = {};
+let popEl = null, popShowTimer = null, popHideTimer = null;
+
+function ensurePopover() {
+  if (popEl) return popEl;
+  popEl = document.createElement("div");
+  popEl.className = "commit-popover hidden";
+  popEl.addEventListener("mouseenter", () => clearTimeout(popHideTimer));
+  popEl.addEventListener("mouseleave", hidePopover);
+  document.body.appendChild(popEl);
+  return popEl;
+}
+function hidePopover() {
+  clearTimeout(popShowTimer);
+  popHideTimer = setTimeout(() => { if (popEl) popEl.classList.add("hidden"); }, 140);
+}
+function buildPopoverHTML(d) {
+  const refs = (d.refs || []).map(r =>
+    `<span class="cp-ref">${svgIcon("branch", 11)}<span>${escapeHtml(r)}</span></span>`).join("");
+  return `
+    <div class="cp-line1">
+      <span class="cp-author">${escapeHtml(d.author)}</span>
+      <span class="cp-when">${escapeHtml(d.when)}</span>
+      <span class="cp-date">${escapeHtml(d.date)}</span>
     </div>
-    <div class="gd-meta">
-      <span>${escapeHtml(c.author)}</span><span class="gd-dot">·</span>
-      <span>${escapeHtml(c.when)}</span><span class="gd-dot">·</span>
-      <span class="gd-hash">${escapeHtml(c.hash)}</span>
+    <div class="cp-subject">${escapeHtml(d.subject)}</div>
+    <div class="cp-stats">
+      <span>${d.files} 个文件改动</span>
+      ${d.insertions ? `<span class="cp-add">+${d.insertions}</span>` : ""}
+      ${d.deletions ? `<span class="cp-del">−${d.deletions}</span>` : ""}
     </div>
-    ${refsHTML ? `<div class="gd-refs">${refsHTML}</div>` : ""}
-    <div class="gd-files-head">${files.length} 个文件改动</div>
-    <div class="gd-files"></div>`;
-  const list = detail.querySelector(".gd-files");
-  files.forEach(f => {
-    const slash = f.path.lastIndexOf("/");
-    const fname = slash >= 0 ? f.path.slice(slash + 1) : f.path;
-    const fdir = slash >= 0 ? f.path.slice(0, slash) : "";
-    const [iconName, iconCls] = gitIconFor(fname);
-    const [letter, letterCls] = statusLetter(f.status);
-    const fr = document.createElement("div");
-    fr.className = "gd-file";
-    fr.title = f.path;
-    fr.innerHTML = `
-      <span class="scm-file-ico ${iconCls}">${svgIcon(iconName, 14)}</span>
-      <span class="scm-file-name">${escapeHtml(fname)}</span>
-      <span class="scm-file-dir">${escapeHtml(fdir)}</span>
-      <span class="scm-file-status ${letterCls}">${letter}</span>`;
-    fr.onclick = async () => {
-      const dd = await gjson(`/api/git/commit_diff?path=${encodeURIComponent(gitCurPath())}&hash=${encodeURIComponent(hash)}&file=${encodeURIComponent(f.path)}`);
-      window.showDiffView(`${f.path} @ ${hash}`, dd.diff || "(无文本差异 / 二进制文件)");
-    };
-    list.appendChild(fr);
+    ${refs ? `<div class="cp-refs">${refs}</div>` : ""}
+    <div class="cp-hash">${svgIcon("git", 11)}<span>${escapeHtml(d.hash)}</span></div>`;
+}
+function positionPopover(row) {
+  const rect = row.getBoundingClientRect(), pop = popEl;
+  pop.style.visibility = "hidden";
+  pop.classList.remove("hidden");
+  const ph = pop.offsetHeight, pw = pop.offsetWidth;
+  let left = rect.right + 10;
+  if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
+  if (left < 8) left = 8;
+  let top = rect.top - 6;
+  if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+  if (top < 8) top = 8;
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  pop.style.visibility = "";
+}
+function attachCommitHover(row) {
+  row.addEventListener("mouseenter", () => {
+    clearTimeout(popHideTimer);
+    clearTimeout(popShowTimer);
+    const h = row.dataset.hash;
+    popShowTimer = setTimeout(async () => {
+      ensurePopover();
+      let d = commitCache[h];
+      if (!d) {
+        d = await gjson(`/api/git/show?path=${encodeURIComponent(gitCurPath())}&hash=${h}`);
+        if (d.error) return;
+        commitCache[h] = d;
+      }
+      popEl.innerHTML = buildPopoverHTML(d);
+      positionPopover(row);
+    }, 300);
   });
-  detail.querySelector(".gd-close").onclick = () => detail.classList.add("hidden");
+  row.addEventListener("mouseleave", hidePopover);
 }
 
 let gitOutTimer = null;
@@ -355,17 +386,15 @@ function initGit() {
     };
   });
 
-  // 分区折叠
+  // 分区折叠（点头部空白处折叠，点动作/选择器不折叠）
   document.querySelectorAll("#view-git .scm-section-head").forEach(head => {
     head.onclick = (e) => {
-      if (e.target.closest(".scm-group-actions")) return;
+      if (e.target.closest(".scm-group-actions") || e.target.closest(".scm-head-extra")) return;
       head.parentElement.classList.toggle("collapsed");
     };
   });
 
-  // 打开提交图 / 刷新提交图
-  document.querySelector("#git-graph-open").onclick = () => window.openGraphView && window.openGraphView();
-  document.querySelector("#gv-refresh").onclick = loadGraph;
+  // 分支选择 → 切换图形显示的分支
+  const sel = document.querySelector("#git-branch-sel");
+  if (sel) sel.onchange = () => { gitState.ref = sel.value; renderSidebarGraph(); };
 }
-
-window.loadGraph = loadGraph;
