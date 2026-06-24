@@ -10,6 +10,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -136,6 +137,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_git_diff(qs.get("path", [""])[0])
         if path == "/api/git/log":
             return self._api_git_log(qs.get("path", [""])[0])
+        if path == "/api/git/show":
+            return self._api_git_show(qs.get("path", [""])[0], qs.get("hash", [""])[0])
         return self._err("not found", 404)
 
     def do_POST(self):
@@ -314,6 +317,53 @@ class Handler(BaseHTTPRequestHandler):
                     commits.append({"hash": parts[0], "author": parts[1],
                                     "when": parts[2], "subject": parts[3]})
         return self._json({"commits": commits})
+
+    def _api_git_show(self, rel, h):
+        if not re.fullmatch(r"[0-9a-fA-F]{4,40}", h or ""):
+            return self._err("非法 hash")
+        try:
+            target = safe_resolve(rel)
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not target.exists():
+            target = ROOT
+        repo = find_repo(target)
+        if repo is None:
+            return self._err("不在仓库内", 404)
+        code, out, err = run_git(
+            ["log", "-1", h, "--shortstat", "--date=format:%Y-%m-%d %H:%M",
+             "--format=%h\x1f%an\x1f%ae\x1f%ad\x1f%ar\x1f%D\x1f%s"], repo)
+        if code != 0:
+            return self._err(err.strip() or "git show 失败", 500)
+        lines = out.split("\n")
+        meta = lines[0].split("\x1f")
+        while len(meta) < 7:
+            meta.append("")
+        short, an, ae, ad, ar, refs_raw, subject = meta[:7]
+        files = ins = dele = 0
+        for L in lines[1:]:
+            if "changed" in L:
+                m = re.search(r"(\d+) files? changed", L); files = int(m.group(1)) if m else 0
+                m = re.search(r"(\d+) insertion", L); ins = int(m.group(1)) if m else 0
+                m = re.search(r"(\d+) deletion", L); dele = int(m.group(1)) if m else 0
+                break
+        refs = []
+        for r in refs_raw.split(","):
+            r = r.strip()
+            if not r:
+                continue
+            if r.startswith("HEAD -> "):
+                r = r[len("HEAD -> "):]
+            elif r == "HEAD":
+                continue
+            elif r.startswith("tag: "):
+                r = r[len("tag: "):]
+            refs.append(r)
+        return self._json({
+            "hash": short, "author": an, "email": ae, "date": ad, "when": ar,
+            "subject": subject, "refs": refs,
+            "files": files, "insertions": ins, "deletions": dele,
+        })
 
     def _api_git_commit(self, body):
         rel = body.get("path", "")

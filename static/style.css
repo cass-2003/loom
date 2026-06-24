@@ -330,6 +330,32 @@ body {
   text-overflow: ellipsis; white-space: nowrap; }
 .scm-commit-sub .hash { font-family: "Cascadia Code", monospace; color: var(--warn); }
 
+/* 提交悬浮详情卡 */
+.commit-popover {
+  position: fixed; z-index: 100; width: 300px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.5); font-size: 13px;
+  pointer-events: auto;
+}
+:root[data-theme="light"] .commit-popover { box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+.commit-popover.hidden { display: none; }
+.cp-line1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.cp-author { color: var(--text); font-weight: 600; }
+.cp-date { color: var(--muted); }
+.cp-subject { color: var(--text); line-height: 1.45; margin-bottom: 10px;
+  word-break: break-word; }
+.cp-stats { display: flex; align-items: center; gap: 10px; font-size: 12px;
+  color: var(--text-dim); padding-top: 9px; border-top: 1px solid var(--border-soft); }
+.cp-add { color: var(--accent2); font-family: "Cascadia Code", monospace; }
+.cp-del { color: var(--danger); font-family: "Cascadia Code", monospace; }
+.cp-refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cp-ref { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+  background: var(--sel); color: var(--accent); border-radius: 11px; font-size: 11px;
+  font-weight: 600; font-family: "Cascadia Code", monospace; }
+.cp-hash { display: flex; align-items: center; gap: 5px; margin-top: 10px;
+  color: var(--warn); font-family: "Cascadia Code", monospace; font-size: 12px; }
+
 /* diff 着色 */
 .git-diff { color: var(--text-dim); }
 .d-add { color: var(--accent2); } .d-del { color: var(--danger); }

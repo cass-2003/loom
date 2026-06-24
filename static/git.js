@@ -118,15 +118,94 @@ async function refreshLog() {
     const last = i === commits.length - 1;
     const row = document.createElement("div");
     row.className = "scm-commit-row";
-    row.title = c.subject;
+    row.dataset.hash = c.hash;
     row.innerHTML = `
       <span class="scm-graph"><span class="dot${i === 0 ? " head" : ""}"></span>${last ? "" : '<span class="line"></span>'}</span>
       <span class="scm-commit-main">
         <span class="scm-commit-msg">${c.subject}</span>
         <span class="scm-commit-sub"><span class="hash">${c.hash}</span> ${c.author} · ${c.when}</span>
       </span>`;
+    attachCommitHover(row);
     logEl.appendChild(row);
   });
+}
+
+/* ===== 提交悬浮详情卡 ===== */
+const commitCache = {};
+let popEl = null, popShowTimer = null, popHideTimer = null;
+
+function ensurePopover() {
+  if (popEl) return popEl;
+  popEl = document.createElement("div");
+  popEl.id = "commit-popover";
+  popEl.className = "commit-popover hidden";
+  popEl.addEventListener("mouseenter", () => clearTimeout(popHideTimer));
+  popEl.addEventListener("mouseleave", hidePopover);
+  document.body.appendChild(popEl);
+  return popEl;
+}
+
+function hidePopover() {
+  clearTimeout(popShowTimer);
+  popHideTimer = setTimeout(() => { if (popEl) popEl.classList.add("hidden"); }, 140);
+}
+
+function buildPopoverHTML(d) {
+  const refs = (d.refs || []).map(r =>
+    `<span class="cp-ref">${svgIcon("branch", 11)}<span>${r}</span></span>`).join("");
+  const stat = [];
+  stat.push(`${d.files} 个文件`);
+  return `
+    <div class="cp-line1">
+      <span class="cp-author">${d.author}</span>
+      <span class="cp-when">${d.when}</span>
+      <span class="cp-date">${d.date}</span>
+    </div>
+    <div class="cp-subject">${d.subject}</div>
+    <div class="cp-stats">
+      <span>${d.files} 个文件改动</span>
+      ${d.insertions ? `<span class="cp-add">+${d.insertions}</span>` : ""}
+      ${d.deletions ? `<span class="cp-del">−${d.deletions}</span>` : ""}
+    </div>
+    ${refs ? `<div class="cp-refs">${refs}</div>` : ""}
+    <div class="cp-hash">${svgIcon("git", 11)}<span>${d.hash}</span></div>`;
+}
+
+function positionPopover(row) {
+  const rect = row.getBoundingClientRect();
+  const pop = popEl;
+  pop.style.visibility = "hidden";
+  pop.classList.remove("hidden");
+  const ph = pop.offsetHeight, pw = pop.offsetWidth;
+  let left = rect.right + 10;
+  if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
+  if (left < 8) left = 8;
+  let top = rect.top - 6;
+  if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+  if (top < 8) top = 8;
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  pop.style.visibility = "";
+}
+
+function attachCommitHover(row) {
+  row.addEventListener("mouseenter", () => {
+    clearTimeout(popHideTimer);
+    clearTimeout(popShowTimer);
+    const h = row.dataset.hash;
+    popShowTimer = setTimeout(async () => {
+      ensurePopover();
+      let d = commitCache[h];
+      if (!d) {
+        d = await gjson(`/api/git/show?path=${encodeURIComponent(gitCurPath())}&hash=${h}`);
+        if (d.error) return;
+        commitCache[h] = d;
+      }
+      popEl.innerHTML = buildPopoverHTML(d);
+      positionPopover(row);
+    }, 320);
+  });
+  row.addEventListener("mouseleave", hidePopover);
 }
 
 let gitOutTimer = null;
