@@ -205,6 +205,7 @@ function buildGraphSvg(commits, lay) {
   const rowY = i => i * ROW_H + ROW_H / 2;
   const w = PAD_X * 2 + maxLane * LANE_W;
   const h = commits.length * ROW_H;
+  const hasHead = commits.some(c => (c.refs || []).some(r => r.kind === "head"));
   let paths = "", nodes = "";
   commits.forEach((c, i) => {
     const x1 = laneX(nodeLane[c.hash]), y1 = rowY(i);
@@ -214,7 +215,8 @@ function buildGraphSvg(commits, lay) {
       else paths += edgePath(x1, y1, x1, h, color);   // 父提交在加载范围外 → 画到底部
     });
     const col = LANE_COLORS[nodeLane[c.hash] % LANE_COLORS.length];
-    const isHead = i === 0 || (c.refs || []).some(r => r.kind === "head");
+    // 空心环只标真正的 HEAD（带 head 引用）；查看非当前分支时无 HEAD，则标该分支提示(第0行)
+    const isHead = (c.refs || []).some(r => r.kind === "head") || (!hasHead && i === 0);
     nodes += isHead
       ? `<circle cx="${x1}" cy="${y1}" r="${NODE_R + 1}" fill="var(--bg2)" stroke="${col}" stroke-width="2.5"/>`
       : `<circle cx="${x1}" cy="${y1}" r="${NODE_R}" fill="${col}"/>`;
