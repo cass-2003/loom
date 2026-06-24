@@ -46,6 +46,7 @@
         <div class="side-head">
           <span>源代码管理</span>
           <div class="head-actions">
+            <button id="git-graph-open" class="icon-btn" data-icon="git" title="打开提交图"></button>
             <button id="git-push" class="icon-btn" data-icon="upload" title="推送"></button>
             <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
           </div>
@@ -54,28 +55,36 @@
           <div class="scm-input">
             <textarea id="git-msg" rows="1" placeholder="消息（Ctrl+Enter 提交）"></textarea>
           </div>
-          <button class="scm-commit" id="git-commit">
-            <span class="i" data-icon="check"></span>
-            <span id="git-commit-label">提交</span>
-          </button>
+          <div class="scm-commit-row">
+            <button class="scm-commit" id="git-commit">
+              <span class="i" data-icon="check"></span>
+              <span id="git-commit-label">提交</span>
+            </button>
+          </div>
           <div id="git-out" class="tool-out"></div>
+
+          <div class="scm-section hidden" id="scm-staged">
+            <div class="scm-section-head">
+              <span class="scm-twist" data-icon="chevron"></span>
+              <span class="scm-title">暂存的更改</span>
+              <span class="scm-count" id="git-staged-count">0</span>
+              <span class="scm-group-actions">
+                <button class="scm-gact" data-act="unstage-all" title="取消全部暂存">−</button>
+              </span>
+            </div>
+            <div id="git-staged" class="scm-list"></div>
+          </div>
 
           <div class="scm-section" id="scm-changes">
             <div class="scm-section-head">
               <span class="scm-twist" data-icon="chevron"></span>
               <span class="scm-title">更改</span>
               <span class="scm-count hidden" id="git-changes-count">0</span>
+              <span class="scm-group-actions">
+                <button class="scm-gact" data-act="stage-all" title="暂存全部更改">+</button>
+              </span>
             </div>
             <div id="git-files" class="scm-list"></div>
-          </div>
-
-          <div class="scm-section" id="scm-history">
-            <div class="scm-section-head">
-              <span class="scm-twist" data-icon="chevron"></span>
-              <span class="scm-title">提交历史</span>
-              <span class="scm-branch-chip" id="git-branch"></span>
-            </div>
-            <div id="git-log" class="scm-list"></div>
           </div>
         </div>
       </div>
@@ -108,6 +117,18 @@
       <div id="diff-view" class="hidden">
         <div class="diff-head" id="diff-head"></div>
         <pre id="diff-body" class="git-diff"></pre>
+      </div>
+      <div id="graph-view" class="hidden">
+        <div class="gv-head">
+          <span class="gv-title"><span class="i" data-icon="git"></span>提交图</span>
+          <span class="gv-branch" id="gv-branch"></span>
+          <span class="gv-spacer"></span>
+          <button id="gv-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
+        </div>
+        <div class="gv-main">
+          <div class="gv-table" id="gv-table"></div>
+          <div class="gv-detail hidden" id="gv-detail"></div>
+        </div>
       </div>
       <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
       <div id="binary-view" class="hidden">

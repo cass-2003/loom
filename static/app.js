@@ -178,9 +178,20 @@ function hideAllViews() {
   $("#welcome").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
   $("#diff-view").classList.add("hidden");
+  $("#graph-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
 }
+
+// 打开提交图（主内容区宽幅视图）
+window.openGraphView = function () {
+  ++state.openSeq;   // 作废在途的 openFile
+  revokeImage();
+  hideAllViews();
+  $("#graph-view").classList.remove("hidden");
+  $("#crumb").textContent = "提交图";
+  if (window.loadGraph) window.loadGraph();
+};
 
 // 在中间区域显示 diff (源代码管理点文件时调用)
 window.showDiffView = function (name, diffText) {

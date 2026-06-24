@@ -163,6 +163,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_git_log(qs.get("path", [""])[0])
         if path == "/api/git/show":
             return self._api_git_show(qs.get("path", [""])[0], qs.get("hash", [""])[0])
+        if path == "/api/git/commit_files":
+            return self._api_git_commit_files(qs.get("path", [""])[0], qs.get("hash", [""])[0])
+        if path == "/api/git/commit_diff":
+            return self._api_git_commit_diff(
+                qs.get("path", [""])[0], qs.get("hash", [""])[0], qs.get("file", [""])[0])
         return self._err("not found", 404)
 
     def do_POST(self):
@@ -174,15 +179,19 @@ class Handler(BaseHTTPRequestHandler):
             if body is None:
                 return
             return self._api_save(body)
-        if parsed.path in ("/api/git/commit", "/api/git/push", "/api/git/init"):
+        post_routes = {
+            "/api/git/commit": self._api_git_commit,
+            "/api/git/push": self._api_git_push,
+            "/api/git/init": self._api_git_init,
+            "/api/git/stage": self._api_git_stage,
+            "/api/git/unstage": self._api_git_unstage,
+            "/api/git/discard": self._api_git_discard,
+        }
+        if parsed.path in post_routes:
             body = self._read_json_body()
             if body is None:
                 return
-            if parsed.path == "/api/git/commit":
-                return self._api_git_commit(body)
-            if parsed.path == "/api/git/push":
-                return self._api_git_push(body)
-            return self._api_git_init(body)
+            return post_routes[parsed.path](body)
         return self._err("not found", 404)
 
     # ---------- static ----------
@@ -294,7 +303,15 @@ class Handler(BaseHTTPRequestHandler):
         if code != 0:
             return self._err(err.strip() or "git status 失败", 500)
         branch, ahead, behind = None, 0, 0
-        files = []
+        staged, unstaged = [], []
+
+        def entry(status, fname):
+            try:
+                root_rel = str((repo / fname).resolve().relative_to(ROOT)).replace("\\", "/")
+            except ValueError:
+                root_rel = None
+            return {"status": status, "repoPath": fname, "path": root_rel}
+
         for line in out.splitlines():
             if line.startswith("## "):
                 head = line[3:]
@@ -306,18 +323,23 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             if not line.strip():
                 continue
-            xy = line[:2]
+            x, y = line[0], line[1]
             fname = line[3:].strip().strip('"')
             if " -> " in fname:  # 重命名
                 fname = fname.split(" -> ")[1]
-            try:
-                root_rel = str((repo / fname).resolve().relative_to(ROOT)).replace("\\", "/")
-            except ValueError:
-                root_rel = None
-            files.append({"status": xy, "repoPath": fname, "path": root_rel})
+            if line[:2] == "??":           # 未跟踪 → 仅未暂存
+                unstaged.append(entry("?", fname))
+                continue
+            if x not in (" ", "?"):         # 索引区有改动 → 已暂存
+                staged.append(entry(x, fname))
+            if y != " ":                    # 工作区有改动 → 未暂存
+                unstaged.append(entry(y, fname))
         repo_rel = str(repo.relative_to(ROOT)).replace("\\", "/") if repo != ROOT else ""
+        # 唯一文件数（一个文件可能同时在两组）作为徽标计数
+        changed = len({e["repoPath"] for e in staged + unstaged})
         return self._json({"repo": repo_rel, "branch": branch,
-                           "ahead": ahead, "behind": behind, "files": files})
+                           "ahead": ahead, "behind": behind,
+                           "staged": staged, "unstaged": unstaged, "changed": changed})
 
     def _api_git_diff(self, rel):
         try:
@@ -340,7 +362,7 @@ class Handler(BaseHTTPRequestHandler):
         if repo is None:
             return
         code, out, err = run_git(
-            ["log", "-30", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D"], repo)
+            ["log", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"], repo)
         commits = []
         if code == 0:
             for line in out.splitlines():
@@ -361,8 +383,10 @@ class Handler(BaseHTTPRequestHandler):
                             refs.append({"name": r, "kind": "remote"})
                         else:
                             refs.append({"name": r, "kind": "branch"})
+                    parents = parts[5].split() if len(parts) > 5 and parts[5].strip() else []
                     commits.append({"hash": parts[0], "author": parts[1],
-                                    "when": parts[2], "subject": parts[3], "refs": refs})
+                                    "when": parts[2], "subject": parts[3],
+                                    "refs": refs, "parents": parents})
         return self._json({"commits": commits})
 
     def _api_git_show(self, rel, h):
@@ -450,6 +474,90 @@ class Handler(BaseHTTPRequestHandler):
             return None
         d = target if target.is_dir() else target.parent
         return d
+
+    # ---------- 暂存 / 取消暂存 / 丢弃 ----------
+    def _repo_and_relpath(self, rel):
+        """把 ROOT 相对路径解析为 (repo, repo相对路径, 绝对Path)。失败时已发响应并返回 None。"""
+        try:
+            fp = safe_resolve(rel)
+        except PermissionError:
+            self._err("forbidden", 403)
+            return None
+        repo = find_repo(fp if fp.exists() else fp.parent)
+        if repo is None:
+            self._err("不在仓库内", 404)
+            return None
+        repo_rel = str(fp.relative_to(repo)).replace("\\", "/")
+        return repo, repo_rel, fp
+
+    def _api_git_stage(self, body):
+        info = self._repo_and_relpath(body.get("path", ""))
+        if info is None:
+            return
+        repo, repo_rel, _ = info
+        code, out, err = run_git(["add", "--", repo_rel], repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_unstage(self, body):
+        info = self._repo_and_relpath(body.get("path", ""))
+        if info is None:
+            return
+        repo, repo_rel, _ = info
+        # 无 HEAD（空仓库）时用 rm --cached 退化
+        code, out, err = run_git(["reset", "-q", "HEAD", "--", repo_rel], repo)
+        if code != 0:
+            code, out, err = run_git(["rm", "--cached", "-q", "--", repo_rel], repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_discard(self, body):
+        info = self._repo_and_relpath(body.get("path", ""))
+        if info is None:
+            return
+        repo, repo_rel, fp = info
+        if body.get("untracked"):
+            # 未跟踪文件：直接删除（仍受 ROOT 约束）
+            try:
+                if fp.is_file():
+                    fp.unlink()
+                return self._json({"ok": True, "output": "已删除未跟踪文件"})
+            except OSError as e:
+                return self._err(f"删除失败: {e}", 500)
+        code, out, err = run_git(["checkout", "--", repo_rel], repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_commit_files(self, rel, h):
+        if not re.fullmatch(r"[0-9a-fA-F]{4,40}", h or ""):
+            return self._err("非法 hash")
+        repo = self._resolve_repo(rel)
+        if repo is None:
+            return
+        code, out, err = run_git(
+            ["show", "--name-status", "--format=", "-M", h], repo)
+        if code != 0:
+            return self._err(err.strip() or "读取提交失败", 500)
+        files = []
+        for line in out.splitlines():
+            if not line.strip():
+                continue
+            cols = line.split("\t")
+            status = cols[0][:1]
+            path = cols[-1]  # 重命名取新名
+            files.append({"status": status, "path": path})
+        return self._json({"hash": h, "files": files})
+
+    def _api_git_commit_diff(self, rel, h, path):
+        if not re.fullmatch(r"[0-9a-fA-F]{4,40}", h or ""):
+            return self._err("非法 hash")
+        if not path:
+            return self._err("缺少 path")
+        repo = self._resolve_repo(rel)
+        if repo is None:
+            return
+        code, out, err = run_git(
+            ["show", "--format=", "-M", h, "--", path], repo)
+        if code != 0:
+            return self._err(err.strip() or "读取 diff 失败", 500)
+        return self._json({"diff": out, "path": path, "hash": h})
 
 
 def main():
