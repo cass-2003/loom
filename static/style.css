@@ -639,6 +639,50 @@ body {
 .markdown-body a:hover { text-decoration: underline; }
 .markdown-body img { max-width: 100%; border-radius: 6px; }
 
+/* ===== Markdown 增强：mermaid 图 / 大纲 / 导出 ===== */
+.mermaid-fig {
+  display: flex; justify-content: center; margin: 14px 0;
+  padding: 14px 16px; border-radius: var(--radius);
+  background: var(--bg2); border: 1px solid var(--border-soft);
+  overflow: auto;
+}
+.mermaid-fig svg { max-width: 100%; height: auto; }
+.mermaid-fig.mermaid-err {
+  justify-content: flex-start; color: var(--danger);
+  font-family: "Cascadia Code", monospace; font-size: 12px; white-space: pre-wrap;
+}
+
+/* 顶栏 Markdown 工具栏 */
+.md-toolbar { display: flex; align-items: center; gap: 6px; }
+.md-tocwrap { position: relative; }
+.toc-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  min-width: 220px; max-width: 340px; max-height: 60vh; overflow: auto;
+  padding: 6px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.toc-item, .toc-act {
+  display: block; padding: 5px 9px; border-radius: 6px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.toc-act { display: flex; align-items: center; gap: 8px; }
+.toc-act .icn { width: 15px; height: 15px; color: var(--text-dim); }
+.toc-item:hover, .toc-act:hover { background: var(--hover); }
+.toc-l1 { font-weight: 600; }
+.toc-l2 { padding-left: 22px; color: var(--text-dim); }
+.toc-l3 { padding-left: 38px; color: var(--muted); font-size: 12.5px; }
+.toc-empty { padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
+
+/* 打印 / PDF：只输出预览内容 */
+@media print {
+  #topbar, #activitybar, #sidebar, #sidebar-resizer, #tabbar,
+  #statusbar, #editor-pane, #editor-find, #quickopen { display: none !important; }
+  #app, #main, #content, #content-body, #editor-wrap { display: block; height: auto; overflow: visible; }
+  #preview { display: block !important; border: none; padding: 0; background: #fff; overflow: visible; }
+}
+
 /* ===== 全文搜索视图 ===== */
 .search-controls { padding: 2px 10px 8px; display: flex; flex-direction: column; gap: 7px; }
 .search-input-wrap {

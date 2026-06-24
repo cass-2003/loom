@@ -44,6 +44,22 @@ marked.setOptions({
   },
 });
 
+// ---------- Mermaid 初始化（手动渲染，不 startOnLoad）----------
+let mermaidSeq = 0;  // 每次渲染递增，保证 id 唯一、避免旧实例残留
+function mermaidTheme() {
+  return (document.documentElement.getAttribute("data-theme") === "light")
+    ? "default" : "dark";
+}
+if (window.mermaid) {
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: mermaidTheme(),
+    });
+  } catch (e) { /* 容错：mermaid 初始化失败不影响其余功能 */ }
+}
+
 const CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
   "c","cpp","h","css","scss","html","htm","xml","yaml","yml","toml","sh",
   "bash","ps1","bat","sql","vue","svelte"]);
@@ -784,11 +800,166 @@ $("#btn-view-edit").onclick = () => {
   applyViewMode(viewMode, true);
 };
 
+// ---------- Markdown 增强：大纲菜单 / 导出 ----------
+function toggleMenu(menu, others) {
+  const willOpen = menu.classList.contains("hidden");
+  others.forEach(m => m.classList.add("hidden"));
+  menu.classList.toggle("hidden", !willOpen);
+}
+$("#btn-toc").onclick = (e) => {
+  e.stopPropagation();
+  toggleMenu($("#toc-menu"), [$("#export-menu")]);
+};
+$("#btn-md-export").onclick = (e) => {
+  e.stopPropagation();
+  toggleMenu($("#export-menu"), [$("#toc-menu")]);
+};
+// 点击别处关闭浮层菜单
+document.addEventListener("mousedown", (e) => {
+  if (!e.target.closest("#md-toolbar")) {
+    $("#toc-menu").classList.add("hidden");
+    $("#export-menu").classList.add("hidden");
+  }
+});
+$("#export-menu").querySelectorAll(".toc-act").forEach(el => {
+  el.onclick = () => {
+    $("#export-menu").classList.add("hidden");
+    if (el.dataset.act === "html") exportHtml();
+    else if (el.dataset.act === "print") window.print();
+  };
+});
+
+// 收集页面里已加载的 highlight / markdown 相关样式，内联进导出的 HTML
+function collectStyleText() {
+  let css = "";
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) css += rule.cssText + "\n";
+    } catch { /* 跨域样式表读取受限，忽略 */ }
+  }
+  return css;
+}
+
+// 把当前预览渲染结果导出为内联样式的独立 .html 下载
+function exportHtml() {
+  const preview = $("#preview");
+  const title = (state.current || "document").split("/").pop().replace(/\.(md|markdown)$/i, "");
+  const theme = document.documentElement.getAttribute("data-theme") || "dark";
+  const css = collectStyleText();
+  const bodyHtml = preview.innerHTML;
+  const doc =
+`<!DOCTYPE html>
+<html lang="zh" data-theme="${theme}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escHtml(title)}</title>
+<style>
+${css}
+body { margin: 0; background: var(--bg, #fff); }
+.export-wrap { max-width: 880px; margin: 0 auto; padding: 40px 32px; }
+.mermaid-fig svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<div class="export-wrap markdown-body">
+${bodyHtml}
+</div>
+</body>
+</html>`;
+  const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = title + ".html";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setMsg("已导出 " + title + ".html", "ok");
+}
+
 // ---------- 预览 ----------
 function renderPreview() {
   if (state.kind !== "text") return;
   const html = marked.parse($("#editor").value);
-  $("#preview").innerHTML = html;
+  const preview = $("#preview");
+  preview.innerHTML = html;
+  // Markdown 增强：仅对 .md/.markdown 启用工具栏、标题锚点、大纲、mermaid
+  const t = tabByPath(state.activeTab);
+  const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
+  $("#md-toolbar").classList.toggle("hidden", !isMd);
+  if (!isMd) return;
+  assignHeadingIds(preview);
+  buildTOC(preview);
+  renderMermaid(preview);
+}
+
+// 给预览里的 h1–h6 加唯一 id（供大纲跳转）
+function assignHeadingIds(root) {
+  const used = new Set();
+  root.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h, i) => {
+    let base = (h.textContent || "heading").trim().toLowerCase()
+      .replace(/[^\w一-龥]+/g, "-").replace(/^-+|-+$/g, "") || "h";
+    let id = "h-" + base, n = 2;
+    while (used.has(id)) id = "h-" + base + "-" + (n++);
+    used.add(id);
+    h.id = id;
+  });
+}
+
+// 构建大纲（h1–h3），写入 #toc-menu
+function buildTOC(root) {
+  const menu = $("#toc-menu");
+  const heads = [...root.querySelectorAll("h1,h2,h3")];
+  if (!heads.length) {
+    menu.innerHTML = `<div class="toc-empty">无标题</div>`;
+    return;
+  }
+  menu.innerHTML = heads.map(h => {
+    const lvl = h.tagName[1];
+    return `<div class="toc-item toc-l${lvl}" data-target="${escHtml(h.id)}">`
+      + `${escHtml((h.textContent || "").trim())}</div>`;
+  }).join("");
+  menu.querySelectorAll(".toc-item").forEach(el => {
+    el.onclick = () => {
+      const preview = $("#preview");
+      const target = preview.querySelector("#" + cssEsc(el.dataset.target));
+      if (target) {
+        // 在 #preview 这个滚动容器内精确定位（scrollIntoView 可能作用于错误的祖先）
+        const top = target.getBoundingClientRect().top
+          - preview.getBoundingClientRect().top + preview.scrollTop - 8;
+        preview.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+      $("#toc-menu").classList.add("hidden");
+    };
+  });
+}
+
+// 渲染预览里的 ```mermaid 代码块（marked 生成 <pre><code class="language-mermaid">）
+async function renderMermaid(root) {
+  if (!window.mermaid) return;
+  const blocks = [...root.querySelectorAll("pre > code.language-mermaid")];
+  if (!blocks.length) return;
+  // 主题跟随当前深浅色（重渲染时重新 initialize 不报错）
+  try { mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: mermaidTheme() }); } catch {}
+  for (const code of blocks) {
+    const pre = code.parentElement;
+    const src = code.textContent || "";
+    const holder = document.createElement("div");
+    holder.className = "mermaid-fig";
+    pre.replaceWith(holder);
+    const id = "mmd-" + (++mermaidSeq);
+    try {
+      const { svg } = await mermaid.render(id, src);
+      holder.innerHTML = svg;
+    } catch (e) {
+      holder.classList.add("mermaid-err");
+      holder.textContent = "Mermaid 渲染失败: " + (e && e.message ? e.message : e);
+      // 清理 mermaid 可能注入到 body 的临时错误节点
+      document.getElementById("d" + id)?.remove();
+    }
+  }
 }
 
 let renderTimer = null;
@@ -1286,6 +1457,8 @@ function applyTheme(t) {
 $("#btn-theme").onclick = () => {
   const cur = document.documentElement.getAttribute("data-theme") || "dark";
   applyTheme(cur === "dark" ? "light" : "dark");
+  // 主题切换后重渲染预览，让 mermaid 图跟随深浅色
+  if (state.kind === "text") renderPreview();
 };
 applyTheme(localStorage.getItem("wb-theme") || "dark");
 

@@ -14,6 +14,20 @@
     <div class="brand"><span class="brand-dot"></span>Workbench</div>
     <div class="crumb" id="crumb"></div>
     <div class="top-actions">
+      <!-- Markdown 增强：大纲 / 导出（仅 .md 显示） -->
+      <div id="md-toolbar" class="md-toolbar hidden">
+        <div class="md-tocwrap">
+          <button id="btn-toc" class="btn ghost" title="大纲目录"><span class="i" data-icon="list"></span>大纲</button>
+          <div id="toc-menu" class="toc-menu hidden"></div>
+        </div>
+        <div class="md-tocwrap">
+          <button id="btn-md-export" class="btn ghost" title="导出 / 打印"><span class="i" data-icon="download"></span>导出</button>
+          <div id="export-menu" class="toc-menu hidden">
+            <div class="toc-act" data-act="html"><span class="i" data-icon="download"></span>导出为 HTML</div>
+            <div class="toc-act" data-act="print"><span class="i" data-icon="printer"></span>打印 / 另存 PDF</div>
+          </div>
+        </div>
+      </div>
       <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色"></button>
       <button id="btn-view-edit" class="btn ghost" title="切换视图">分屏</button>
       <button id="btn-save" class="btn" title="保存 (Ctrl+S)"><span class="i" data-icon="save"></span>保存</button>
@@ -207,6 +221,7 @@
 </div>
 
 <script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/mermaid.min.js"></script>
 <script src="/static/vendor/highlight.min.js"></script>
 <script src="/static/icons.js"></script>
 <script src="/static/tools.js"></script>
