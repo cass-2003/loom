@@ -22,7 +22,7 @@ body {
 /* 顶栏 */
 #topbar {
   display: flex; align-items: center; gap: 14px;
-  height: 44px; padding: 0 14px; background: var(--bg2);
+  height: 42px; padding: 0 14px; background: var(--bg2);
   border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 .brand { font-weight: 600; color: var(--accent); white-space: nowrap; }
@@ -35,6 +35,7 @@ body {
 }
 .btn:hover { background: var(--hover); border-color: var(--accent); }
 .btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: default; }
 .icon-btn {
   background: transparent; color: var(--muted); border: none; cursor: pointer;
   font-size: 15px; padding: 2px 6px; border-radius: 4px;
@@ -44,16 +45,44 @@ body {
 /* 主区 */
 #main { flex: 1; display: flex; min-height: 0; }
 
-/* 侧栏 */
-#sidebar {
-  width: 260px; background: var(--bg2); border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; flex-shrink: 0;
+/* 活动栏 */
+#activitybar {
+  width: 48px; background: var(--bg3); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; padding-top: 6px;
+  flex-shrink: 0; gap: 2px;
 }
+.act {
+  width: 40px; height: 40px; background: transparent; border: none;
+  color: var(--muted); font-size: 19px; cursor: pointer; border-radius: 8px;
+  position: relative; border-left: 2px solid transparent;
+}
+.act:hover { color: var(--text); background: var(--hover); }
+.act.active { color: var(--text); }
+.act.active::before {
+  content: ""; position: absolute; left: -7px; top: 8px; bottom: 8px;
+  width: 2px; background: var(--accent); border-radius: 2px;
+}
+.badge {
+  position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px;
+  background: var(--accent); color: var(--bg3); border-radius: 8px;
+  font-size: 10px; line-height: 16px; padding: 0 4px; font-weight: 600;
+}
+
+/* 侧边栏 */
+#sidebar {
+  width: 270px; background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+}
+.view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.view.hidden { display: none; }
 .side-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px; font-size: 12px; text-transform: uppercase;
   letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
+
+/* 文件树 */
 #tree { flex: 1; overflow: auto; padding: 4px 0; }
 .node { user-select: none; }
 .node-row {
@@ -89,22 +118,30 @@ body {
   flex: 1; min-width: 0; overflow: auto; padding: 20px 28px;
   border-left: 1px solid var(--border); background: var(--bg);
 }
-/* 单栏模式 */
 #editor-wrap.mode-edit #preview { display: none; }
 #editor-wrap.mode-preview #editor { display: none; }
 #editor-wrap.mode-preview #preview { border-left: none; }
+
+/* diff 视图(中间) */
+#diff-view { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.diff-head {
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  font-family: "Cascadia Code", monospace; font-size: 13px; color: var(--accent);
+  background: var(--bg2); flex-shrink: 0;
+}
+#diff-body {
+  flex: 1; margin: 0; overflow: auto; padding: 12px 16px; background: var(--bg3);
+  font-family: "Cascadia Code", monospace; font-size: 12.5px; line-height: 1.5;
+  white-space: pre;
+}
 
 #image-view { margin: auto; padding: 20px; }
 #image-view img { max-width: 100%; max-height: 80vh; border-radius: 6px; }
 #binary-view { margin: auto; text-align: center; }
 
-/* 工具面板 */
-#toolpane {
-  width: 340px; background: var(--bg2); border-left: 1px solid var(--border);
-  display: flex; flex-direction: column; flex-shrink: 0;
-}
+/* 工具视图 */
 .tool-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px;
-  border-bottom: 1px solid var(--border); }
+  border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .tool-tab {
   font-size: 12px; padding: 4px 9px; border-radius: 5px; cursor: pointer;
   background: var(--panel); border: 1px solid transparent; color: var(--muted);
@@ -112,8 +149,8 @@ body {
 .tool-tab:hover { color: var(--text); }
 .tool-tab.active { color: var(--bg2); background: var(--accent); }
 #tool-body { flex: 1; overflow: auto; padding: 12px; }
-#tool-body label { display: block; font-size: 12px; color: var(--muted);
-  margin: 8px 0 4px; }
+#tool-body label, #git-body label { display: block; font-size: 12px;
+  color: var(--muted); margin: 8px 0 4px; }
 #tool-body textarea, #tool-body input, #tool-body select {
   width: 100%; background: var(--bg3); color: var(--text);
   border: 1px solid var(--border); border-radius: 5px; padding: 7px;
@@ -121,35 +158,34 @@ body {
 }
 #tool-body textarea { min-height: 90px; }
 .tool-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.tool-row .btn { flex: 1; padding: 5px; }
-.tool-out { margin-top: 10px; font-size: 12px; white-space: pre-wrap;
+.tool-row .btn { flex: 1; padding: 5px; text-align: center; }
+.tool-out { margin-top: 8px; font-size: 12px; white-space: pre-wrap;
   word-break: break-all; color: var(--muted); }
 .tool-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
-/* git 面板 */
-.git-head { display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 6px; }
-#git-branch { font-size: 13px; color: var(--accent); }
-.git-file { display: flex; align-items: center; gap: 7px; padding: 3px 4px;
-  border-radius: 4px; cursor: pointer; font-size: 12px; }
+/* Git 视图(侧栏) */
+#git-body { flex: 1; overflow: auto; padding: 10px 12px; display: flex;
+  flex-direction: column; }
+.git-branch { font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+#git-msg { width: 100%; min-height: 50px; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; padding: 7px;
+  font-family: inherit; font-size: 13px; resize: vertical; }
+.git-changes-head { font-size: 11px; text-transform: uppercase; color: var(--muted);
+  margin: 12px 0 4px; letter-spacing: .5px; }
+.git-file { display: flex; align-items: center; gap: 7px; padding: 4px 5px;
+  border-radius: 4px; cursor: pointer; font-size: 13px; }
 .git-file:hover { background: var(--hover); }
-.g-flag { width: 22px; text-align: center; font-family: monospace;
-  border-radius: 3px; font-size: 11px; padding: 1px 0; flex-shrink: 0; }
-.g-new { background: #313a2a; color: var(--accent2); }
-.g-mod { background: #3a3526; color: #f9e2af; }
-.g-del { background: #3a2a2f; color: var(--danger); }
-.g-add { background: #2a3344; color: var(--accent); }
-.g-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.git-diff {
-  margin-top: 10px; max-height: 320px; overflow: auto; font-size: 11px;
-  line-height: 1.45; background: var(--bg3); border-radius: 6px;
-  padding: 8px; white-space: pre; font-family: "Cascadia Code", monospace;
-}
-.git-diff:empty { display: none; }
-.d-add { color: var(--accent2); }
-.d-del { color: var(--danger); }
-.d-hunk { color: #94e2d5; }
-.d-meta { color: var(--muted); }
+.git-file.active { background: #313a55; }
+.g-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.g-flag { width: 18px; text-align: center; font-family: monospace; font-size: 12px;
+  font-weight: 700; flex-shrink: 0; }
+.g-new { color: var(--accent2); } .g-mod { color: #f9e2af; }
+.g-del { color: var(--danger); } .g-add { color: var(--accent); }
+
+/* diff 着色 */
+.git-diff { color: var(--text); }
+.d-add { color: var(--accent2); } .d-del { color: var(--danger); }
+.d-hunk { color: #94e2d5; } .d-meta { color: var(--muted); }
 
 /* 状态栏 */
 #statusbar {
@@ -178,9 +214,7 @@ body {
   color: var(--muted);
 }
 .markdown-body table { border-collapse: collapse; }
-.markdown-body th, .markdown-body td {
-  border: 1px solid var(--border); padding: 6px 12px;
-}
+.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 12px; }
 .markdown-body a { color: var(--accent); }
 .markdown-body img { max-width: 100%; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }

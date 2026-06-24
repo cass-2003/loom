@@ -145,9 +145,29 @@ function setCurrent(path, kind) {
 function hideAllViews() {
   $("#welcome").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
+  $("#diff-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
 }
+
+// 在中间区域显示 diff (源代码管理点文件时调用)
+window.showDiffView = function (name, diffText) {
+  hideAllViews();
+  $("#diff-head").textContent = "⎇ " + name;
+  const body = $("#diff-body");
+  body.innerHTML = "";
+  for (const line of diffText.split("\n")) {
+    const span = document.createElement("span");
+    span.textContent = line + "\n";
+    if (line.startsWith("+") && !line.startsWith("+++")) span.className = "d-add";
+    else if (line.startsWith("-") && !line.startsWith("---")) span.className = "d-del";
+    else if (line.startsWith("@@")) span.className = "d-hunk";
+    else if (line.startsWith("diff ") || line.startsWith("index ")) span.className = "d-meta";
+    body.appendChild(span);
+  }
+  $("#diff-view").classList.remove("hidden");
+  $("#crumb").textContent = "diff: " + name;
+};
 
 // ---------- 视图模式 ----------
 let viewMode = "split"; // split | edit | preview
@@ -204,15 +224,27 @@ async function save() {
   state.dirty = false;
   document.body.classList.remove("dirty");
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
+  if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
 }
 $("#btn-save").onclick = save;
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
 });
 
-// ---------- 工具面板 ----------
-$("#btn-tools").onclick = () => $("#toolpane").classList.toggle("hidden");
-$("#btn-close-tools").onclick = () => $("#toolpane").classList.add("hidden");
+// ---------- 活动栏：视图切换 ----------
+let activeView = "files";
+function switchView(view) {
+  activeView = view;
+  document.querySelectorAll(".act").forEach(b =>
+    b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+  $("#view-" + view).classList.remove("hidden");
+  if (view === "git") refreshGit();
+}
+document.querySelectorAll(".act").forEach(btn => {
+  btn.onclick = () => switchView(btn.dataset.view);
+});
+
 $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
 
 // ---------- 杂项 ----------
@@ -241,3 +273,5 @@ window.addEventListener("beforeunload", (e) => {
 
 initTree();
 initTools();
+initGit();
+refreshGit();  // 首次加载更新 Git 徽标/状态栏

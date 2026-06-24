@@ -15,31 +15,72 @@
     <div class="crumb" id="crumb"></div>
     <div class="top-actions">
       <button id="btn-save" class="btn" title="保存 (Ctrl+S)">保存</button>
-      <button id="btn-view-edit" class="btn" data-mode="split" title="切换视图">分屏</button>
-      <button id="btn-tools" class="btn" title="工具面板">工具 ⚙</button>
+      <button id="btn-view-edit" class="btn" title="切换视图">分屏</button>
     </div>
   </header>
 
   <div id="main">
-    <!-- 左：文件树 -->
+    <!-- 活动栏 -->
+    <nav id="activitybar">
+      <button class="act active" data-view="files" title="资源管理器">🗂</button>
+      <button class="act" data-view="git" title="源代码管理">
+        ⎇<span class="badge hidden" id="git-badge">0</span>
+      </button>
+      <button class="act" data-view="tools" title="工具箱">🧰</button>
+    </nav>
+
+    <!-- 侧边栏：三个视图切换 -->
     <aside id="sidebar">
-      <div class="side-head">
-        <span>文件</span>
-        <button id="btn-refresh" class="icon-btn" title="刷新">⟳</button>
+      <!-- 文件视图 -->
+      <div class="view" id="view-files">
+        <div class="side-head">
+          <span>资源管理器</span>
+          <button id="btn-refresh" class="icon-btn" title="刷新">⟳</button>
+        </div>
+        <div id="tree"></div>
       </div>
-      <div id="tree"></div>
+
+      <!-- Git 视图 -->
+      <div class="view hidden" id="view-git">
+        <div class="side-head">
+          <span>源代码管理</span>
+          <button id="git-refresh" class="icon-btn" title="刷新">⟳</button>
+        </div>
+        <div id="git-body">
+          <div id="git-branch" class="git-branch muted">读取中…</div>
+          <textarea id="git-msg" placeholder="提交信息 (Ctrl+Enter 提交)"></textarea>
+          <div class="tool-row">
+            <button class="btn" id="git-commit">✓ 提交</button>
+            <button class="btn" id="git-push">↑ 推送</button>
+          </div>
+          <div id="git-out" class="tool-out"></div>
+          <div class="git-changes-head" id="git-changes-head"></div>
+          <div id="git-files"></div>
+        </div>
+      </div>
+
+      <!-- 工具视图 -->
+      <div class="view hidden" id="view-tools">
+        <div class="side-head"><span>工具箱</span></div>
+        <div class="tool-tabs" id="tool-tabs"></div>
+        <div id="tool-body"></div>
+      </div>
     </aside>
 
-    <!-- 中：编辑/预览 -->
+    <!-- 中：编辑 / 预览 / diff -->
     <section id="content">
       <div id="welcome" class="welcome">
         <h1>🛠 Workbench</h1>
-        <p>左侧选择一个文件开始。Markdown 实时预览，<kbd>Ctrl</kbd>+<kbd>S</kbd> 保存。</p>
-        <p class="muted">右上角「工具」里有 JSON / Base64 / 时间戳 / Hash 等小工具。</p>
+        <p>左侧 <b>🗂</b> 选文件编辑，<b>⎇</b> 看 Git 改动，<b>🧰</b> 用小工具。</p>
+        <p class="muted">Markdown 实时预览，<kbd>Ctrl</kbd>+<kbd>S</kbd> 保存。</p>
       </div>
       <div id="editor-wrap" class="hidden">
         <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
         <div id="preview" class="markdown-body"></div>
+      </div>
+      <div id="diff-view" class="hidden">
+        <div class="diff-head" id="diff-head"></div>
+        <pre id="diff-body" class="git-diff"></pre>
       </div>
       <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
       <div id="binary-view" class="hidden">
@@ -47,20 +88,11 @@
         <p class="muted" id="binary-info"></p>
       </div>
     </section>
-
-    <!-- 右：工具面板 -->
-    <aside id="toolpane" class="hidden">
-      <div class="side-head">
-        <span>工具箱</span>
-        <button id="btn-close-tools" class="icon-btn" title="关闭">✕</button>
-      </div>
-      <div class="tool-tabs" id="tool-tabs"></div>
-      <div id="tool-body"></div>
-    </aside>
   </div>
 
   <footer id="statusbar">
     <span id="status-file">未打开文件</span>
+    <span id="status-branch" class="muted"></span>
     <span id="status-msg"></span>
   </footer>
 </div>
@@ -68,6 +100,7 @@
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/highlight.min.js"></script>
 <script src="/static/tools.js"></script>
+<script src="/static/git.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
