@@ -9,6 +9,14 @@ const api = {
   }).then(r => r.json()),
 };
 
+// 同源 POST 帮手（带 CSRF 必需的 Content-Type + 同源 Origin）
+function fsPost(url, obj) {
+  return fetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj),
+  }).then(r => r.json());
+}
+
 const state = {
   current: null,   // 当前文件 path
   kind: null,      // text/image/binary
@@ -115,7 +123,361 @@ function renderNode(entry) {
     row.append(twist, ico, name);
     node.append(row);
   }
+  bindRowContextMenu(row, entry);
   return node;
+}
+
+// ---------- 文件操作（新建/重命名/删除）----------
+// 刷新某层目录的 container（重新拉取该目录列表）。container 为 #tree 时刷新根。
+async function refreshDir(parentRel, container) {
+  if (container === $("#tree")) {
+    await loadTree("", container);
+  } else {
+    await loadTree(parentRel, container);
+    container.dataset.loaded = "1";
+  }
+  hydrateIcons(container);
+}
+
+// 找到某行所属的「子容器」(.node-children) —— 即该 row 的兄弟节点
+function childrenOf(row) {
+  return row.parentElement.querySelector(":scope > .node-children");
+}
+// 找到某行所在的「父容器」—— 它被渲染进的那个 container
+function containerOf(row) {
+  // row 在 .node 内，.node 在 container 内
+  return row.closest(".node").parentElement;
+}
+
+// 在指定文件夹下新建文件/文件夹
+async function fsCreate(parentRel, container) {
+  return new Promise((resolve) => {
+    showModal({
+      title: "新建文件",
+      sub: parentRel ? `位置: ${parentRel}/` : "位置: 根目录",
+      placeholder: "名称（如 notes.md）",
+      okLabel: "创建",
+      onSubmit: async (name) => {
+        const res = await fsPost("/api/fs/create", { path: parentRel, name, type: "file" });
+        if (res.error) return res.error;
+        // 确保父目录已展开后再刷新
+        if (container) {
+          if (container !== $("#tree") && container.classList.contains("hidden")) {
+            container.classList.remove("hidden");
+          }
+          await refreshDir(parentRel, container);
+        } else {
+          await fullRefresh();
+        }
+        const newRow = findRow(res.path);
+        openFile(res.path, newRow || null);
+        setMsg("已创建 " + res.path, "ok");
+        resolve(true);
+        return null;
+      },
+    });
+  });
+}
+async function fsCreateDir(parentRel, container) {
+  return new Promise((resolve) => {
+    showModal({
+      title: "新建文件夹",
+      sub: parentRel ? `位置: ${parentRel}/` : "位置: 根目录",
+      placeholder: "文件夹名称",
+      okLabel: "创建",
+      onSubmit: async (name) => {
+        const res = await fsPost("/api/fs/create", { path: parentRel, name, type: "dir" });
+        if (res.error) return res.error;
+        if (container) {
+          if (container !== $("#tree") && container.classList.contains("hidden")) {
+            container.classList.remove("hidden");
+          }
+          await refreshDir(parentRel, container);
+        } else {
+          await fullRefresh();
+        }
+        setMsg("已创建 " + res.path, "ok");
+        resolve(true);
+        return null;
+      },
+    });
+  });
+}
+
+// 重命名（path 是目标，container 是它所在容器，parentRel 是它的父目录 rel）
+async function fsRename(path, oldName, isDir, container, parentRel) {
+  showModal({
+    title: isDir ? "重命名文件夹" : "重命名文件",
+    sub: path,
+    placeholder: "新名称",
+    value: oldName,
+    okLabel: "重命名",
+    onSubmit: async (newName) => {
+      if (newName === oldName) return null;  // 无变化直接关
+      const res = await fsPost("/api/fs/rename", { path, newName });
+      if (res.error) return res.error;
+      // 若当前打开的就是它（或它的子项），更新/清空编辑区
+      handlePathMoved(path, res.path, isDir);
+      if (container) await refreshDir(parentRel, container);
+      else await fullRefresh();
+      setMsg("已重命名为 " + res.path, "ok");
+      return null;
+    },
+  });
+}
+
+// 删除（confirm 模态）
+async function fsDelete(path, isDir, container, parentRel) {
+  showConfirm({
+    title: isDir ? "删除文件夹" : "删除文件",
+    message: isDir
+      ? `确定删除文件夹 “${path}” 及其全部内容？此操作不可撤销。`
+      : `确定删除文件 “${path}”？此操作不可撤销。`,
+    okLabel: "删除",
+    danger: true,
+    onConfirm: async () => {
+      const res = await fsPost("/api/fs/delete", { path });
+      if (res.error) { setMsg(res.error, "err"); return; }
+      handlePathDeleted(path, isDir);
+      if (container) await refreshDir(parentRel, container);
+      else await fullRefresh();
+      setMsg("已删除 " + path, "ok");
+    },
+  });
+}
+
+// 当前打开文件受重命名影响时同步
+function handlePathMoved(oldPath, newPath, isDir) {
+  const cur = state.current;
+  if (!cur) return;
+  if (cur === oldPath) {
+    setCurrent(newPath, state.kind);
+  } else if (isDir && cur.startsWith(oldPath + "/")) {
+    setCurrent(newPath + cur.slice(oldPath.length), state.kind);
+  }
+}
+// 当前打开文件被删除时清空编辑区
+function handlePathDeleted(path, isDir) {
+  const cur = state.current;
+  if (!cur) return;
+  if (cur === path || (isDir && cur.startsWith(path + "/"))) {
+    closeCurrent();
+  }
+}
+function closeCurrent() {
+  revokeImage();
+  hideAllViews();
+  $("#welcome").classList.remove("hidden");
+  $("#editor").value = "";
+  state.current = null; state.kind = null;
+  state.dirty = false; document.body.classList.remove("dirty");
+  $("#status-file").textContent = "未打开文件";
+  $("#crumb").textContent = "";
+}
+
+// 在树中按 path 找到对应的 .node-row（仅限已渲染节点）
+function findRow(path) {
+  return document.querySelector(`#tree .node-row[data-path="${cssEsc(path)}"]`);
+}
+function cssEsc(s) {
+  return window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&");
+}
+
+// 整树刷新，尽量保留 state.expanded 展开状态
+async function fullRefresh() {
+  const wanted = new Set(state.expanded);
+  state.expanded.clear();
+  await loadTree("", $("#tree"));
+  hydrateIcons($("#tree"));
+  // 按路径深度从浅到深依次展开
+  const paths = [...wanted].sort((a, b) => a.split("/").length - b.split("/").length);
+  for (const p of paths) {
+    const row = findRow(p);
+    if (row && row.dataset.type === "dir") {
+      const children = childrenOf(row);
+      if (children && children.classList.contains("hidden")) {
+        row.click();  // 触发懒加载+展开
+        // 等待该层加载完成
+        await waitFor(() => children.dataset.loaded === "1");
+        hydrateIcons(children);
+      }
+    }
+  }
+}
+function waitFor(cond, tries = 50) {
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (cond() || tries-- <= 0) return resolve();
+      setTimeout(tick, 20);
+    };
+    tick();
+  });
+}
+
+// ---------- 上下文菜单 ----------
+let ctxMenuEl = null;
+function closeCtxMenu() {
+  if (ctxMenuEl) { ctxMenuEl.remove(); ctxMenuEl = null; }
+}
+function showCtxMenu(x, y, items) {
+  closeCtxMenu();
+  const menu = document.createElement("div");
+  menu.id = "ctx-menu";
+  for (const it of items) {
+    if (it.sep) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-sep";
+      menu.appendChild(sep);
+      continue;
+    }
+    const el = document.createElement("div");
+    el.className = "ctx-item" + (it.danger ? " danger" : "");
+    el.innerHTML = svgIcon(it.icon, 15) + `<span>${escHtml(it.label)}</span>`;
+    el.onclick = () => { closeCtxMenu(); it.action(); };
+    menu.appendChild(el);
+  }
+  document.body.appendChild(menu);
+  // 防止溢出屏幕
+  const r = menu.getBoundingClientRect();
+  if (x + r.width > window.innerWidth) x = window.innerWidth - r.width - 6;
+  if (y + r.height > window.innerHeight) y = window.innerHeight - r.height - 6;
+  menu.style.left = Math.max(4, x) + "px";
+  menu.style.top = Math.max(4, y) + "px";
+  ctxMenuEl = menu;
+}
+// 点击空白 / 滚动 / Esc 关闭
+document.addEventListener("mousedown", (e) => {
+  if (ctxMenuEl && !ctxMenuEl.contains(e.target)) closeCtxMenu();
+});
+document.addEventListener("scroll", closeCtxMenu, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtxMenu(); });
+window.addEventListener("blur", closeCtxMenu);
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// 给某个 .node-row 绑定右键菜单
+function bindRowContextMenu(row, entry) {
+  row.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const container = containerOf(row);
+    const parentRel = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
+    const isDir = entry.type === "dir";
+    const items = [];
+    if (isDir) {
+      const children = childrenOf(row);
+      items.push({
+        icon: "filePlus", label: "新建文件",
+        action: async () => {
+          await ensureExpanded(row, children);
+          fsCreate(entry.path, children);
+        },
+      });
+      items.push({
+        icon: "folderPlus", label: "新建文件夹",
+        action: async () => {
+          await ensureExpanded(row, children);
+          fsCreateDir(entry.path, children);
+        },
+      });
+      items.push({ sep: true });
+    }
+    items.push({
+      icon: "pencil", label: "重命名",
+      action: () => fsRename(entry.path, entry.name, isDir, container, parentRel),
+    });
+    items.push({
+      icon: "trash", label: "删除", danger: true,
+      action: () => fsDelete(entry.path, isDir, container, parentRel),
+    });
+    showCtxMenu(e.clientX, e.clientY, items);
+  });
+}
+// 确保文件夹已展开（懒加载完成）
+async function ensureExpanded(row, children) {
+  if (children && children.classList.contains("hidden")) {
+    row.click();
+    await waitFor(() => children.dataset.loaded === "1");
+    hydrateIcons(children);
+  }
+}
+
+// ---------- 模态：输入名称 / 确认 ----------
+function buildOverlay() {
+  const ov = document.createElement("div");
+  ov.id = "modal-overlay";
+  return ov;
+}
+function closeModal() {
+  const ov = $("#modal-overlay");
+  if (ov) ov.remove();
+}
+// 输入框模态。onSubmit(value) 返回错误字符串则不关闭并展示，返回 null 则关闭。
+function showModal({ title, sub, placeholder, value = "", okLabel = "确定", onSubmit }) {
+  closeModal();
+  const ov = buildOverlay();
+  ov.innerHTML = `
+    <div class="modal-box">
+      <h3>${escHtml(title)}</h3>
+      ${sub ? `<p class="modal-sub">${escHtml(sub)}</p>` : ""}
+      <input class="modal-input" type="text" placeholder="${escHtml(placeholder || "")}">
+      <div class="modal-err"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" data-act="cancel">取消</button>
+        <button class="modal-btn primary" data-act="ok">${escHtml(okLabel)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const input = ov.querySelector(".modal-input");
+  const errEl = ov.querySelector(".modal-err");
+  input.value = value;
+  input.focus();
+  // 预选中文件名主干（保留扩展名）
+  const dot = value.lastIndexOf(".");
+  if (dot > 0) input.setSelectionRange(0, dot); else input.select();
+
+  const submit = async () => {
+    const name = input.value.trim();
+    if (!name) { errEl.textContent = "名称不能为空"; return; }
+    ov.querySelector('[data-act="ok"]').disabled = true;
+    const err = await onSubmit(name);
+    if (err) {
+      errEl.textContent = err;
+      ov.querySelector('[data-act="ok"]').disabled = false;
+      return;
+    }
+    closeModal();
+  };
+  ov.querySelector('[data-act="ok"]').onclick = submit;
+  ov.querySelector('[data-act="cancel"]').onclick = closeModal;
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeModal(); }
+  });
+  ov.addEventListener("mousedown", (e) => { if (e.target === ov) closeModal(); });
+}
+// 确认模态
+function showConfirm({ title, message, okLabel = "确定", danger = false, onConfirm }) {
+  closeModal();
+  const ov = buildOverlay();
+  ov.innerHTML = `
+    <div class="modal-box">
+      <h3>${escHtml(title)}</h3>
+      <p class="modal-sub">${escHtml(message)}</p>
+      <div class="modal-actions">
+        <button class="modal-btn" data-act="cancel">取消</button>
+        <button class="modal-btn ${danger ? "danger" : "primary"}" data-act="ok">${escHtml(okLabel)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const okBtn = ov.querySelector('[data-act="ok"]');
+  okBtn.focus();
+  okBtn.onclick = async () => { okBtn.disabled = true; await onConfirm(); closeModal(); };
+  ov.querySelector('[data-act="cancel"]').onclick = closeModal;
+  ov.addEventListener("mousedown", (e) => { if (e.target === ov) closeModal(); });
+  ov.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 }
 
 // ---------- 打开文件 ----------
@@ -281,6 +643,8 @@ document.querySelectorAll(".act").forEach(btn => {
 });
 
 $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
+$("#btn-new-file").onclick = () => fsCreate("", $("#tree"));
+$("#btn-new-dir").onclick = () => fsCreateDir("", $("#tree"));
 
 // ---------- 侧栏宽度拖动 ----------
 function initSidebarResize() {

@@ -164,6 +164,64 @@ body {
 .ic-text { color: #9aa5ce; }
 .ic-bin { color: var(--muted); }
 
+/* 文件树内联输入框 */
+.node-row .tree-input {
+  flex: 1; min-width: 0; font: inherit; font-size: 13px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 4px;
+  padding: 1px 5px; outline: none;
+}
+
+/* 右键上下文菜单 */
+#ctx-menu {
+  position: fixed; z-index: 1000; min-width: 168px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px; box-shadow: 0 8px 28px rgba(0,0,0,.4);
+  font-size: 13px; user-select: none;
+}
+#ctx-menu .ctx-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 11px; border-radius: 6px; cursor: pointer; color: var(--text-dim);
+}
+#ctx-menu .ctx-item:hover { background: var(--hover); color: var(--text); }
+#ctx-menu .ctx-item .icn { color: var(--muted); }
+#ctx-menu .ctx-item:hover .icn { color: var(--text); }
+#ctx-menu .ctx-item.danger { color: var(--danger); }
+#ctx-menu .ctx-item.danger .icn { color: var(--danger); }
+#ctx-menu .ctx-item.danger:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+#ctx-menu .ctx-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }
+
+/* 模态对话框（输入名称 / 确认删除） */
+#modal-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px 22px; width: 360px; max-width: calc(100vw - 40px);
+  box-shadow: 0 14px 46px rgba(0,0,0,.5);
+}
+.modal-box h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--text); }
+.modal-box .modal-sub { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+.modal-box input.modal-input {
+  width: 100%; font: inherit; font-size: 13.5px; padding: 8px 11px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px; outline: none;
+}
+.modal-box input.modal-input:focus { border-color: var(--accent); }
+.modal-box .modal-err { color: var(--danger); font-size: 12px; min-height: 16px; margin: 7px 1px 0; }
+.modal-box .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 16px; }
+.modal-box .modal-btn {
+  font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 7px;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--bg-soft); color: var(--text-dim);
+}
+.modal-box .modal-btn:hover { background: var(--hover); color: var(--text); }
+.modal-box .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #11131e; font-weight: 600; }
+.modal-box .modal-btn.primary:hover { background: var(--accent-press); }
+.modal-box .modal-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.modal-box .modal-btn.danger:hover { filter: brightness(1.08); }
+
 /* 内容区 */
 #content { flex: 1; min-width: 0; position: relative; display: flex; background: var(--bg); }
 .hidden { display: none !important; }

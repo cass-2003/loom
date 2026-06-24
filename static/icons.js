@@ -23,6 +23,10 @@ const ICON_PATHS = {
   discard: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   tag: '<path d="M12.6 2.3a1 1 0 0 0-.7-.3H4a2 2 0 0 0-2 2v7.9a1 1 0 0 0 .3.7l8.4 8.4a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8z"/><circle cx="7.5" cy="7.5" r="1"/>',
+  filePlus: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/><path d="M12 11v6M9 14h6"/>',
+  folderPlus: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M12 10v6M9 13h6"/>',
+  pencil: '<path d="M21.2 3.8a2.7 2.7 0 0 0-3.8 0L4 17.2 3 21l3.8-1 13.4-13.4a2.7 2.7 0 0 0 0-3.8z"/>',
+  trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>',
 };
 
 function svgIcon(name, size = 16) {
