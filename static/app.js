@@ -322,6 +322,7 @@ function closeCurrent() {
   state.dirty = false; document.body.classList.remove("dirty");
   $("#status-file").textContent = "未打开文件";
   $("#crumb").textContent = "";
+  if (window.updateStatusBar) updateStatusBar();
 }
 
 // 在树中按 path 找到对应的 .node-row（仅限已渲染节点）
@@ -699,6 +700,7 @@ function closeTab(path) {
 
 // 渲染标签栏
 function renderTabs() {
+  if (window.saveWorkspace) saveWorkspace();
   const bar = $("#tabbar");
   bar.innerHTML = "";
   if (state.tabs.length === 0) {
@@ -745,6 +747,7 @@ function setCurrent(path, kind) {
   state.current = path; state.kind = kind;
   $("#status-file").textContent = path;
   $("#crumb").textContent = path;
+  if (window.updateStatusBar) updateStatusBar();
 }
 
 function hideAllViews() {
@@ -1193,13 +1196,16 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Tab 键插入两个空格
+// Tab 键插入缩进（宽度跟随设置：2/4 空格或真实 Tab）
 $("#editor").addEventListener("keydown", (e) => {
   if (e.key === "Tab") {
     e.preventDefault();
+    const cfg = window.wbSettings ? wbSettings() : null;
+    const tw = cfg ? cfg.tabWidth : "2";
+    const ins = tw === "tab" ? "\t" : (tw === "4" ? "    " : "  ");
     const t = e.target, s = t.selectionStart, end = t.selectionEnd;
-    t.value = t.value.slice(0, s) + "  " + t.value.slice(end);
-    t.selectionStart = t.selectionEnd = s + 2;
+    t.value = t.value.slice(0, s) + ins + t.value.slice(end);
+    t.selectionStart = t.selectionEnd = s + ins.length;
   }
 });
 
@@ -1455,19 +1461,62 @@ function applyTheme(t) {
   btn.innerHTML = svgIcon(t === "dark" ? "sun" : "moon", 16);
   btn.title = t === "dark" ? "切换到浅色" : "切换到深色";
 }
-$("#btn-theme").onclick = () => {
+function toggleTheme() {
   const cur = document.documentElement.getAttribute("data-theme") || "dark";
   applyTheme(cur === "dark" ? "light" : "dark");
   // 主题切换后重渲染预览，让 mermaid 图跟随深浅色
   if (state.kind === "text") renderPreview();
-};
+}
+window.toggleTheme = toggleTheme;
+$("#btn-theme").onclick = toggleTheme;
 applyTheme(localStorage.getItem("wb-theme") || "dark");
 
+// ---------- 工作区记忆：保存/恢复打开的标签 ----------
+const WS_KEY = "wb-workspace";
+let wsRestoring = false;   // 恢复期间不写回，避免覆盖
+function saveWorkspace() {
+  if (wsRestoring) return;
+  try {
+    // 仅记忆非图片/二进制的“可重开”路径（图片靠重新拉取也行，这里一并记）
+    const paths = state.tabs.map(t => t.path);
+    localStorage.setItem(WS_KEY, JSON.stringify({
+      tabs: paths,
+      active: state.activeTab,
+    }));
+  } catch {}
+}
+window.saveWorkspace = saveWorkspace;
+
+async function restoreWorkspace() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(WS_KEY) || "null"); } catch { data = null; }
+  if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
+  wsRestoring = true;
+  // 校验路径仍存在：用 files-flat 列表过滤
+  let valid = null;
+  try {
+    const flat = await fetch("/api/files-flat").then(r => r.json());
+    if (flat && Array.isArray(flat.files)) valid = new Set(flat.files);
+  } catch {}
+  for (const p of data.tabs) {
+    if (valid && !valid.has(p)) continue;
+    await openFile(p, true);
+  }
+  wsRestoring = false;
+  const act = data.active;
+  if (act && tabByPath(act)) activateTab(act);
+  saveWorkspace();
+}
+
 hydrateIcons();   // 把 data-icon 占位换成 SVG
-initTree();
 initTools();
 initGit();
 initSearch();
 initNotes();
 initSidebarResize();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
+if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
+(async () => {
+  await initTree();
+  await restoreWorkspace();
+})();

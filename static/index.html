@@ -28,6 +28,9 @@
           </div>
         </div>
       </div>
+      <button id="btn-cmdpalette" class="btn ghost icon-only" title="命令面板 (Ctrl+Shift+P)"><span class="i" data-icon="command"></span></button>
+      <button id="btn-help" class="btn ghost icon-only" title="快捷键帮助 (?)"><span class="i" data-icon="help"></span></button>
+      <button id="btn-settings" class="btn ghost icon-only" title="设置"><span class="i" data-icon="gear"></span></button>
       <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色"></button>
       <button id="btn-view-edit" class="btn ghost" title="切换视图">分屏</button>
       <button id="btn-save" class="btn" title="保存 (Ctrl+S)"><span class="i" data-icon="save"></span>保存</button>
@@ -237,10 +240,84 @@
     </div>
   </div>
 
+  <!-- Ctrl+Shift+P 命令面板浮层 -->
+  <div id="cmdpalette" class="hidden">
+    <div class="cp-box">
+      <div class="cp-input-wrap">
+        <span class="cp-search-i" data-icon="command"></span>
+        <input id="cp-input" type="text" spellcheck="false" autocomplete="off"
+               placeholder="输入命令…（↑↓ 选择，Enter 执行，Esc 关闭）">
+      </div>
+      <div id="cp-list"></div>
+    </div>
+  </div>
+
+  <!-- 设置面板浮层 -->
+  <div id="settings-overlay" class="hidden">
+    <div class="settings-box">
+      <div class="settings-head">
+        <span class="settings-title"><span class="i" data-icon="gear"></span>设置</span>
+        <button id="settings-close" class="icon-btn" data-icon="close" title="关闭"></button>
+      </div>
+      <div class="settings-body">
+        <div class="set-row">
+          <label>字号</label>
+          <div class="set-ctl">
+            <input id="set-fontsize" type="range" min="11" max="22" step="1">
+            <span id="set-fontsize-val" class="set-val">13px</span>
+          </div>
+        </div>
+        <div class="set-row">
+          <label>Tab 宽度</label>
+          <div class="set-ctl seg" id="set-tabwidth">
+            <button data-v="2">2 空格</button>
+            <button data-v="4">4 空格</button>
+            <button data-v="tab">Tab</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <label>主题强调色</label>
+          <div class="set-ctl swatches" id="set-accent"></div>
+        </div>
+        <div class="set-row">
+          <label>编辑器自动换行</label>
+          <div class="set-ctl">
+            <button id="set-wrap" class="toggle" role="switch"><span class="knob"></span></button>
+          </div>
+        </div>
+        <div class="set-row">
+          <label>自动保存<span class="set-hint">停止输入 1.2 秒后保存</span></label>
+          <div class="set-ctl">
+            <button id="set-autosave" class="toggle" role="switch"><span class="knob"></span></button>
+          </div>
+        </div>
+        <div class="settings-foot">
+          <button id="set-reset" class="modal-btn">恢复默认</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 快捷键帮助浮层 -->
+  <div id="help-overlay" class="hidden">
+    <div class="help-box">
+      <div class="settings-head">
+        <span class="settings-title"><span class="i" data-icon="help"></span>快捷键</span>
+        <button id="help-close" class="icon-btn" data-icon="close" title="关闭"></button>
+      </div>
+      <div id="help-body" class="help-body"></div>
+    </div>
+  </div>
+
   <footer id="statusbar">
     <span id="status-file">未打开文件</span>
     <span id="status-branch" class="muted"></span>
     <span id="status-msg"></span>
+    <span class="status-spacer"></span>
+    <span id="status-words" class="status-item hidden" title="字数"></span>
+    <span id="status-lang" class="status-item hidden" title="文件类型 / 语言"></span>
+    <span id="status-pos" class="status-item hidden" title="光标位置 行:列">行 1, 列 1</span>
+    <span id="status-enc" class="status-item hidden" title="编码">UTF-8</span>
   </footer>
 </div>
 
@@ -252,6 +329,7 @@
 <script src="/static/git.js"></script>
 <script src="/static/search.js"></script>
 <script src="/static/notes.js"></script>
+<script src="/static/workbench.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
