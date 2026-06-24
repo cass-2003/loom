@@ -11,6 +11,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -188,6 +189,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/git/stage": self._api_git_stage,
             "/api/git/unstage": self._api_git_unstage,
             "/api/git/discard": self._api_git_discard,
+            "/api/fs/create": self._api_fs_create,
+            "/api/fs/rename": self._api_fs_rename,
+            "/api/fs/delete": self._api_fs_delete,
         }
         if parsed.path in post_routes:
             body = self._read_json_body()
@@ -279,6 +283,82 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self._err(f"write failed: {e}", 500)
         return self._json({"ok": True, "size": len(data)})
+
+    # ---------- 文件操作（新建/重命名/删除）----------
+    @staticmethod
+    def _valid_name(name):
+        return bool(name) and name not in (".", "..") \
+            and "/" not in name and "\\" not in name \
+            and not re.search(r'[:*?"<>|]', name)
+
+    def _rel_of(self, p):
+        return str(p.relative_to(ROOT)).replace("\\", "/")
+
+    def _api_fs_create(self, body):
+        parent_rel = body.get("path", "") or ""
+        name = (body.get("name") or "").strip()
+        kind = body.get("type", "file")
+        if not self._valid_name(name):
+            return self._err("名称非法（不能含 / \\ : * ? \" < > | 或为空）")
+        try:
+            parent = safe_resolve(parent_rel) if parent_rel else ROOT
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not parent.is_dir():
+            parent = parent.parent
+        target = parent / name
+        if target.exists():
+            return self._err("已存在同名文件/文件夹")
+        try:
+            if kind == "dir":
+                target.mkdir(parents=False)
+            else:
+                target.write_bytes(b"")
+        except OSError as e:
+            return self._err(f"创建失败: {e}", 500)
+        return self._json({"ok": True, "path": self._rel_of(target), "type": kind})
+
+    def _api_fs_rename(self, body):
+        rel = body.get("path")
+        new_name = (body.get("newName") or "").strip()
+        if not rel:
+            return self._err("missing path")
+        if not self._valid_name(new_name):
+            return self._err("名称非法")
+        try:
+            src = safe_resolve(rel)
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not src.exists():
+            return self._err("源不存在", 404)
+        dst = src.parent / new_name
+        if dst.exists():
+            return self._err("目标已存在")
+        try:
+            src.rename(dst)
+        except OSError as e:
+            return self._err(f"重命名失败: {e}", 500)
+        return self._json({"ok": True, "path": self._rel_of(dst),
+                           "type": "dir" if dst.is_dir() else "file"})
+
+    def _api_fs_delete(self, body):
+        rel = body.get("path")
+        if not rel:
+            return self._err("missing path")
+        try:
+            target = safe_resolve(rel)
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not target.exists():
+            return self._err("不存在", 404)
+        try:
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        except OSError as e:
+            return self._err(f"删除失败: {e}", 500)
+        return self._json({"ok": True})
 
     # ---------- git api ----------
     def _resolve_repo(self, rel):
