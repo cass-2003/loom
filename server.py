@@ -158,6 +158,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_file(qs.get("path", [""])[0])
         if path == "/api/files-flat":
             return self._api_files_flat()
+        if path == "/api/search":
+            return self._api_search(
+                qs.get("q", [""])[0],
+                qs.get("regex", ["0"])[0] == "1",
+                qs.get("case", ["0"])[0] == "1",
+            )
         if path == "/api/git/status":
             return self._api_git_status(qs.get("path", [""])[0])
         if path == "/api/git/diff":
@@ -292,6 +298,93 @@ class Handler(BaseHTTPRequestHandler):
                 if len(out) >= limit:
                     return self._json({"files": out, "truncated": True})
         return self._json({"files": out, "truncated": False})
+
+    # 全文搜索：忽略的目录 / 限额
+    _SEARCH_SKIP_DIRS = {
+        ".git", "node_modules", ".venv", "venv", "__pycache__", ".mypy_cache",
+        ".pytest_cache", "dist", "build", ".next", ".nuxt", "target",
+        ".idea", ".vscode", ".cache", "System Volume Information",
+    }
+    _SEARCH_TOTAL_LIMIT = 500     # 总结果条数上限
+    _SEARCH_PER_FILE_LIMIT = 50   # 单文件结果条数上限
+    _SEARCH_MAX_BYTES = 2 * 1024 * 1024  # 单文件超过此大小跳过
+
+    def _api_search(self, q, use_regex, case_sensitive):
+        q = q or ""
+        if not q.strip():
+            return self._json({"results": [], "truncated": False})
+        # 构造匹配器
+        if use_regex:
+            try:
+                flags = 0 if case_sensitive else re.IGNORECASE
+                pattern = re.compile(q, flags)
+            except re.error as e:
+                return self._err(f"正则非法: {e}")
+            matcher = lambda line: pattern.search(line)
+        else:
+            needle = q if case_sensitive else q.lower()
+            def matcher(line, _n=needle, _cs=case_sensitive):
+                hay = line if _cs else line.lower()
+                idx = hay.find(_n)
+                return None if idx < 0 else (idx, idx + len(_n))
+
+        results = []
+        truncated = False
+        skip = self._SEARCH_SKIP_DIRS
+        total_limit = self._SEARCH_TOTAL_LIMIT
+        per_file = self._SEARCH_PER_FILE_LIMIT
+        max_bytes = self._SEARCH_MAX_BYTES
+
+        for dirpath, dirnames, filenames in os.walk(ROOT):
+            dirnames[:] = [d for d in dirnames
+                           if d not in skip and not d.startswith("$")]
+            dirnames.sort(key=str.lower)
+            for name in sorted(filenames, key=str.lower):
+                fp = Path(dirpath) / name
+                try:
+                    st = fp.stat()
+                except OSError:
+                    continue
+                if st.st_size > max_bytes:
+                    continue
+                try:
+                    raw = fp.read_bytes()
+                except OSError:
+                    continue
+                if b"\x00" in raw:  # 含 NUL → 视为二进制，跳过
+                    continue
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
+                try:
+                    rel = str(fp.relative_to(ROOT)).replace("\\", "/")
+                except ValueError:
+                    continue
+                file_hits = 0
+                for lineno, line in enumerate(text.splitlines(), 1):
+                    m = matcher(line)
+                    if not m:
+                        continue
+                    if use_regex:
+                        col = m.start()
+                        mlen = max(1, m.end() - m.start())
+                    else:
+                        col = m[0]
+                        mlen = m[1] - m[0]
+                    results.append({
+                        "path": rel, "line": lineno, "col": col,
+                        "len": mlen,
+                        "text": line[:1000],
+                    })
+                    file_hits += 1
+                    if len(results) >= total_limit:
+                        truncated = True
+                        return self._json({"results": results, "truncated": True})
+                    if file_hits >= per_file:
+                        truncated = True
+                        break
+        return self._json({"results": results, "truncated": truncated})
 
     def _api_save(self, body):
         rel = body.get("path")

@@ -27,6 +27,7 @@
       <button class="act" data-view="git" data-icon="git" title="源代码管理">
         <span class="badge hidden" id="git-badge">0</span>
       </button>
+      <button class="act" data-view="search" data-icon="search" title="搜索"></button>
       <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
     </nav>
 
@@ -103,6 +104,24 @@
         </div>
       </div>
 
+      <!-- 搜索视图（全文搜索） -->
+      <div class="view hidden" id="view-search">
+        <div class="side-head"><span>搜索</span></div>
+        <div class="search-controls">
+          <div class="search-input-wrap">
+            <span class="search-i" data-icon="search"></span>
+            <input id="search-input" type="text" spellcheck="false" autocomplete="off"
+                   placeholder="搜索全文…">
+          </div>
+          <div class="search-opts">
+            <button id="search-case" class="search-opt" title="区分大小写">Aa</button>
+            <button id="search-regex" class="search-opt" title="使用正则表达式">.*</button>
+          </div>
+        </div>
+        <div id="search-summary" class="search-summary"></div>
+        <div id="search-results" class="search-results"></div>
+      </div>
+
       <!-- 工具视图 -->
       <div class="view hidden" id="view-tools">
         <div class="side-head"><span>工具箱</span></div>
@@ -172,6 +191,7 @@
 <script src="/static/icons.js"></script>
 <script src="/static/tools.js"></script>
 <script src="/static/git.js"></script>
+<script src="/static/search.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

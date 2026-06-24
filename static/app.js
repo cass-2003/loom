@@ -523,10 +523,16 @@ function stashActiveTab() {
 }
 
 // 打开文件：已打开则直接切换，否则新建标签并加载
-async function openFile(path, row) {
+// opts.line（1 起）：打开后滚动/选中到该行（仅文本文件）
+async function openFile(path, row, opts) {
+  const gotoLine = opts && opts.line ? opts.line : null;
   if (row) highlightTreeRow(path);
   const existing = tabByPath(path);
-  if (existing) { activateTab(path); return; }
+  if (existing) {
+    if (gotoLine) existing.pendingLine = gotoLine;
+    activateTab(path);
+    return;
+  }
 
   // 先把当前标签的编辑状态暂存，避免被新文件覆盖
   stashActiveTab();
@@ -562,9 +568,29 @@ async function openFile(path, row) {
   // 文本
   const tab = { path, kind: "text", name: data.name || name,
                 ext: data.ext || "", dirty: false, draft: data.content,
-                viewMode: "split" };
+                viewMode: "split", pendingLine: gotoLine };
   addTab(tab);
   activateTab(path);
+}
+
+// 把文本编辑器光标定位到第 line 行（1 起）并滚动可见
+function gotoEditorLine(line) {
+  const ta = $("#editor");
+  const text = ta.value;
+  const lines = text.split("\n");
+  if (line < 1) line = 1;
+  if (line > lines.length) line = lines.length;
+  let start = 0;
+  for (let i = 0; i < line - 1; i++) start += lines[i].length + 1;
+  const end = start + (lines[line - 1] ? lines[line - 1].length : 0);
+  ta.focus();
+  try { ta.setSelectionRange(start, end); } catch {}
+  // 估算滚动位置（行高 * 行号），尽量让目标行居中
+  const style = getComputedStyle(ta);
+  let lh = parseFloat(style.lineHeight);
+  if (!lh || Number.isNaN(lh)) lh = parseFloat(style.fontSize) * 1.6 || 20;
+  const target = (line - 1) * lh - ta.clientHeight / 2;
+  ta.scrollTop = Math.max(0, target);
 }
 
 // ---------- 标签管理 ----------
@@ -612,6 +638,13 @@ function activateTab(path) {
     if (isMd) viewMode = tab.viewMode || "split";
     applyViewMode(isMd ? viewMode : "edit", isMd);
     renderPreview();
+    if (tab.pendingLine) {
+      const ln = tab.pendingLine;
+      tab.pendingLine = null;
+      // markdown 在纯预览模式下没有可见 textarea，先切到含源码的模式
+      if (isMd && viewMode === "preview") { viewMode = "split"; applyViewMode("split", true); }
+      requestAnimationFrame(() => gotoEditorLine(ln));
+    }
   }
   highlightTreeRow(path);
   renderTabs();
@@ -955,6 +988,7 @@ function switchView(view) {
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   $("#view-" + view).classList.remove("hidden");
   if (view === "git") refreshGit();
+  if (view === "search" && window.focusSearchInput) window.focusSearchInput();
 }
 document.querySelectorAll(".act").forEach(btn => {
   btn.onclick = () => switchView(btn.dataset.view);
@@ -1034,5 +1068,6 @@ hydrateIcons();   // 把 data-icon 占位换成 SVG
 initTree();
 initTools();
 initGit();
+initSearch();
 initSidebarResize();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
