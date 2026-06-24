@@ -337,6 +337,23 @@ body {
 
 /* 编辑器 */
 #editor-wrap { flex: 1; display: flex; min-width: 0; }
+/* 编辑窗格：行号槽 + 文本域（横向并排），上方浮查找条 */
+#editor-pane {
+  flex: 1; min-width: 0; position: relative; display: flex;
+  background: var(--bg); overflow: hidden;
+}
+/* 行号槽：与 #editor 同字体/行高，竖直滚动由 JS 同步 */
+#editor-gutter {
+  flex: none; overflow: hidden; box-sizing: border-box;
+  padding: 18px 10px 18px 14px; text-align: right;
+  background: var(--bg); color: var(--muted);
+  border-right: 1px solid var(--border-soft);
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 13px;
+  line-height: 1.65; tab-size: 2;
+  white-space: pre; user-select: none; -webkit-user-select: none;
+}
+#editor-gutter .gline { display: block; }
+#editor-gutter .gline.cur { color: var(--accent2); }
 #editor {
   flex: 1; min-width: 0; resize: none; border: none; outline: none;
   background: var(--bg); color: var(--text); padding: 18px 20px;
@@ -348,8 +365,47 @@ body {
   border-left: 1px solid var(--border-soft); background: var(--bg-soft);
 }
 #editor-wrap.mode-edit #preview { display: none; }
-#editor-wrap.mode-preview #editor { display: none; }
+#editor-wrap.mode-preview #editor-pane { display: none; }
 #editor-wrap.mode-preview #preview { border-left: none; }
+
+/* 文件内查找/替换条 */
+#editor-find {
+  position: absolute; top: 8px; right: 16px; z-index: 20;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 8px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--border);
+  box-shadow: 0 8px 26px rgba(0,0,0,.35);
+}
+#editor-find .find-row { display: flex; align-items: center; gap: 4px; }
+#editor-find input {
+  width: 190px; box-sizing: border-box; padding: 4px 8px;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; outline: none;
+  font-family: "Cascadia Code", Consolas, monospace; font-size: 12px;
+}
+#editor-find input:focus { border-color: var(--accent); }
+#replace-input { width: 190px; }
+.find-count {
+  min-width: 56px; text-align: center; font-size: 11px; color: var(--muted);
+  white-space: nowrap;
+}
+.find-opt {
+  flex: none; width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--muted);
+  font-size: 11px; font-family: Consolas, monospace; line-height: 1;
+}
+.find-opt:hover { background: var(--hover); color: var(--text-dim); }
+.find-opt.on { background: var(--sel); color: var(--accent2); border-color: var(--border); }
+.find-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
+  background: transparent; border: none; color: var(--muted); padding: 0;
+}
+.find-btn:hover { background: var(--hover); color: var(--text); }
+.find-btn.text { width: auto; padding: 0 8px; font-size: 12px; color: var(--text-dim); }
+.find-btn.text:hover { color: var(--text); }
+#find-next svg { transform: rotate(90deg); }
+#find-prev svg { transform: rotate(-90deg); }
 
 /* diff 视图 */
 #diff-view { flex: 1; display: flex; flex-direction: column; min-width: 0; }

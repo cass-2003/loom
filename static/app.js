@@ -29,6 +29,10 @@ const state = {
 };
 window.state = state;  // 供工具箱 (Git) 读取当前文件
 
+// 行号槽状态（在 activateTab 之前用到，提前声明）
+let gutterLineCount = -1;   // 当前已渲染的行数（避免无谓重绘）
+let curGLine = -1;          // 当前高亮行
+
 // ---------- marked 配置 ----------
 marked.setOptions({
   breaks: true,
@@ -630,6 +634,8 @@ function activateTab(path) {
     setCurrent(path, "binary");
   } else {
     $("#editor").value = tab.draft != null ? tab.draft : "";
+    gutterLineCount = -1; curGLine = -1;  // 强制重建行号
+    updateGutter();
     $("#editor-wrap").classList.remove("hidden");
     setCurrent(path, "text");
     state.dirty = !!tab.dirty;
@@ -792,8 +798,227 @@ $("#editor").addEventListener("input", () => {
     const t = tabByPath(state.activeTab);
     if (t) { t.dirty = true; renderTabs(); }  // 标签亮起脏点
   }
+  updateGutter();
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderPreview, 120);
+});
+
+// ---------- 行号槽 ----------
+const gutterEl = $("#editor-gutter");
+// 重建行号（仅当行数变化时重写 DOM），并刷新当前行高亮
+function updateGutter() {
+  const ta = $("#editor");
+  const n = ta.value.split("\n").length;
+  if (n !== gutterLineCount) {
+    let html = "";
+    for (let i = 1; i <= n; i++) html += `<span class="gline" data-l="${i}">${i}</span>`;
+    gutterEl.innerHTML = html;
+    gutterLineCount = n;
+  }
+  syncGutterScroll();
+  highlightCurrentLine();
+}
+// 行号槽随 textarea 垂直滚动
+function syncGutterScroll() {
+  gutterEl.scrollTop = $("#editor").scrollTop;
+}
+// 当前行高亮（基于光标所在行）
+function highlightCurrentLine() {
+  const ta = $("#editor");
+  const line = ta.value.slice(0, ta.selectionStart).split("\n").length;
+  if (line === curGLine) return;
+  const prev = gutterEl.querySelector(".gline.cur");
+  if (prev) prev.classList.remove("cur");
+  const el = gutterEl.querySelector(`.gline[data-l="${line}"]`);
+  if (el) el.classList.add("cur");
+  curGLine = line;
+}
+$("#editor").addEventListener("scroll", syncGutterScroll);
+$("#editor").addEventListener("keyup", highlightCurrentLine);
+$("#editor").addEventListener("click", highlightCurrentLine);
+$("#editor").addEventListener("input", highlightCurrentLine);
+
+// ---------- 文件内查找/替换 (Ctrl+F) ----------
+const find = { open: false, regex: false, ci: true, matches: [], idx: -1 };
+
+function findIsOpen() { return find.open; }
+
+function openFind() {
+  if (state.kind !== "text") return;   // 仅文本编辑可用
+  find.open = true;
+  $("#editor-find").classList.remove("hidden");
+  const ta = $("#editor");
+  // 用选区内容预填查找框
+  const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+  const inp = $("#find-input");
+  if (sel && !sel.includes("\n")) inp.value = sel;
+  inp.focus(); inp.select();
+  runFind(false);
+}
+
+function closeFind() {
+  find.open = false;
+  $("#editor-find").classList.add("hidden");
+  find.matches = []; find.idx = -1;
+  $("#editor").focus();
+}
+
+// 构建匹配列表 [{start,end}]，按需重新计算
+function computeMatches() {
+  find.matches = [];
+  const q = $("#find-input").value;
+  const text = $("#editor").value;
+  if (!q) return;
+  if (find.regex) {
+    let re;
+    try { re = new RegExp(q, "g" + (find.ci ? "i" : "")); }
+    catch { $("#find-count").textContent = "正则错误"; return; }
+    let m, guard = 0;
+    while ((m = re.exec(text)) && guard++ < 100000) {
+      find.matches.push({ start: m.index, end: m.index + m[0].length });
+      if (m.index === re.lastIndex) re.lastIndex++;  // 防零宽死循环
+    }
+  } else {
+    const hay = find.ci ? text.toLowerCase() : text;
+    const needle = find.ci ? q.toLowerCase() : q;
+    let from = 0, i;
+    while ((i = hay.indexOf(needle, from)) !== -1) {
+      find.matches.push({ start: i, end: i + needle.length });
+      from = i + (needle.length || 1);
+    }
+  }
+}
+
+function updateFindCount() {
+  const c = $("#find-count");
+  if (!$("#find-input").value) { c.textContent = "无结果"; return; }
+  if (c.textContent === "正则错误") return;
+  if (find.matches.length === 0) { c.textContent = "无结果"; return; }
+  c.textContent = `${find.idx + 1}/${find.matches.length}`;
+}
+
+// 选中第 idx 个匹配并滚动可见
+function selectMatch(idx) {
+  if (!find.matches.length) { updateFindCount(); return; }
+  if (idx < 0) idx = find.matches.length - 1;
+  if (idx >= find.matches.length) idx = 0;
+  find.idx = idx;
+  const m = find.matches[idx];
+  const ta = $("#editor");
+  ta.focus();
+  try { ta.setSelectionRange(m.start, m.end); } catch {}
+  // 滚动到匹配行
+  const before = ta.value.slice(0, m.start).split("\n").length;
+  const style = getComputedStyle(ta);
+  let lh = parseFloat(style.lineHeight);
+  if (!lh || Number.isNaN(lh)) lh = parseFloat(style.fontSize) * 1.65 || 20;
+  ta.scrollTop = Math.max(0, (before - 1) * lh - ta.clientHeight / 2);
+  syncGutterScroll();
+  highlightCurrentLine();
+  // 重新聚焦查找框（保留选区高亮）
+  $("#find-input").focus();
+  updateFindCount();
+}
+
+// 执行查找。advance=true 时定位首个/下一个匹配
+function runFind(advance) {
+  computeMatches();
+  if (!find.matches.length) { find.idx = -1; updateFindCount(); return; }
+  // 优先选中光标之后的第一个匹配
+  const caret = $("#editor").selectionStart;
+  let target = find.matches.findIndex(m => m.start >= caret);
+  if (target < 0) target = 0;
+  selectMatch(target);
+}
+
+function findNext(dir) {
+  if (!find.matches.length) { computeMatches(); }
+  if (!find.matches.length) { updateFindCount(); return; }
+  selectMatch(find.idx + (dir || 1));
+}
+
+// 触发 input 事件以更新脏标记/预览/行号
+function fireEditorInput() {
+  $("#editor").dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// 替换当前选中的匹配
+function replaceCurrent() {
+  if (find.idx < 0 || !find.matches.length) { findNext(1); return; }
+  const ta = $("#editor");
+  const m = find.matches[find.idx];
+  // 仅当当前选区正好是该匹配才替换，否则先定位
+  if (ta.selectionStart !== m.start || ta.selectionEnd !== m.end) {
+    selectMatch(find.idx);
+    return;
+  }
+  const rep = $("#replace-input").value;
+  ta.setRangeText(rep, m.start, m.end, "end");
+  fireEditorInput();
+  const nextCaret = m.start + rep.length;
+  ta.selectionStart = ta.selectionEnd = nextCaret;
+  // 重新计算并定位下一个
+  computeMatches();
+  if (!find.matches.length) { find.idx = -1; updateFindCount(); return; }
+  let t = find.matches.findIndex(x => x.start >= nextCaret);
+  if (t < 0) t = 0;
+  selectMatch(t);
+}
+
+// 全部替换
+function replaceAll() {
+  computeMatches();
+  if (!find.matches.length) { updateFindCount(); return; }
+  const ta = $("#editor");
+  const rep = $("#replace-input").value;
+  // 从后往前替换，避免下标偏移
+  let text = ta.value;
+  for (let i = find.matches.length - 1; i >= 0; i--) {
+    const m = find.matches[i];
+    text = text.slice(0, m.start) + rep + text.slice(m.end);
+  }
+  const count = find.matches.length;
+  ta.value = text;
+  fireEditorInput();
+  computeMatches();
+  find.idx = -1;
+  updateFindCount();
+  setMsg(`已替换 ${count} 处`, "ok");
+}
+
+$("#find-input").addEventListener("input", () => runFind(false));
+$("#find-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); findNext(e.shiftKey ? -1 : 1); }
+  else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+});
+$("#replace-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); replaceCurrent(); }
+  else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+});
+$("#find-next").onclick = () => findNext(1);
+$("#find-prev").onclick = () => findNext(-1);
+$("#find-close").onclick = closeFind;
+$("#replace-one").onclick = replaceCurrent;
+$("#replace-all").onclick = replaceAll;
+$("#find-regex").onclick = () => {
+  find.regex = !find.regex;
+  $("#find-regex").classList.toggle("on", find.regex);
+  runFind(false);
+};
+$("#find-case").onclick = () => {
+  find.ci = !find.ci;   // ci=true 表示忽略大小写；按钮高亮表示“区分大小写”=!ci
+  $("#find-case").classList.toggle("on", !find.ci);
+  runFind(false);
+};
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    // 仅在文本编辑视图激活时拦截，否则放行浏览器查找
+    if (state.kind === "text" && !$("#editor-wrap").classList.contains("hidden")) {
+      e.preventDefault();
+      openFind();
+    }
+  }
 });
 
 // Tab 键插入两个空格

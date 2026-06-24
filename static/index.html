@@ -150,7 +150,27 @@
         <p class="muted kbd-tip"><kbd>Ctrl</kbd>+<kbd>S</kbd> 保存　·　<kbd>Ctrl</kbd>+<kbd>Enter</kbd> 提交</p>
       </div>
       <div id="editor-wrap" class="hidden">
-        <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
+        <div id="editor-pane">
+          <!-- 文件内查找/替换条 (Ctrl+F) -->
+          <div id="editor-find" class="hidden">
+            <div class="find-row">
+              <input id="find-input" type="text" spellcheck="false" autocomplete="off" placeholder="查找">
+              <span id="find-count" class="find-count">无结果</span>
+              <button id="find-regex" class="find-opt" title="使用正则表达式">.*</button>
+              <button id="find-case" class="find-opt" title="区分大小写">Aa</button>
+              <button id="find-prev" class="find-btn" title="上一个 (Shift+Enter)" data-icon="chevron"></button>
+              <button id="find-next" class="find-btn" title="下一个 (Enter)" data-icon="chevron"></button>
+              <button id="find-close" class="find-btn" title="关闭 (Esc)" data-icon="close"></button>
+            </div>
+            <div class="find-row">
+              <input id="replace-input" type="text" spellcheck="false" autocomplete="off" placeholder="替换">
+              <button id="replace-one" class="find-btn text" title="替换">替换</button>
+              <button id="replace-all" class="find-btn text" title="全部替换">全部</button>
+            </div>
+          </div>
+          <div id="editor-gutter" aria-hidden="true"></div>
+          <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
+        </div>
         <div id="preview" class="markdown-body"></div>
       </div>
       <div id="diff-view" class="hidden">
