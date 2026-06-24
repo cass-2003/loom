@@ -179,6 +179,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/git/commit_diff":
             return self._api_git_commit_diff(
                 qs.get("path", [""])[0], qs.get("hash", [""])[0], qs.get("file", [""])[0])
+        if path == "/api/notes":
+            return self._api_notes_get()
         return self._err("not found", 404)
 
     def do_POST(self):
@@ -200,6 +202,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/fs/create": self._api_fs_create,
             "/api/fs/rename": self._api_fs_rename,
             "/api/fs/delete": self._api_fs_delete,
+            "/api/notes": self._api_notes_save,
         }
         if parsed.path in post_routes:
             body = self._read_json_body()
@@ -484,6 +487,54 @@ class Handler(BaseHTTPRequestHandler):
                 target.unlink()
         except OSError as e:
             return self._err(f"删除失败: {e}", 500)
+        return self._json({"ok": True})
+
+    # ---------- 便签 / Todo ----------
+    def _notes_path(self) -> Path:
+        return ROOT / ".workbench" / "notes.json"
+
+    def _api_notes_get(self):
+        fp = self._notes_path()
+        data = {"todos": [], "note": ""}
+        if fp.is_file():
+            try:
+                loaded = json.loads(fp.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    todos = loaded.get("todos")
+                    note = loaded.get("note")
+                    if isinstance(todos, list):
+                        data["todos"] = todos
+                    if isinstance(note, str):
+                        data["note"] = note
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        return self._json(data)
+
+    def _api_notes_save(self, body):
+        todos = body.get("todos", [])
+        note = body.get("note", "")
+        if not isinstance(todos, list):
+            return self._err("todos 必须是数组")
+        if not isinstance(note, str):
+            return self._err("note 必须是字符串")
+        # 规范化每个 todo，剔除多余字段
+        clean = []
+        for t in todos:
+            if not isinstance(t, dict):
+                continue
+            clean.append({
+                "id": str(t.get("id", "")),
+                "text": str(t.get("text", "")),
+                "done": bool(t.get("done", False)),
+            })
+        payload = {"todos": clean, "note": note}
+        data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        fp = self._notes_path()
+        try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_bytes(data)
+        except OSError as e:
+            return self._err(f"保存失败: {e}", 500)
         return self._json({"ok": True})
 
     # ---------- git api ----------

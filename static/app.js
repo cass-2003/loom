@@ -1467,5 +1467,6 @@ initTree();
 initTools();
 initGit();
 initSearch();
+initNotes();
 initSidebarResize();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏

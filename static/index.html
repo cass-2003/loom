@@ -42,6 +42,7 @@
         <span class="badge hidden" id="git-badge">0</span>
       </button>
       <button class="act" data-view="search" data-icon="search" title="搜索"></button>
+      <button class="act" data-view="notes" data-icon="checkSquare" title="便签 / Todo"></button>
       <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
     </nav>
 
@@ -136,6 +137,29 @@
         <div id="search-results" class="search-results"></div>
       </div>
 
+      <!-- 便签 / Todo 视图 -->
+      <div class="view hidden" id="view-notes">
+        <div class="side-head">
+          <span>便签 / Todo</span>
+          <span id="notes-status" class="notes-status"></span>
+        </div>
+        <div id="notes-body">
+          <div class="notes-add">
+            <input id="todo-input" type="text" spellcheck="false" autocomplete="off"
+                   placeholder="添加待办，回车确认…">
+            <button id="todo-add" class="notes-add-btn" data-icon="plus" title="添加"></button>
+          </div>
+          <div id="todo-list" class="todo-list"></div>
+          <div class="notes-section">
+            <div class="notes-section-head">
+              <span class="i" data-icon="notebook"></span><span>便签</span>
+            </div>
+            <textarea id="notes-text" spellcheck="false"
+                      placeholder="随手记点东西…（自动保存）"></textarea>
+          </div>
+        </div>
+      </div>
+
       <!-- 工具视图 -->
       <div class="view hidden" id="view-tools">
         <div class="side-head"><span>工具箱</span></div>
@@ -227,6 +251,7 @@
 <script src="/static/tools.js"></script>
 <script src="/static/git.js"></script>
 <script src="/static/search.js"></script>
+<script src="/static/notes.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
