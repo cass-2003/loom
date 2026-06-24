@@ -98,6 +98,30 @@ class Handler(BaseHTTPRequestHandler):
     def _err(self, msg, status=400):
         self._json({"error": msg}, status)
 
+    def _check_csrf(self):
+        """阻止跨站请求伪造：写操作必须同源 + Content-Type 为 application/json。
+
+        - 要求 application/json：跨站的表单/简单请求无法设置该类型，会触发预检，
+          而本服务不应答 CORS 预检，浏览器即拦截，从根上挡住无预检的简单请求 CSRF。
+        - Sec-Fetch-Site 若存在，必须是 same-origin/same-site/none。
+        - Origin 若存在，其 host 必须与 Host 头一致。
+        """
+        ctype = self.headers.get("Content-Type", "")
+        if not ctype.startswith("application/json"):
+            return False
+        site = self.headers.get("Sec-Fetch-Site")
+        if site and site not in ("same-origin", "same-site", "none"):
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            host = self.headers.get("Host", "")
+            try:
+                if urlparse(origin).netloc != host:
+                    return False
+            except ValueError:
+                return False
+        return True
+
     def _read_json_body(self):
         """读取并解析 POST 的 JSON。出错时已发响应并返回 None。"""
         length = int(self.headers.get("Content-Length", 0))
@@ -143,6 +167,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if not self._check_csrf():
+            return self._err("拒绝跨站请求（需同源且 Content-Type: application/json）", 403)
         if parsed.path == "/api/save":
             body = self._read_json_body()
             if body is None:
@@ -224,6 +250,11 @@ class Handler(BaseHTTPRequestHandler):
         content = body.get("content")
         if rel is None or content is None:
             return self._err("missing path or content")
+        if not isinstance(content, str):
+            return self._err("content 必须是字符串")
+        data = content.encode("utf-8")
+        if len(data) > MAX_TEXT_BYTES:
+            return self._err(f"内容过大（>{MAX_TEXT_BYTES // (1024*1024)}MB），不宜在线编辑")
         try:
             fp = safe_resolve(rel)
         except PermissionError:
@@ -232,10 +263,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._err("path is a directory")
         try:
             fp.parent.mkdir(parents=True, exist_ok=True)
-            fp.write_text(content, encoding="utf-8")
+            # write_bytes 不做换行转换，保留原始 \n（避免 Windows 上被强制 CRLF）
+            fp.write_bytes(data)
         except OSError as e:
             return self._err(f"write failed: {e}", 500)
-        return self._json({"ok": True, "size": len(content.encode("utf-8"))})
+        return self._json({"ok": True, "size": len(data)})
 
     # ---------- git api ----------
     def _resolve_repo(self, rel):

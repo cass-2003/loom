@@ -14,6 +14,8 @@ const state = {
   kind: null,      // text/image/binary
   dirty: false,
   expanded: new Set(),
+  openSeq: 0,      // 打开文件请求令牌（防竞态）
+  imageUrl: null,  // 当前图片 blob URL（用于释放）
 };
 window.state = state;  // 供工具箱 (Git) 读取当前文件
 
@@ -123,18 +125,25 @@ async function openFile(path, row) {
   document.querySelectorAll(".node-row.active").forEach(e => e.classList.remove("active"));
   if (row) row.classList.add("active");
 
+  // 请求令牌：连续切换文件时，只让最后一次请求生效，丢弃过期响应
+  const token = ++state.openSeq;
   const res = await api.file(path);
+  if (token !== state.openSeq) return;
   const ctype = res.headers.get("Content-Type") || "";
   hideAllViews();
 
   if (ctype.startsWith("image/")) {
     const blob = await res.blob();
-    $("#image-el").src = URL.createObjectURL(blob);
+    if (token !== state.openSeq) return;
+    revokeImage();
+    state.imageUrl = URL.createObjectURL(blob);
+    $("#image-el").src = state.imageUrl;
     $("#image-view").classList.remove("hidden");
     setCurrent(path, "image");
     return;
   }
   const data = await res.json();
+  if (token !== state.openSeq) return;
   if (data.error) { setMsg(data.error, "err"); return; }
 
   if (data.kind === "binary") {
@@ -154,6 +163,11 @@ async function openFile(path, row) {
   renderPreview();
 }
 
+// 释放上一张图片的 blob URL，避免内存泄漏
+function revokeImage() {
+  if (state.imageUrl) { URL.revokeObjectURL(state.imageUrl); state.imageUrl = null; }
+}
+
 function setCurrent(path, kind) {
   state.current = path; state.kind = kind;
   $("#status-file").textContent = path;
@@ -170,8 +184,11 @@ function hideAllViews() {
 
 // 在中间区域显示 diff (源代码管理点文件时调用)
 window.showDiffView = function (name, diffText) {
+  ++state.openSeq;  // 作废可能在途的 openFile，避免其覆盖 diff 视图
+  revokeImage();
   hideAllViews();
-  $("#diff-head").innerHTML = svgIcon("branch", 14) + `<span>${name}</span>`;
+  const esc = window.escapeHtml || (s => s);
+  $("#diff-head").innerHTML = svgIcon("branch", 14) + `<span>${esc(name)}</span>`;
   const body = $("#diff-body");
   body.innerHTML = "";
   for (const line of diffText.split("\n")) {

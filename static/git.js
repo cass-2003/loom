@@ -53,7 +53,7 @@ async function refreshGit() {
   }
 
   const branch = d.branch || "(无分支)";
-  let chip = branch;
+  let chip = escapeHtml(branch);
   if (d.ahead) chip += ` ↑${d.ahead}`;
   if (d.behind) chip += ` ↓${d.behind}`;
   branchEl.innerHTML = svgIcon("branch", 12) + `<span>${chip}</span>`;
@@ -84,8 +84,8 @@ async function refreshGit() {
     row.title = repoPath;
     row.innerHTML = `
       <span class="scm-file-ico ${iconCls}">${svgIcon(iconName, 15)}</span>
-      <span class="scm-file-name">${name}</span>
-      <span class="scm-file-dir">${dir}</span>
+      <span class="scm-file-name">${escapeHtml(name)}</span>
+      <span class="scm-file-dir">${escapeHtml(dir)}</span>
       <span class="scm-file-actions">
         <button class="scm-act" title="在编辑器打开">${svgIcon("file", 14)}</button>
       </span>
@@ -120,6 +120,7 @@ function escapeHtml(s) {
   return (s || "").replace(/[&<>"]/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
+window.escapeHtml = escapeHtml;
 
 // 提交历史（Git Graph）
 async function refreshLog() {
@@ -178,23 +179,21 @@ function hidePopover() {
 
 function buildPopoverHTML(d) {
   const refs = (d.refs || []).map(r =>
-    `<span class="cp-ref">${svgIcon("branch", 11)}<span>${r}</span></span>`).join("");
-  const stat = [];
-  stat.push(`${d.files} 个文件`);
+    `<span class="cp-ref">${svgIcon("branch", 11)}<span>${escapeHtml(r)}</span></span>`).join("");
   return `
     <div class="cp-line1">
-      <span class="cp-author">${d.author}</span>
-      <span class="cp-when">${d.when}</span>
-      <span class="cp-date">${d.date}</span>
+      <span class="cp-author">${escapeHtml(d.author)}</span>
+      <span class="cp-when">${escapeHtml(d.when)}</span>
+      <span class="cp-date">${escapeHtml(d.date)}</span>
     </div>
-    <div class="cp-subject">${d.subject}</div>
+    <div class="cp-subject">${escapeHtml(d.subject)}</div>
     <div class="cp-stats">
       <span>${d.files} 个文件改动</span>
       ${d.insertions ? `<span class="cp-add">+${d.insertions}</span>` : ""}
       ${d.deletions ? `<span class="cp-del">−${d.deletions}</span>` : ""}
     </div>
     ${refs ? `<div class="cp-refs">${refs}</div>` : ""}
-    <div class="cp-hash">${svgIcon("git", 11)}<span>${d.hash}</span></div>`;
+    <div class="cp-hash">${svgIcon("git", 11)}<span>${escapeHtml(d.hash)}</span></div>`;
 }
 
 function positionPopover(row) {
