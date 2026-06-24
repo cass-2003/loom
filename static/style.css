@@ -1,0 +1,188 @@
+:root {
+  --bg: #1e1e2e;
+  --bg2: #181825;
+  --bg3: #11111b;
+  --panel: #252537;
+  --border: #313244;
+  --text: #cdd6f4;
+  --muted: #7f849c;
+  --accent: #89b4fa;
+  --accent2: #a6e3a1;
+  --hover: #2a2a3c;
+  --danger: #f38ba8;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); font-size: 14px;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* 顶栏 */
+#topbar {
+  display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 14px; background: var(--bg2);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.brand { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.crumb { flex: 1; color: var(--muted); font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.top-actions { display: flex; gap: 8px; }
+.btn {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.btn:hover { background: var(--hover); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+.icon-btn {
+  background: transparent; color: var(--muted); border: none; cursor: pointer;
+  font-size: 15px; padding: 2px 6px; border-radius: 4px;
+}
+.icon-btn:hover { color: var(--text); background: var(--hover); }
+
+/* 主区 */
+#main { flex: 1; display: flex; min-height: 0; }
+
+/* 侧栏 */
+#sidebar {
+  width: 260px; background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.side-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--border);
+}
+#tree { flex: 1; overflow: auto; padding: 4px 0; }
+.node { user-select: none; }
+.node-row {
+  display: flex; align-items: center; gap: 5px; padding: 3px 10px;
+  cursor: pointer; white-space: nowrap; font-size: 13px;
+}
+.node-row:hover { background: var(--hover); }
+.node-row.active { background: #313a55; color: #fff; }
+.node-row .twist { width: 12px; color: var(--muted); font-size: 10px; }
+.node-row .ico { width: 16px; text-align: center; }
+.node-children { padding-left: 14px; }
+.node-name { overflow: hidden; text-overflow: ellipsis; }
+.muted { color: var(--muted); }
+
+/* 内容区 */
+#content { flex: 1; min-width: 0; position: relative; display: flex; }
+.welcome { margin: auto; text-align: center; max-width: 520px; padding: 30px; }
+.welcome h1 { font-size: 34px; }
+.welcome kbd {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 6px; font-size: 12px;
+}
+.hidden { display: none !important; }
+
+#editor-wrap { flex: 1; display: flex; min-width: 0; }
+#editor {
+  flex: 1; min-width: 0; resize: none; border: none; outline: none;
+  background: var(--bg3); color: var(--text); padding: 16px;
+  font-family: "Cascadia Code", "Consolas", monospace; font-size: 13px;
+  line-height: 1.6; tab-size: 2;
+}
+#preview {
+  flex: 1; min-width: 0; overflow: auto; padding: 20px 28px;
+  border-left: 1px solid var(--border); background: var(--bg);
+}
+/* 单栏模式 */
+#editor-wrap.mode-edit #preview { display: none; }
+#editor-wrap.mode-preview #editor { display: none; }
+#editor-wrap.mode-preview #preview { border-left: none; }
+
+#image-view { margin: auto; padding: 20px; }
+#image-view img { max-width: 100%; max-height: 80vh; border-radius: 6px; }
+#binary-view { margin: auto; text-align: center; }
+
+/* 工具面板 */
+#toolpane {
+  width: 340px; background: var(--bg2); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.tool-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px;
+  border-bottom: 1px solid var(--border); }
+.tool-tab {
+  font-size: 12px; padding: 4px 9px; border-radius: 5px; cursor: pointer;
+  background: var(--panel); border: 1px solid transparent; color: var(--muted);
+}
+.tool-tab:hover { color: var(--text); }
+.tool-tab.active { color: var(--bg2); background: var(--accent); }
+#tool-body { flex: 1; overflow: auto; padding: 12px; }
+#tool-body label { display: block; font-size: 12px; color: var(--muted);
+  margin: 8px 0 4px; }
+#tool-body textarea, #tool-body input, #tool-body select {
+  width: 100%; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; padding: 7px;
+  font-family: "Cascadia Code", monospace; font-size: 12px; resize: vertical;
+}
+#tool-body textarea { min-height: 90px; }
+.tool-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.tool-row .btn { flex: 1; padding: 5px; }
+.tool-out { margin-top: 10px; font-size: 12px; white-space: pre-wrap;
+  word-break: break-all; color: var(--muted); }
+.tool-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* git 面板 */
+.git-head { display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; }
+#git-branch { font-size: 13px; color: var(--accent); }
+.git-file { display: flex; align-items: center; gap: 7px; padding: 3px 4px;
+  border-radius: 4px; cursor: pointer; font-size: 12px; }
+.git-file:hover { background: var(--hover); }
+.g-flag { width: 22px; text-align: center; font-family: monospace;
+  border-radius: 3px; font-size: 11px; padding: 1px 0; flex-shrink: 0; }
+.g-new { background: #313a2a; color: var(--accent2); }
+.g-mod { background: #3a3526; color: #f9e2af; }
+.g-del { background: #3a2a2f; color: var(--danger); }
+.g-add { background: #2a3344; color: var(--accent); }
+.g-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-diff {
+  margin-top: 10px; max-height: 320px; overflow: auto; font-size: 11px;
+  line-height: 1.45; background: var(--bg3); border-radius: 6px;
+  padding: 8px; white-space: pre; font-family: "Cascadia Code", monospace;
+}
+.git-diff:empty { display: none; }
+.d-add { color: var(--accent2); }
+.d-del { color: var(--danger); }
+.d-hunk { color: #94e2d5; }
+.d-meta { color: var(--muted); }
+
+/* 状态栏 */
+#statusbar {
+  height: 24px; display: flex; align-items: center; gap: 16px;
+  padding: 0 14px; background: var(--bg2); border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted); flex-shrink: 0;
+}
+#status-msg.ok { color: var(--accent2); }
+#status-msg.err { color: var(--danger); }
+.dirty #status-file::after { content: " ●"; color: var(--accent2); }
+
+/* markdown 渲染 */
+.markdown-body { line-height: 1.7; }
+.markdown-body h1, .markdown-body h2 { border-bottom: 1px solid var(--border);
+  padding-bottom: .3em; }
+.markdown-body code {
+  background: var(--bg3); padding: 2px 5px; border-radius: 4px;
+  font-family: "Cascadia Code", monospace; font-size: .9em;
+}
+.markdown-body pre {
+  background: var(--bg3); padding: 14px; border-radius: 8px; overflow: auto;
+}
+.markdown-body pre code { background: none; padding: 0; }
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent); margin: 0; padding-left: 14px;
+  color: var(--muted);
+}
+.markdown-body table { border-collapse: collapse; }
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border); padding: 6px 12px;
+}
+.markdown-body a { color: var(--accent); }
+.markdown-body img { max-width: 100%; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }

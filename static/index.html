@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workbench</title>
+<link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶栏 -->
+  <header id="topbar">
+    <div class="brand">🛠 Workbench</div>
+    <div class="crumb" id="crumb"></div>
+    <div class="top-actions">
+      <button id="btn-save" class="btn" title="保存 (Ctrl+S)">保存</button>
+      <button id="btn-view-edit" class="btn" data-mode="split" title="切换视图">分屏</button>
+      <button id="btn-tools" class="btn" title="工具面板">工具 ⚙</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <!-- 左：文件树 -->
+    <aside id="sidebar">
+      <div class="side-head">
+        <span>文件</span>
+        <button id="btn-refresh" class="icon-btn" title="刷新">⟳</button>
+      </div>
+      <div id="tree"></div>
+    </aside>
+
+    <!-- 中：编辑/预览 -->
+    <section id="content">
+      <div id="welcome" class="welcome">
+        <h1>🛠 Workbench</h1>
+        <p>左侧选择一个文件开始。Markdown 实时预览，<kbd>Ctrl</kbd>+<kbd>S</kbd> 保存。</p>
+        <p class="muted">右上角「工具」里有 JSON / Base64 / 时间戳 / Hash 等小工具。</p>
+      </div>
+      <div id="editor-wrap" class="hidden">
+        <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
+        <div id="preview" class="markdown-body"></div>
+      </div>
+      <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
+      <div id="binary-view" class="hidden">
+        <p>二进制文件，无法编辑。</p>
+        <p class="muted" id="binary-info"></p>
+      </div>
+    </section>
+
+    <!-- 右：工具面板 -->
+    <aside id="toolpane" class="hidden">
+      <div class="side-head">
+        <span>工具箱</span>
+        <button id="btn-close-tools" class="icon-btn" title="关闭">✕</button>
+      </div>
+      <div class="tool-tabs" id="tool-tabs"></div>
+      <div id="tool-body"></div>
+    </aside>
+  </div>
+
+  <footer id="statusbar">
+    <span id="status-file">未打开文件</span>
+    <span id="status-msg"></span>
+  </footer>
+</div>
+
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/tools.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
