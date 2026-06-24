@@ -323,6 +323,7 @@ function closeCurrent() {
   $("#status-file").textContent = "未打开文件";
   $("#crumb").textContent = "";
   if (window.updateStatusBar) updateStatusBar();
+  if (window.updateRunButton) updateRunButton();
 }
 
 // 在树中按 path 找到对应的 .node-row（仅限已渲染节点）
@@ -759,6 +760,7 @@ function setCurrent(path, kind) {
   $("#status-file").textContent = path;
   $("#crumb").textContent = path;
   if (window.updateStatusBar) updateStatusBar();
+  if (window.updateRunButton) updateRunButton();
 }
 
 function hideAllViews() {
@@ -1187,6 +1189,116 @@ function findNext(dir) {
 function fireEditorInput() {
   $("#editor").dispatchEvent(new Event("input", { bubbles: true }));
 }
+
+// ---------- Markdown 粘贴图片自动存盘 + 插链接 ----------
+// 当前激活标签是否为 Markdown 文件
+function activeTabIsMarkdown() {
+  const t = tabByPath(state.activeTab);
+  return !!(t && (t.ext === ".md" || t.ext === ".markdown"));
+}
+
+// 把 Markdown 文本插入到 #editor 当前光标处（替换选区），并刷新预览/脏标记
+function insertAtCursor(text) {
+  const ta = $("#editor");
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+  const caret = s + text.length;
+  ta.selectionStart = ta.selectionEnd = caret;
+  fireEditorInput();
+}
+
+// 读 Blob 为 base64 dataURL
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(fr.error || new Error("读取失败"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+$("#editor").addEventListener("paste", async (e) => {
+  // 仅在文本编辑视图、且当前是 Markdown 文件时拦截图片粘贴
+  if (state.kind !== "text" || !activeTabIsMarkdown()) return;
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  let imgItem = null;
+  for (const it of items) {
+    if (it.kind === "file" && it.type && it.type.startsWith("image/")) { imgItem = it; break; }
+  }
+  if (!imgItem) return;   // 非图片粘贴照常
+  e.preventDefault();
+  const file = imgItem.getAsFile();
+  if (!file) return;
+  // 占位符，避免上传期间用户继续输入打乱光标
+  const placeholder = `![上传中…](uploading)`;
+  insertAtCursor(placeholder);
+  try {
+    const dataUrl = await blobToDataURL(file);
+    const res = await fsPost("/api/upload-image", {
+      dataB64: dataUrl, mime: file.type, name: file.name || "",
+    });
+    const ta = $("#editor");
+    if (res && res.path) {
+      const md = `![](${res.path})`;
+      const at = ta.value.indexOf(placeholder);
+      if (at >= 0) {
+        ta.value = ta.value.slice(0, at) + md + ta.value.slice(at + placeholder.length);
+        ta.selectionStart = ta.selectionEnd = at + md.length;
+      } else {
+        insertAtCursor(md);
+      }
+      fireEditorInput();
+      setMsg("已插入图片 " + res.path, "ok");
+    } else {
+      // 失败：移除占位符
+      const at = ta.value.indexOf(placeholder);
+      if (at >= 0) {
+        ta.value = ta.value.slice(0, at) + ta.value.slice(at + placeholder.length);
+        ta.selectionStart = ta.selectionEnd = at;
+        fireEditorInput();
+      }
+      setMsg("图片上传失败: " + ((res && res.error) || "未知错误"), "err");
+    }
+  } catch (err) {
+    const ta = $("#editor");
+    const at = ta.value.indexOf(placeholder);
+    if (at >= 0) {
+      ta.value = ta.value.slice(0, at) + ta.value.slice(at + placeholder.length);
+      ta.selectionStart = ta.selectionEnd = at;
+      fireEditorInput();
+    }
+    setMsg("图片上传失败: " + (err && err.message ? err.message : err), "err");
+  }
+});
+
+// ---------- 编辑 ↔ 预览 滚动同步（仅分屏模式）----------
+// 分屏：editor-wrap 既无 mode-edit 也无 mode-preview，且当前是 markdown 文件
+function isSplitMode() {
+  const wrap = $("#editor-wrap");
+  if (!wrap || wrap.classList.contains("hidden")) return false;
+  if (wrap.classList.contains("mode-edit") || wrap.classList.contains("mode-preview")) return false;
+  return activeTabIsMarkdown();
+}
+let scrollSyncing = false;   // 防回声循环
+function ratioOf(el) {
+  const range = el.scrollHeight - el.clientHeight;
+  return range > 0 ? el.scrollTop / range : 0;
+}
+function applyRatio(el, ratio) {
+  const range = el.scrollHeight - el.clientHeight;
+  el.scrollTop = range > 0 ? ratio * range : 0;
+}
+function syncScrollFrom(src, dst) {
+  if (scrollSyncing) return;
+  if (!isSplitMode()) return;
+  scrollSyncing = true;
+  applyRatio(dst, ratioOf(src));
+  // 下一帧解锁，吞掉被动滚动触发的回声事件
+  requestAnimationFrame(() => { scrollSyncing = false; });
+}
+$("#editor").addEventListener("scroll", () => syncScrollFrom($("#editor"), $("#preview")), { passive: true });
+$("#preview").addEventListener("scroll", () => syncScrollFrom($("#preview"), $("#editor")), { passive: true });
 
 // 替换当前选中的匹配
 function replaceCurrent() {
