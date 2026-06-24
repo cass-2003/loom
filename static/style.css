@@ -538,8 +538,26 @@ body {
 .ggraph-row { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 2px;
   box-sizing: border-box; cursor: default; border-radius: 5px; }
 .ggraph-row:hover { background: var(--hover); }
+.ggraph-row.expanded { background: var(--sel); }
 .ggraph-msg { font-size: 12.5px; color: var(--text); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
+/* 提交内联展开的改动文件列表 */
+.ggraph-files { border-left: 2px solid var(--accent); margin: 2px 0 4px 4px;
+  background: var(--bg2); border-radius: 0 6px 6px 0; overflow: hidden; }
+.ggraph-files-loading { padding: 6px 10px; font-size: 12px; color: var(--muted); }
+.ggraph-file { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px;
+  height: 24px; box-sizing: border-box; cursor: pointer; }
+.ggraph-file:hover { background: var(--hover); }
+.ggraph-file.active { background: var(--sel); }
+.ggraph-file-ico { display: inline-flex; flex-shrink: 0; }
+.ggraph-file-ico.ic-md { color: var(--accent2); } .ggraph-file-ico.ic-img { color: var(--purple); }
+.ggraph-file-ico.ic-code { color: var(--accent); } .ggraph-file-ico.ic-text { color: var(--text-dim); }
+.ggraph-file-name { font-size: 12px; color: var(--text); flex-shrink: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.ggraph-file-dir { font-size: 10.5px; color: var(--muted); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.ggraph-file-status { width: 14px; text-align: center; flex-shrink: 0;
+  font-family: "Cascadia Code", monospace; font-size: 12px; font-weight: 700; }
 /* 分支/标签胶囊 */
 .ggraph-ref { flex-shrink: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; padding: 0 7px; border-radius: 9px; font-size: 10px; font-weight: 600;

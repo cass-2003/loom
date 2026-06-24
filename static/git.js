@@ -262,7 +262,81 @@ async function renderSidebarGraph() {
   logEl.innerHTML =
     `<div class="ggraph-col" style="width:${w}px">${svg}</div><div class="ggraph-rows">${rows}</div>`;
 
-  logEl.querySelectorAll(".ggraph-row").forEach(row => attachCommitHover(row));
+  logEl.querySelectorAll(".ggraph-row").forEach(row => {
+    attachCommitHover(row);
+    row.addEventListener("click", () => toggleCommitFiles(row));
+  });
+}
+
+/* ===== 点提交行 → 内联展开改动文件列表 ===== */
+const commitFilesCache = {};
+
+function statusLetterForCommit(code) {
+  code = (code || "").trim().toUpperCase();
+  if (code[0] === "A") return ["A", "g-add"];
+  if (code[0] === "D") return ["D", "g-del"];
+  if (code[0] === "R") return ["R", "g-mod"];
+  if (code[0] === "C") return ["C", "g-add"];
+  return ["M", "g-mod"];
+}
+
+async function toggleCommitFiles(row) {
+  // 已展开 → 收起
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains("ggraph-files")) {
+    next.remove();
+    row.classList.remove("expanded");
+    return;
+  }
+  // 同一时间只展开一个：移除其它已展开面板
+  document.querySelectorAll(".ggraph-files").forEach(e => e.remove());
+  document.querySelectorAll(".ggraph-row.expanded").forEach(e => e.classList.remove("expanded"));
+
+  const h = row.dataset.hash;
+  row.classList.add("expanded");
+  const panel = document.createElement("div");
+  panel.className = "ggraph-files";
+  panel.innerHTML = `<div class="ggraph-files-loading">加载中…</div>`;
+  row.after(panel);
+
+  let d = commitFilesCache[h];
+  if (!d) {
+    d = await gjson(`/api/git/commit_files?path=${encodeURIComponent(gitCurPath())}&hash=${h}`);
+    if (d.error) { panel.innerHTML = `<div class="ggraph-files-loading">${escapeHtml(d.error)}</div>`; return; }
+    commitFilesCache[h] = d;
+  }
+  // 面板可能在请求期间被收起/替换
+  if (!panel.isConnected) return;
+
+  const files = d.files || [];
+  if (!files.length) { panel.innerHTML = `<div class="ggraph-files-loading">无文件改动</div>`; return; }
+
+  panel.innerHTML = "";
+  files.forEach(f => {
+    const slash = f.path.lastIndexOf("/");
+    const name = slash >= 0 ? f.path.slice(slash + 1) : f.path;
+    const dir = slash >= 0 ? f.path.slice(0, slash) : "";
+    const [iconName, iconCls] = gitIconFor(name);
+    const [letter, letterCls] = statusLetterForCommit(f.status);
+    const item = document.createElement("div");
+    item.className = "ggraph-file";
+    item.title = f.path;
+    item.innerHTML =
+      `<span class="ggraph-file-ico ${iconCls}">${svgIcon(iconName, 14)}</span>`
+      + `<span class="ggraph-file-name">${escapeHtml(name)}</span>`
+      + `<span class="ggraph-file-dir">${escapeHtml(dir)}</span>`
+      + `<span class="ggraph-file-status ${letterCls}">${letter}</span>`;
+    item.onclick = async (e) => {
+      e.stopPropagation();
+      panel.querySelectorAll(".ggraph-file.active").forEach(x => x.classList.remove("active"));
+      item.classList.add("active");
+      const dd = await gjson(
+        `/api/git/commit_diff?path=${encodeURIComponent(gitCurPath())}&hash=${h}&file=${encodeURIComponent(f.path)}`);
+      const title = `${f.path} @ ${h.slice(0, 7)}`;
+      window.showDiffView(title, dd.diff || "(无文本差异 / 二进制文件)");
+    };
+    panel.appendChild(item);
+  });
 }
 
 /* ===== 提交悬浮详情卡（鼠标停在某条提交上弹出） ===== */
