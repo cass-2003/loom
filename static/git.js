@@ -85,6 +85,7 @@ async function refreshGit() {
     staged.forEach(f => stagedEl.appendChild(renderFileRow(f, "staged")));
   } else {
     stagedSec.classList.add("hidden");
+    stagedCount.textContent = "0";
     stagedEl.innerHTML = "";
   }
 

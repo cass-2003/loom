@@ -816,6 +816,7 @@ $("#btn-md-export").onclick = (e) => {
 };
 // 点击别处关闭浮层菜单
 document.addEventListener("mousedown", (e) => {
+  if (!(e.target instanceof Element)) return;
   if (!e.target.closest("#md-toolbar")) {
     $("#toc-menu").classList.add("hidden");
     $("#export-menu").classList.add("hidden");
