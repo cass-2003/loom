@@ -936,7 +936,9 @@ function renderMath(root) {
 // marked 渲染的 GFM 任务项形如 <li class="task-list-item"><input type=checkbox ...>...
 // 给每个复选框打上「在源码里的序号」，点击后回写对应行的 [ ]<->[x]。
 function decorateTaskList(root) {
-  const boxes = root.querySelectorAll('li.task-list-item > input[type="checkbox"], li > input[type="checkbox"].task-list-item-checkbox');
+  // 本地 vendor 的 marked 渲染任务项不带 task-list-item 类，直接匹配列表项里的复选框。
+  // GFM 只为任务清单语法生成 li 内的 checkbox，故按 DOM 顺序与源码任务行一一对应。
+  const boxes = root.querySelectorAll('li input[type="checkbox"]');
   let i = 0;
   boxes.forEach(cb => {
     cb.disabled = false;
