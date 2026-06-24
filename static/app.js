@@ -28,18 +28,32 @@ marked.setOptions({
   },
 });
 
-const ICONS = {
-  dir: "📁", dirOpen: "📂", text: "📄", image: "🖼", binary: "📦",
-  md: "📝", json: "🔧", js: "🟨", py: "🐍", html: "🌐", css: "🎨",
-};
+const CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
+  "c","cpp","h","css","scss","html","htm","xml","yaml","yml","toml","sh",
+  "bash","ps1","bat","sql","vue","svelte"]);
+// 返回 [图标名, 颜色类]
 function fileIcon(entry) {
-  if (entry.type === "dir") return ICONS.dir;
+  if (entry.type === "dir") return ["folder", "ic-folder"];
   const ext = (entry.name.split(".").pop() || "").toLowerCase();
-  if (ext === "md" || ext === "markdown") return ICONS.md;
-  if (ext === "json") return ICONS.json;
-  if (entry.kind === "image") return ICONS.image;
-  if (entry.kind === "binary") return ICONS.binary;
-  return ICONS.text;
+  if (ext === "md" || ext === "markdown") return ["markdown", "ic-md"];
+  if (entry.kind === "image") return ["image", "ic-img"];
+  if (entry.kind === "binary") return ["file", "ic-bin"];
+  if (CODE_EXTS.has(ext)) return ["fileCode", "ic-code"];
+  return ["fileText", "ic-text"];
+}
+
+// 把页面上所有 [data-icon] 占位元素替换为 SVG
+function hydrateIcons(root = document) {
+  root.querySelectorAll("[data-icon]").forEach(el => {
+    if (el.dataset.hydrated) return;
+    const name = el.dataset.icon;
+    let size = 16;
+    if (el.classList.contains("act")) size = 21;
+    else if (el.classList.contains("welcome-logo")) size = 46;
+    else if (el.classList.contains("bin-icon")) size = 44;
+    el.insertAdjacentHTML("afterbegin", svgIcon(name, size));
+    el.dataset.hydrated = "1";
+  });
 }
 
 // ---------- 文件树 ----------
@@ -60,24 +74,26 @@ function renderNode(entry) {
   row.dataset.path = entry.path;
   row.dataset.type = entry.type;
 
+  const [iconName, iconCls] = fileIcon(entry);
   const twist = document.createElement("span");
   twist.className = "twist";
   const ico = document.createElement("span");
-  ico.className = "ico";
+  ico.className = "ico " + iconCls;
+  ico.innerHTML = svgIcon(iconName, 16);
   const name = document.createElement("span");
   name.className = "node-name";
   name.textContent = entry.name;
-  ico.textContent = fileIcon(entry);
 
   if (entry.type === "dir") {
-    twist.textContent = "▶";
+    twist.innerHTML = svgIcon("chevron", 13);
     const children = document.createElement("div");
     children.className = "node-children hidden";
     row.onclick = async () => {
       const open = !children.classList.contains("hidden");
       if (open) {
         children.classList.add("hidden");
-        twist.textContent = "▶"; ico.textContent = ICONS.dir;
+        twist.classList.remove("open");
+        ico.innerHTML = svgIcon("folder", 16);
         state.expanded.delete(entry.path);
       } else {
         if (!children.dataset.loaded) {
@@ -85,7 +101,8 @@ function renderNode(entry) {
           children.dataset.loaded = "1";
         }
         children.classList.remove("hidden");
-        twist.textContent = "▼"; ico.textContent = ICONS.dirOpen;
+        twist.classList.add("open");
+        ico.innerHTML = svgIcon("folderOpen", 16);
         state.expanded.add(entry.path);
       }
     };
@@ -153,7 +170,7 @@ function hideAllViews() {
 // 在中间区域显示 diff (源代码管理点文件时调用)
 window.showDiffView = function (name, diffText) {
   hideAllViews();
-  $("#diff-head").textContent = "⎇ " + name;
+  $("#diff-head").innerHTML = svgIcon("branch", 14) + `<span>${name}</span>`;
   const body = $("#diff-body");
   body.innerHTML = "";
   for (const line of diffText.split("\n")) {
@@ -271,6 +288,7 @@ window.addEventListener("beforeunload", (e) => {
   if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
 });
 
+hydrateIcons();   // 把 data-icon 占位换成 SVG
 initTree();
 initTools();
 initGit();

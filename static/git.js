@@ -37,11 +37,11 @@ async function refreshGit() {
     return;
   }
 
-  let tag = `⎇ ${d.branch || "(无分支)"}`;
-  if (d.ahead) tag += `  ↑${d.ahead}`;
-  if (d.behind) tag += `  ↓${d.behind}`;
-  branchEl.textContent = tag;
-  stBranch.textContent = tag;
+  let tail = d.branch || "(无分支)";
+  if (d.ahead) tail += `  ↑${d.ahead}`;
+  if (d.behind) tail += `  ↓${d.behind}`;
+  branchEl.innerHTML = svgIcon("branch", 14) + `<span>${tail}</span>`;
+  stBranch.innerHTML = svgIcon("branch", 12) + `<span>${tail}</span>`;
 
   const n = d.files.length;
   if (n) { badge.textContent = n; badge.classList.remove("hidden"); }

@@ -11,31 +11,31 @@
 <div id="app">
   <!-- 顶栏 -->
   <header id="topbar">
-    <div class="brand">🛠 Workbench</div>
+    <div class="brand"><span class="brand-dot"></span>Workbench</div>
     <div class="crumb" id="crumb"></div>
     <div class="top-actions">
-      <button id="btn-save" class="btn" title="保存 (Ctrl+S)">保存</button>
-      <button id="btn-view-edit" class="btn" title="切换视图">分屏</button>
+      <button id="btn-view-edit" class="btn ghost" title="切换视图">分屏</button>
+      <button id="btn-save" class="btn" title="保存 (Ctrl+S)"><span class="i" data-icon="save"></span>保存</button>
     </div>
   </header>
 
   <div id="main">
     <!-- 活动栏 -->
     <nav id="activitybar">
-      <button class="act active" data-view="files" title="资源管理器">🗂</button>
-      <button class="act" data-view="git" title="源代码管理">
-        ⎇<span class="badge hidden" id="git-badge">0</span>
+      <button class="act active" data-view="files" data-icon="folder" title="资源管理器"></button>
+      <button class="act" data-view="git" data-icon="git" title="源代码管理">
+        <span class="badge hidden" id="git-badge">0</span>
       </button>
-      <button class="act" data-view="tools" title="工具箱">🧰</button>
+      <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
     </nav>
 
-    <!-- 侧边栏：三个视图切换 -->
+    <!-- 侧边栏 -->
     <aside id="sidebar">
       <!-- 文件视图 -->
       <div class="view" id="view-files">
         <div class="side-head">
           <span>资源管理器</span>
-          <button id="btn-refresh" class="icon-btn" title="刷新">⟳</button>
+          <button id="btn-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
         </div>
         <div id="tree"></div>
       </div>
@@ -44,14 +44,14 @@
       <div class="view hidden" id="view-git">
         <div class="side-head">
           <span>源代码管理</span>
-          <button id="git-refresh" class="icon-btn" title="刷新">⟳</button>
+          <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
         </div>
         <div id="git-body">
           <div id="git-branch" class="git-branch muted">读取中…</div>
-          <textarea id="git-msg" placeholder="提交信息 (Ctrl+Enter 提交)"></textarea>
+          <textarea id="git-msg" placeholder="提交信息（Ctrl+Enter 提交）"></textarea>
           <div class="tool-row">
-            <button class="btn" id="git-commit">✓ 提交</button>
-            <button class="btn" id="git-push">↑ 推送</button>
+            <button class="btn primary" id="git-commit"><span class="i" data-icon="check"></span>提交</button>
+            <button class="btn ghost" id="git-push"><span class="i" data-icon="upload"></span>推送</button>
           </div>
           <div id="git-out" class="tool-out"></div>
           <div class="git-changes-head" id="git-changes-head"></div>
@@ -70,9 +70,15 @@
     <!-- 中：编辑 / 预览 / diff -->
     <section id="content">
       <div id="welcome" class="welcome">
-        <h1>🛠 Workbench</h1>
-        <p>左侧 <b>🗂</b> 选文件编辑，<b>⎇</b> 看 Git 改动，<b>🧰</b> 用小工具。</p>
-        <p class="muted">Markdown 实时预览，<kbd>Ctrl</kbd>+<kbd>S</kbd> 保存。</p>
+        <div class="welcome-logo" data-icon="tools"></div>
+        <h1>Workbench</h1>
+        <p class="lead">轻量本地工作台</p>
+        <div class="welcome-hints">
+          <div class="hint"><span class="hint-i" data-icon="folder"></span>选文件编辑，Markdown 实时预览</div>
+          <div class="hint"><span class="hint-i" data-icon="git"></span>查看 Git 改动、提交推送</div>
+          <div class="hint"><span class="hint-i" data-icon="tools"></span>JSON / Base64 / 时间戳 等小工具</div>
+        </div>
+        <p class="muted kbd-tip"><kbd>Ctrl</kbd>+<kbd>S</kbd> 保存　·　<kbd>Ctrl</kbd>+<kbd>Enter</kbd> 提交</p>
       </div>
       <div id="editor-wrap" class="hidden">
         <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
@@ -84,7 +90,8 @@
       </div>
       <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
       <div id="binary-view" class="hidden">
-        <p>二进制文件，无法编辑。</p>
+        <div class="bin-icon" data-icon="file"></div>
+        <p>二进制文件，无法编辑</p>
         <p class="muted" id="binary-info"></p>
       </div>
     </section>
@@ -99,6 +106,7 @@
 
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/icons.js"></script>
 <script src="/static/tools.js"></script>
 <script src="/static/git.js"></script>
 <script src="/static/app.js"></script>
