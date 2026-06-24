@@ -41,24 +41,42 @@
         <div id="tree"></div>
       </div>
 
-      <!-- Git 视图 -->
+      <!-- Git 视图 (源代码管理) -->
       <div class="view hidden" id="view-git">
         <div class="side-head">
           <span>源代码管理</span>
-          <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
+          <div class="head-actions">
+            <button id="git-push" class="icon-btn" data-icon="upload" title="推送"></button>
+            <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
+          </div>
         </div>
         <div id="git-body">
-          <div id="git-branch" class="git-branch muted">读取中…</div>
-          <textarea id="git-msg" placeholder="提交信息（Ctrl+Enter 提交）"></textarea>
-          <div class="tool-row">
-            <button class="btn primary" id="git-commit"><span class="i" data-icon="check"></span>提交</button>
-            <button class="btn ghost" id="git-push"><span class="i" data-icon="upload"></span>推送</button>
+          <div class="scm-input">
+            <textarea id="git-msg" rows="1" placeholder="消息（Ctrl+Enter 提交）"></textarea>
           </div>
+          <button class="scm-commit" id="git-commit">
+            <span class="i" data-icon="check"></span>
+            <span id="git-commit-label">提交</span>
+          </button>
           <div id="git-out" class="tool-out"></div>
-          <div class="git-changes-head" id="git-changes-head"></div>
-          <div id="git-files"></div>
-          <div class="git-changes-head" id="git-log-head">提交历史</div>
-          <div id="git-log"></div>
+
+          <div class="scm-section" id="scm-changes">
+            <div class="scm-section-head">
+              <span class="scm-twist" data-icon="chevron"></span>
+              <span class="scm-title">更改</span>
+              <span class="scm-count hidden" id="git-changes-count">0</span>
+            </div>
+            <div id="git-files" class="scm-list"></div>
+          </div>
+
+          <div class="scm-section" id="scm-history">
+            <div class="scm-section-head">
+              <span class="scm-twist" data-icon="chevron"></span>
+              <span class="scm-title">提交历史</span>
+              <span class="scm-branch-chip" id="git-branch"></span>
+            </div>
+            <div id="git-log" class="scm-list"></div>
+          </div>
         </div>
       </div>
 

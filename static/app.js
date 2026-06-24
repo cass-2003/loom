@@ -117,6 +117,7 @@ function renderNode(entry) {
 }
 
 // ---------- 打开文件 ----------
+window.openFile = openFile;
 async function openFile(path, row) {
   if (state.dirty && !confirm("当前文件未保存，确定切换？")) return;
   document.querySelectorAll(".node-row.active").forEach(e => e.classList.remove("active"));

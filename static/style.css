@@ -252,40 +252,83 @@ body {
   word-break: break-all; color: var(--muted); line-height: 1.5; }
 .tool-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
-/* Git 视图 */
-#git-body { flex: 1; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; }
-.git-branch { display: flex; align-items: center; gap: 7px; font-size: 13px;
-  color: var(--accent); margin-bottom: 10px; font-family: "Cascadia Code", monospace; }
-#git-msg { font-family: inherit; font-size: 13px; min-height: 54px; }
-.git-changes-head { font-size: 11px; text-transform: uppercase; color: var(--muted);
-  margin: 14px 0 6px; letter-spacing: .7px; font-weight: 600; }
-.git-file { display: flex; align-items: center; gap: 9px; padding: 5px 8px;
+/* ===== 源代码管理 (仿 VS Code) ===== */
+.head-actions { display: flex; gap: 2px; }
+#git-body { flex: 1; overflow: auto; padding: 10px 10px 14px; display: flex; flex-direction: column; }
+
+/* 提交输入 + 按钮 */
+.scm-input { margin: 0 2px; }
+#git-msg { width: 100%; min-height: 30px; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px;
+  font-family: inherit; font-size: 13px; resize: none; line-height: 1.4; overflow: hidden; }
+#git-msg:focus { outline: none; border-color: var(--accent); }
+.scm-commit { display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: calc(100% - 4px); margin: 7px 2px 4px; padding: 7px; cursor: pointer;
+  background: var(--accent); color: #07140c; border: none; border-radius: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 600; transition: background .12s; }
+.scm-commit:hover { background: var(--accent-press); }
+.scm-commit:active { transform: translateY(1px); }
+:root[data-theme="light"] .scm-commit { color: #fff; }
+
+/* 分区 */
+.scm-section { margin-top: 10px; }
+.scm-section-head { display: flex; align-items: center; gap: 5px; padding: 3px 4px;
+  cursor: pointer; color: var(--muted); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px; user-select: none; border-radius: 5px; }
+.scm-section-head:hover { color: var(--text-dim); }
+.scm-twist { display: flex; transition: transform .12s; }
+.scm-twist .icn { width: 14px; height: 14px; }
+.scm-section.collapsed .scm-twist { transform: rotate(-90deg); }
+.scm-section.collapsed .scm-list { display: none; }
+.scm-title { flex: 1; }
+.scm-count { background: var(--panel); color: var(--text-dim); border-radius: 9px;
+  min-width: 18px; text-align: center; padding: 1px 6px; font-size: 11px;
+  font-weight: 700; letter-spacing: 0; }
+.scm-branch-chip { display: inline-flex; align-items: center; gap: 4px;
+  color: var(--muted); font-size: 11px; font-weight: 600; text-transform: none;
+  letter-spacing: 0; font-family: "Cascadia Code", monospace; }
+.scm-list { margin-top: 3px; }
+.scm-empty { color: var(--muted); font-size: 12.5px; padding: 8px 6px;
+  display: flex; flex-direction: column; align-items: flex-start; }
+
+/* 改动文件行 */
+.scm-file { display: flex; align-items: center; gap: 7px; padding: 4px 8px;
   border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-dim);
-  transition: background .1s; }
-.git-file:hover { background: var(--hover); }
-.git-file.active { background: var(--sel); color: #fff; }
-.g-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.g-flag { width: 16px; text-align: center; font-family: "Cascadia Code", monospace;
+  transition: background .1s; position: relative; }
+.scm-file:hover { background: var(--hover); }
+.scm-file.active { background: var(--sel); }
+.scm-file-ico { display: flex; flex-shrink: 0; }
+.scm-file-name { white-space: nowrap; }
+.scm-file-dir { flex: 1; min-width: 0; color: var(--muted); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-file-actions { display: none; align-items: center; gap: 2px; }
+.scm-file:hover .scm-file-actions { display: flex; }
+.scm-file:hover .scm-file-status { display: none; }
+.scm-act { display: flex; padding: 2px; background: transparent; border: none;
+  color: var(--muted); cursor: pointer; border-radius: 4px; }
+.scm-act:hover { color: var(--text); background: var(--panel); }
+.scm-file-status { width: 16px; text-align: center; font-family: "Cascadia Code", monospace;
   font-size: 12px; font-weight: 700; flex-shrink: 0; }
 .g-new { color: var(--accent2); } .g-mod { color: var(--warn); }
 .g-del { color: var(--danger); } .g-add { color: var(--accent); }
 
-/* 提交历史 (commit 树) */
-#git-log { display: flex; flex-direction: column; }
-.git-log-item { display: flex; gap: 10px; }
-.log-graph { position: relative; width: 14px; display: flex; justify-content: center;
-  flex-shrink: 0; }
-.log-graph .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px;
+/* 提交历史 */
+.scm-commit-row { display: flex; gap: 9px; padding: 0 4px; cursor: default; border-radius: 6px; }
+.scm-commit-row:hover { background: var(--hover); }
+.scm-graph { position: relative; width: 12px; display: flex; justify-content: center; flex-shrink: 0; }
+.scm-graph .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px;
   background: var(--muted); box-shadow: 0 0 0 3px var(--bg2); z-index: 1; }
-.log-graph .dot.head { background: var(--accent);
-  box-shadow: 0 0 0 3px var(--bg2), 0 0 7px var(--accent); }
-.log-graph .line { position: absolute; top: 9px; bottom: -6px; left: 50%;
+.scm-graph .dot.head { background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg2), 0 0 6px var(--accent); }
+.scm-graph .line { position: absolute; top: 10px; bottom: -2px; left: 50%;
   width: 2px; transform: translateX(-50%); background: var(--border); }
-.log-main { flex: 1; min-width: 0; padding-bottom: 12px; }
-.log-subject { font-size: 13px; color: var(--text-dim); overflow: hidden;
+.scm-commit-main { flex: 1; min-width: 0; display: flex; flex-direction: column;
+  padding: 3px 0 9px; }
+.scm-commit-msg { font-size: 13px; color: var(--text-dim); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
-.log-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
-.log-hash { font-family: "Cascadia Code", monospace; color: var(--warn); }
+.scm-commit-sub { font-size: 11px; color: var(--muted); margin-top: 1px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.scm-commit-sub .hash { font-family: "Cascadia Code", monospace; color: var(--warn); }
 
 /* diff 着色 */
 .git-diff { color: var(--text-dim); }
