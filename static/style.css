@@ -315,25 +315,30 @@ body {
 /* 提交历史 (Git Graph) */
 .glog-row { display: flex; gap: 9px; padding: 0 4px; cursor: default; border-radius: 6px; }
 .glog-row:hover { background: var(--hover); }
-.glog-lane { position: relative; width: 24px; flex-shrink: 0; display: flex;
-  justify-content: center; }
-.glog-track { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
-  transform: translateX(-50%); background: var(--graph-line, #3a3a42); }
-.glog-track.is-first { top: 18px; }
-.glog-track.is-last { bottom: calc(100% - 18px); }
-.glog-avatar { position: relative; z-index: 1; width: 22px; height: 22px; margin-top: 7px;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
-  box-shadow: 0 0 0 3px var(--bg2); text-shadow: 0 1px 1px rgba(0,0,0,.3); }
+.glog-lane { position: relative; width: 22px; flex-shrink: 0; }
+/* 连线：以节点中心(顶部约 15px)为界，上下两段 */
+.glog-line { position: absolute; left: 50%; width: 2px; transform: translateX(-50%);
+  background: var(--graph); }
+.glog-line.top { top: 0; height: 15px; }
+.glog-line.bot { top: 15px; bottom: 0; }
+/* 节点：实心圆点 */
+.glog-node { position: absolute; left: 50%; top: 15px; width: 9px; height: 9px;
+  transform: translate(-50%, -50%); border-radius: 50%; background: var(--graph);
+  box-shadow: 0 0 0 3px var(--bg2); z-index: 1; }
+/* HEAD：空心圆环 */
+.glog-node.head { width: 11px; height: 11px; background: var(--bg2);
+  border: 2.5px solid var(--graph); box-shadow: 0 0 0 3px var(--bg2), 0 0 7px var(--graph); }
 .glog-body { flex: 1; min-width: 0; display: flex; flex-direction: column;
-  padding: 6px 0 10px; }
+  padding: 6px 0 11px; }
 .glog-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .glog-msg { font-size: 13px; color: var(--text); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .glog-meta { font-size: 11px; color: var(--muted); margin-top: 2px;
-  display: flex; align-items: center; gap: 5px; }
+  display: flex; align-items: center; gap: 5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.glog-author { color: var(--text-dim); }
 .glog-hash { font-family: "Cascadia Code", monospace; color: var(--warn); }
-.glog-dot { opacity: .6; }
+.glog-dot { opacity: .5; }
 /* 分支/标签胶囊 */
 .glog-ref { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
   padding: 1px 7px 1px 6px; border-radius: 10px; font-size: 10.5px; font-weight: 600;
@@ -344,8 +349,8 @@ body {
 .glog-ref.branch { background: color-mix(in srgb, var(--purple) 24%, transparent); color: var(--purple); }
 .glog-ref.remote { background: color-mix(in srgb, var(--muted) 28%, transparent); color: var(--text-dim); }
 .glog-ref.tag { background: color-mix(in srgb, var(--warn) 24%, transparent); color: var(--warn); }
-:root[data-theme="dark"] { --graph-line: #34343c; }
-:root[data-theme="light"] { --graph-line: #d0d3da; }
+:root[data-theme="dark"] { --graph: #4c9aff; }
+:root[data-theme="light"] { --graph: #2f81f7; }
 
 /* 提交悬浮详情卡 */
 .commit-popover {

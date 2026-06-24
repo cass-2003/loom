@@ -131,7 +131,7 @@ async function refreshLog() {
   logEl.innerHTML = "";
   commits.forEach((c, i) => {
     const first = i === 0, last = i === commits.length - 1;
-    const color = authorColor(c.author);
+    const isHead = i === 0 || (c.refs || []).some(r => r.kind === "head");
     const refsHTML = (c.refs || []).map(r =>
       `<span class="glog-ref ${r.kind}">${r.kind === "tag" ? svgIcon("file", 10) : svgIcon("branch", 10)}<span>${escapeHtml(r.name)}</span></span>`
     ).join("");
@@ -140,15 +140,16 @@ async function refreshLog() {
     row.dataset.hash = c.hash;
     row.innerHTML = `
       <div class="glog-lane">
-        <span class="glog-track${first ? " is-first" : ""}${last ? " is-last" : ""}"></span>
-        <span class="glog-avatar" style="background:${color}" title="${escapeHtml(c.author)}">${authorInitial(c.author)}</span>
+        ${first ? "" : '<span class="glog-line top"></span>'}
+        ${last ? "" : '<span class="glog-line bot"></span>'}
+        <span class="glog-node${isHead ? " head" : ""}"></span>
       </div>
       <div class="glog-body">
         <div class="glog-top">
           <span class="glog-msg">${escapeHtml(c.subject)}</span>
           ${refsHTML}
         </div>
-        <div class="glog-meta"><span class="glog-hash">${c.hash}</span><span class="glog-dot">·</span>${escapeHtml(c.when)}</div>
+        <div class="glog-meta"><span class="glog-author">${escapeHtml(c.author)}</span><span class="glog-dot">·</span><span class="glog-hash">${c.hash}</span><span class="glog-dot">·</span>${escapeHtml(c.when)}</div>
       </div>`;
     attachCommitHover(row);
     logEl.appendChild(row);
