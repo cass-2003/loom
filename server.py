@@ -708,6 +708,89 @@ class Handler(BaseHTTPRequestHandler):
         rel = self._rel_of(fp)
         return self._json({"ok": True, "path": rel, "size": len(data)})
 
+    # ---------- 终端 / 运行文件 / 任务 ----------
+    def _api_exec(self, body):
+        """POST /api/exec {cmd, cwd?} —— 在 ROOT 内执行 shell 命令。"""
+        cmd = (body.get("cmd") or "").strip()
+        if not cmd:
+            return self._err("命令不能为空")
+        try:
+            cwd = resolve_cwd(body.get("cwd", ""))
+        except PermissionError:
+            return self._err("forbidden", 403)
+        code, out, err = run_shell(cmd, cwd, EXEC_TIMEOUT)
+        return self._json({
+            "code": code, "stdout": out, "stderr": err,
+            "cwd": self._rel_of(cwd) if cwd != ROOT else "",
+        })
+
+    def _api_run_file(self, body):
+        """POST /api/run-file {path} —— 按扩展名选解释器运行该文件。"""
+        rel = body.get("path")
+        if not rel:
+            return self._err("缺少 path")
+        try:
+            fp = safe_resolve(rel)
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not fp.is_file():
+            return self._err("文件不存在", 404)
+        ext = fp.suffix.lower()
+        prefix = RUN_INTERPRETERS.get(ext)
+        if not prefix:
+            return self._err(f"不支持运行该类型文件（{ext or '无扩展名'}）")
+        argv = list(prefix) + [str(fp)]
+        cwd = fp.parent
+        # cwd 仍在 ROOT 内（safe_resolve 已保证父目录受控）
+        code, out, err = run_argv(argv, cwd, EXEC_TIMEOUT)
+        return self._json({
+            "code": code, "stdout": out, "stderr": err,
+            "interpreter": os.path.basename(prefix[0]),
+            "path": self._rel_of(fp),
+        })
+
+    def _api_run_task(self, body):
+        """POST /api/run-task {name, kind} —— 跑 npm/make 任务（在 ROOT）。"""
+        name = (body.get("name") or "").strip()
+        kind = (body.get("kind") or "").strip()
+        if not name:
+            return self._err("缺少任务名")
+        # 任务名做保守白名单，避免命令注入
+        if not re.fullmatch(r"[\w.:\-/]+", name):
+            return self._err("任务名含非法字符")
+        if kind == "npm":
+            if not (ROOT / "package.json").is_file():
+                return self._err("根目录无 package.json")
+            cmd = f"npm run {name}"
+        elif kind == "make":
+            if not (ROOT / "Makefile").is_file():
+                return self._err("根目录无 Makefile")
+            cmd = f"make {name}"
+        else:
+            return self._err("kind 必须是 npm 或 make")
+        code, out, err = run_shell(cmd, ROOT, 300)
+        return self._json({"code": code, "stdout": out, "stderr": err, "cmd": cmd})
+
+    def _api_tasks(self, rel):
+        """GET /api/tasks —— 读 ROOT/package.json scripts 与 Makefile 目标。"""
+        npm, make = [], []
+        pkg = ROOT / "package.json"
+        if pkg.is_file():
+            try:
+                data = json.loads(pkg.read_text(encoding="utf-8"))
+                scripts = data.get("scripts") if isinstance(data, dict) else None
+                if isinstance(scripts, dict):
+                    npm = [str(k) for k in scripts.keys()]
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        mk = ROOT / "Makefile"
+        if mk.is_file():
+            try:
+                make = parse_makefile_targets(mk.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                pass
+        return self._json({"npm": npm, "make": make})
+
     # ---------- git api ----------
     def _resolve_repo(self, rel):
         """返回 (repo_path, error_response_called)。找不到仓库时已发送响应。"""

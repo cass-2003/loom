@@ -1026,3 +1026,91 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   background: var(--bg3); border: 1px solid var(--border);
   border-radius: 5px; padding: 2px 6px; color: var(--text-dim);
 }
+
+/* ===== 集成终端面板 ===== */
+#terminal-panel {
+  flex-shrink: 0; display: flex; flex-direction: column;
+  height: 260px; border-top: 1px solid var(--border);
+  background: var(--bg2); min-height: 0;
+}
+#terminal-panel.collapsed { height: 32px; }
+#terminal-panel.collapsed #term-out,
+#terminal-panel.collapsed #term-input-row { display: none; }
+#term-head {
+  display: flex; align-items: center; gap: 10px; height: 32px;
+  flex-shrink: 0; padding: 0 8px 0 12px; cursor: pointer;
+  background: var(--bg3); border-bottom: 1px solid var(--border-soft);
+  font-size: 12px; user-select: none; -webkit-user-select: none;
+}
+.term-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text-dim); font-weight: 600; letter-spacing: .3px;
+}
+.term-title .icn { color: var(--accent); }
+.term-safe {
+  color: var(--danger); font-size: 11px; opacity: .9; white-space: nowrap;
+}
+.term-cwd {
+  color: var(--muted); font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-spacer { flex: 1; }
+.term-task-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.term-task-sel {
+  background: var(--bg); color: var(--text-dim); border: 1px solid var(--border);
+  border-radius: 5px; font-size: 11.5px; padding: 2px 5px; max-width: 200px;
+  cursor: pointer; outline: none;
+}
+.term-task-sel:disabled { color: var(--muted); cursor: default; }
+#term-collapse .icn { transition: transform .12s; transform: rotate(90deg); }
+#term-collapse.up .icn { transform: rotate(-90deg); }
+#term-out {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px;
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  font-size: 12.5px; line-height: 1.5; background: var(--bg);
+}
+.term-block { margin-bottom: 8px; }
+.term-cmd { display: flex; gap: 7px; color: var(--text); }
+.term-cmd-prompt { color: var(--accent); font-weight: 700; }
+.term-cmd-text { white-space: pre-wrap; word-break: break-all; }
+.term-note { color: var(--muted); font-size: 11.5px; margin: 2px 0; }
+.term-stdout, .term-stderr {
+  margin: 3px 0 0; white-space: pre-wrap; word-break: break-word;
+  font-family: inherit; font-size: inherit; line-height: 1.5;
+}
+.term-stdout { color: var(--text-dim); }
+.term-stderr { color: var(--danger); }
+.term-exit { font-size: 11px; margin-top: 3px; }
+.term-exit.ok { color: var(--accent2); }
+.term-exit.bad { color: var(--danger); }
+.term-pending { color: var(--muted); font-style: italic; padding: 2px 0; }
+#term-input-row {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 6px 12px; border-top: 1px solid var(--border-soft); background: var(--bg);
+}
+.term-prompt { color: var(--accent); font-weight: 700;
+  font-family: "Cascadia Code", Consolas, monospace; }
+#term-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text);
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  font-size: 12.5px;
+}
+#term-input:disabled { opacity: .6; }
+
+/* 状态栏终端入口 */
+.status-clickable { cursor: pointer; gap: 4px; }
+.status-clickable:hover { color: var(--text-dim); }
+#status-term.active { color: var(--accent); }
+
+/* 运行此文件按钮（浮于内容右上角） */
+.tab-run-btn {
+  position: absolute; top: 5px; right: 10px; z-index: 30;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--accent); color: #11131e; border: none;
+  border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.tab-run-btn:hover { background: var(--accent-press); }
+.tab-run-btn .icn { color: #11131e; }

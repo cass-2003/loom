@@ -247,6 +247,28 @@
         <p class="muted" id="binary-info"></p>
       </div>
       </div><!-- /#content-body -->
+
+      <!-- 集成终端面板（默认折叠） -->
+      <div id="terminal-panel" class="collapsed">
+        <div id="term-head">
+          <span class="term-title"><span class="i" data-icon="terminal"></span>终端</span>
+          <span class="term-safe" title="命令在服务器本机执行">⚠ 在服务器本机执行命令</span>
+          <span class="term-cwd" id="term-cwd" title="工作目录（相对根）">/</span>
+          <span class="term-spacer"></span>
+          <div class="term-task-wrap">
+            <select id="term-task-sel" class="term-task-sel" title="npm / make 任务"></select>
+            <button id="term-task-run" class="icon-btn" data-icon="play" title="运行选中任务"></button>
+          </div>
+          <button id="term-clear" class="icon-btn" data-icon="trash" title="清屏"></button>
+          <button id="term-collapse" class="icon-btn" data-icon="chevron" title="折叠 / 展开"></button>
+        </div>
+        <div id="term-out" class="term-out"></div>
+        <div id="term-input-row">
+          <span class="term-prompt" id="term-prompt">$</span>
+          <input id="term-input" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="输入命令，回车执行（↑↓ 历史）">
+        </div>
+      </div>
     </section>
   </div>
 
@@ -336,6 +358,7 @@
     <span id="status-branch" class="muted"></span>
     <span id="status-msg"></span>
     <span class="status-spacer"></span>
+    <span id="status-term" class="status-item status-clickable" title="切换终端面板"><span class="i" data-icon="terminal"></span>终端</span>
     <span id="status-words" class="status-item hidden" title="字数"></span>
     <span id="status-lang" class="status-item hidden" title="文件类型 / 语言"></span>
     <span id="status-pos" class="status-item hidden" title="光标位置 行:列">行 1, 列 1</span>
@@ -354,6 +377,7 @@
 <script src="/static/search.js"></script>
 <script src="/static/notes.js"></script>
 <script src="/static/workbench.js"></script>
+<script src="/static/terminal.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
