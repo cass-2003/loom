@@ -29,6 +29,8 @@ async function refreshGit() {
     filesEl.innerHTML = `<div class="tool-row"><button class="btn" id="git-init">git init 当前目录</button></div>`;
     badge.classList.add("hidden");
     stBranch.textContent = "";
+    document.querySelector("#git-log").innerHTML = "";
+    document.querySelector("#git-log-head").style.display = "none";
     const ib = document.querySelector("#git-init");
     if (ib) ib.onclick = async () => {
       const r = await gpost("/api/git/init", { path: gitCurPath() });
@@ -42,6 +44,7 @@ async function refreshGit() {
   if (d.behind) tail += `  ↓${d.behind}`;
   branchEl.innerHTML = svgIcon("branch", 14) + `<span>${tail}</span>`;
   stBranch.innerHTML = svgIcon("branch", 12) + `<span>${tail}</span>`;
+  refreshLog();  // 提交历史(树)始终显示，即便工作区干净
 
   const n = d.files.length;
   if (n) { badge.textContent = n; badge.classList.remove("hidden"); }
@@ -68,6 +71,30 @@ async function refreshGit() {
     };
     filesEl.appendChild(row);
   }
+}
+
+// 提交历史 (commit 树)
+async function refreshLog() {
+  const logEl = document.querySelector("#git-log");
+  const head = document.querySelector("#git-log-head");
+  if (!logEl) return;
+  const d = await gjson(`/api/git/log?path=${encodeURIComponent(gitCurPath())}`);
+  const commits = d.commits || [];
+  if (!commits.length) { head.style.display = "none"; logEl.innerHTML = ""; return; }
+  head.style.display = "";
+  logEl.innerHTML = "";
+  commits.forEach((c, i) => {
+    const item = document.createElement("div");
+    item.className = "git-log-item";
+    const last = i === commits.length - 1;
+    item.innerHTML = `
+      <div class="log-graph"><span class="dot${i === 0 ? " head" : ""}"></span>${last ? "" : '<span class="line"></span>'}</div>
+      <div class="log-main">
+        <div class="log-subject" title="${c.subject.replace(/"/g, "&quot;")}">${c.subject}</div>
+        <div class="log-meta"><span class="log-hash">${c.hash}</span> · ${c.author} · ${c.when}</div>
+      </div>`;
+    logEl.appendChild(item);
+  });
 }
 
 let gitOutTimer = null;

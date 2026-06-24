@@ -288,6 +288,21 @@ window.addEventListener("beforeunload", (e) => {
   if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
 });
 
+// ---------- 主题 ----------
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem("wb-theme", t);
+  const btn = $("#btn-theme");
+  // 显示「将切换到的」模式图标
+  btn.innerHTML = svgIcon(t === "dark" ? "sun" : "moon", 16);
+  btn.title = t === "dark" ? "切换到浅色" : "切换到深色";
+}
+$("#btn-theme").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme") || "dark";
+  applyTheme(cur === "dark" ? "light" : "dark");
+};
+applyTheme(localStorage.getItem("wb-theme") || "dark");
+
 hydrateIcons();   // 把 data-icon 占位换成 SVG
 initTree();
 initTools();
