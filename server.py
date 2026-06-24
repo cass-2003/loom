@@ -97,6 +97,16 @@ class Handler(BaseHTTPRequestHandler):
     def _err(self, msg, status=400):
         self._json({"error": msg}, status)
 
+    def _read_json_body(self):
+        """读取并解析 POST 的 JSON。出错时已发响应并返回 None。"""
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw.decode("utf-8")) if raw else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._err("请求体必须是合法的 UTF-8 JSON")
+            return None
+
     def _send_bytes(self, data: bytes, ctype: str):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
@@ -131,18 +141,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/save":
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                body = json.loads(self.rfile.read(length) or b"{}")
-            except json.JSONDecodeError:
-                return self._err("bad json")
+            body = self._read_json_body()
+            if body is None:
+                return
             return self._api_save(body)
         if parsed.path in ("/api/git/commit", "/api/git/push", "/api/git/init"):
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                body = json.loads(self.rfile.read(length) or b"{}")
-            except json.JSONDecodeError:
-                return self._err("bad json")
+            body = self._read_json_body()
+            if body is None:
+                return
             if parsed.path == "/api/git/commit":
                 return self._api_git_commit(body)
             if parsed.path == "/api/git/push":
