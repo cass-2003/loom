@@ -24,6 +24,8 @@ const state = {
   expanded: new Set(),
   openSeq: 0,      // 打开文件请求令牌（防竞态）
   imageUrl: null,  // 当前图片 blob URL（用于释放）
+  tabs: [],        // 已打开标签：{path,kind,name,ext,dirty,draft,viewMode,loaded}
+  activeTab: null, // 当前激活标签的 path
 };
 window.state = state;  // 供工具箱 (Git) 读取当前文件
 
@@ -246,22 +248,49 @@ async function fsDelete(path, isDir, container, parentRel) {
   });
 }
 
-// 当前打开文件受重命名影响时同步
-function handlePathMoved(oldPath, newPath, isDir) {
-  const cur = state.current;
-  if (!cur) return;
-  if (cur === oldPath) {
-    setCurrent(newPath, state.kind);
-  } else if (isDir && cur.startsWith(oldPath + "/")) {
-    setCurrent(newPath + cur.slice(oldPath.length), state.kind);
+// 重命名/移动时把受影响的标签路径一并更新
+function remapTabPath(tab, oldPath, newPath, isDir) {
+  if (tab.path === oldPath) {
+    tab.path = newPath;
+    tab.name = newPath.split("/").pop();
+  } else if (isDir && tab.path.startsWith(oldPath + "/")) {
+    tab.path = newPath + tab.path.slice(oldPath.length);
+    tab.name = tab.path.split("/").pop();
   }
 }
-// 当前打开文件被删除时清空编辑区
-function handlePathDeleted(path, isDir) {
+// 当前打开文件受重命名影响时同步
+function handlePathMoved(oldPath, newPath, isDir) {
+  const wasActive = state.activeTab;
+  for (const tab of state.tabs) remapTabPath(tab, oldPath, newPath, isDir);
+  // 同步 activeTab / current 指针
   const cur = state.current;
-  if (!cur) return;
-  if (cur === path || (isDir && cur.startsWith(path + "/"))) {
-    closeCurrent();
+  if (cur === oldPath) {
+    state.activeTab = newPath;
+    setCurrent(newPath, state.kind);
+  } else if (isDir && cur && cur.startsWith(oldPath + "/")) {
+    const np = newPath + cur.slice(oldPath.length);
+    state.activeTab = np;
+    setCurrent(np, state.kind);
+  } else if (wasActive) {
+    const at = state.activeTab;
+    if (at === oldPath) state.activeTab = newPath;
+    else if (isDir && at && at.startsWith(oldPath + "/"))
+      state.activeTab = newPath + at.slice(oldPath.length);
+  }
+  renderTabs();
+}
+// 文件/目录被删除时关闭受影响的标签
+function handlePathDeleted(path, isDir) {
+  const affected = (p) => p === path || (isDir && p.startsWith(path + "/"));
+  const survivors = state.tabs.filter(t => !affected(t.path));
+  if (survivors.length === state.tabs.length) return;  // 无影响
+  state.tabs = survivors;
+  if (state.current && affected(state.current)) {
+    state.activeTab = null;
+    if (state.tabs.length) activateTab(state.tabs[state.tabs.length - 1].path);
+    else { closeCurrent(); renderTabs(); }
+  } else {
+    renderTabs();
   }
 }
 function closeCurrent() {
@@ -269,7 +298,7 @@ function closeCurrent() {
   hideAllViews();
   $("#welcome").classList.remove("hidden");
   $("#editor").value = "";
-  state.current = null; state.kind = null;
+  state.current = null; state.kind = null; state.activeTab = null;
   state.dirty = false; document.body.classList.remove("dirty");
   $("#status-file").textContent = "未打开文件";
   $("#crumb").textContent = "";
@@ -482,26 +511,40 @@ function showConfirm({ title, message, okLabel = "确定", danger = false, onCon
 
 // ---------- 打开文件 ----------
 window.openFile = openFile;
+
+// 在打开/切换文件前，把当前文本标签的编辑器内容暂存进 tab 对象（保留未保存草稿）
+function stashActiveTab() {
+  const t = tabByPath(state.activeTab);
+  if (t && t.kind === "text") {
+    t.draft = $("#editor").value;
+    t.viewMode = viewMode;
+    t.dirty = state.dirty;
+  }
+}
+
+// 打开文件：已打开则直接切换，否则新建标签并加载
 async function openFile(path, row) {
-  if (state.dirty && !confirm("当前文件未保存，确定切换？")) return;
-  document.querySelectorAll(".node-row.active").forEach(e => e.classList.remove("active"));
-  if (row) row.classList.add("active");
+  if (row) highlightTreeRow(path);
+  const existing = tabByPath(path);
+  if (existing) { activateTab(path); return; }
+
+  // 先把当前标签的编辑状态暂存，避免被新文件覆盖
+  stashActiveTab();
 
   // 请求令牌：连续切换文件时，只让最后一次请求生效，丢弃过期响应
   const token = ++state.openSeq;
   const res = await api.file(path);
   if (token !== state.openSeq) return;
   const ctype = res.headers.get("Content-Type") || "";
-  hideAllViews();
 
+  const name = path.split("/").pop();
   if (ctype.startsWith("image/")) {
     const blob = await res.blob();
     if (token !== state.openSeq) return;
-    revokeImage();
-    state.imageUrl = URL.createObjectURL(blob);
-    $("#image-el").src = state.imageUrl;
-    $("#image-view").classList.remove("hidden");
-    setCurrent(path, "image");
+    const tab = { path, kind: "image", name, ext: "", dirty: false,
+                  draft: null, viewMode: "split", blob };
+    addTab(tab);
+    activateTab(path);
     return;
   }
   const data = await res.json();
@@ -509,20 +552,133 @@ async function openFile(path, row) {
   if (data.error) { setMsg(data.error, "err"); return; }
 
   if (data.kind === "binary") {
-    $("#binary-info").textContent = `${data.name} · ${fmtSize(data.size)}`;
-    $("#binary-view").classList.remove("hidden");
-    setCurrent(path, "binary");
+    const tab = { path, kind: "binary", name: data.name || name, ext: "",
+                  dirty: false, draft: null, viewMode: "split",
+                  size: data.size };
+    addTab(tab);
+    activateTab(path);
     return;
   }
   // 文本
-  $("#editor").value = data.content;
-  $("#editor-wrap").classList.remove("hidden");
-  setCurrent(path, "text");
-  state.dirty = false;
-  document.body.classList.remove("dirty");
-  const isMd = data.ext === ".md" || data.ext === ".markdown";
-  applyViewMode(isMd ? viewMode : "edit", isMd);
-  renderPreview();
+  const tab = { path, kind: "text", name: data.name || name,
+                ext: data.ext || "", dirty: false, draft: data.content,
+                viewMode: "split" };
+  addTab(tab);
+  activateTab(path);
+}
+
+// ---------- 标签管理 ----------
+function tabByPath(path) {
+  return path ? state.tabs.find(t => t.path === path) || null : null;
+}
+function tabIcon(tab) {
+  // 复用 fileIcon 的语义（构造一个伪 entry）
+  return fileIcon({ type: "file", name: tab.name, kind: tab.kind });
+}
+function addTab(tab) {
+  if (!tabByPath(tab.path)) state.tabs.push(tab);
+}
+
+// 激活某个标签：恢复其编辑器内容/视图模式，并渲染
+function activateTab(path) {
+  const tab = tabByPath(path);
+  if (!tab) return;
+  // 切换前暂存上一个标签
+  if (state.activeTab !== path) stashActiveTab();
+
+  state.activeTab = path;
+  // 作废在途的 openFile（避免其响应覆盖本次切换）
+  const token = ++state.openSeq;
+  void token;
+  revokeImage();
+  hideAllViews();
+
+  if (tab.kind === "image") {
+    state.imageUrl = URL.createObjectURL(tab.blob);
+    $("#image-el").src = state.imageUrl;
+    $("#image-view").classList.remove("hidden");
+    setCurrent(path, "image");
+  } else if (tab.kind === "binary") {
+    $("#binary-info").textContent = `${tab.name} · ${fmtSize(tab.size)}`;
+    $("#binary-view").classList.remove("hidden");
+    setCurrent(path, "binary");
+  } else {
+    $("#editor").value = tab.draft != null ? tab.draft : "";
+    $("#editor-wrap").classList.remove("hidden");
+    setCurrent(path, "text");
+    state.dirty = !!tab.dirty;
+    document.body.classList.toggle("dirty", state.dirty);
+    const isMd = tab.ext === ".md" || tab.ext === ".markdown";
+    if (isMd) viewMode = tab.viewMode || "split";
+    applyViewMode(isMd ? viewMode : "edit", isMd);
+    renderPreview();
+  }
+  highlightTreeRow(path);
+  renderTabs();
+}
+
+// 关闭标签（有脏标记时二次确认）
+function closeTab(path) {
+  const tab = tabByPath(path);
+  if (!tab) return;
+  if (tab.dirty || (tab.path === state.activeTab && state.dirty)) {
+    if (!confirm(`“${tab.name}” 有未保存的更改，确定关闭？`)) return;
+  }
+  const idx = state.tabs.findIndex(t => t.path === path);
+  if (idx < 0) return;
+  state.tabs.splice(idx, 1);
+
+  if (state.activeTab === path) {
+    state.activeTab = null;
+    const next = state.tabs[idx] || state.tabs[idx - 1] || null;
+    if (next) {
+      activateTab(next.path);
+    } else {
+      closeCurrent();
+      renderTabs();
+    }
+  } else {
+    renderTabs();
+  }
+}
+
+// 渲染标签栏
+function renderTabs() {
+  const bar = $("#tabbar");
+  bar.innerHTML = "";
+  if (state.tabs.length === 0) {
+    bar.classList.add("hidden");
+    return;
+  }
+  bar.classList.remove("hidden");
+  for (const tab of state.tabs) {
+    const isDirty = tab.dirty || (tab.path === state.activeTab && state.dirty);
+    const [iconName, iconCls] = tabIcon(tab);
+    const el = document.createElement("div");
+    el.className = "tab" + (tab.path === state.activeTab ? " active" : "")
+      + (isDirty ? " dirty" : "");
+    el.title = tab.path;
+    el.innerHTML =
+      `<span class="tab-ico ${iconCls}">${svgIcon(iconName, 15)}</span>`
+      + `<span class="tab-name">${escHtml(tab.name)}</span>`
+      + `<span class="tab-close" title="关闭">${svgIcon("close", 13)}</span>`;
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".tab-close")) { closeTab(tab.path); return; }
+      activateTab(tab.path);
+    });
+    // 鼠标中键关闭
+    el.addEventListener("mousedown", (e) => {
+      if (e.button === 1) { e.preventDefault(); closeTab(tab.path); }
+    });
+    bar.appendChild(el);
+  }
+}
+
+// 高亮文件树中对应行（仅已渲染节点）
+function highlightTreeRow(path) {
+  document.querySelectorAll(".node-row.active").forEach(e => e.classList.remove("active"));
+  const row = findRow(path);
+  if (row) row.classList.add("active");
 }
 
 // 释放上一张图片的 blob URL，避免内存泄漏
@@ -598,7 +754,11 @@ function renderPreview() {
 
 let renderTimer = null;
 $("#editor").addEventListener("input", () => {
-  if (!state.dirty) { state.dirty = true; document.body.classList.add("dirty"); }
+  if (!state.dirty) {
+    state.dirty = true; document.body.classList.add("dirty");
+    const t = tabByPath(state.activeTab);
+    if (t) { t.dirty = true; renderTabs(); }  // 标签亮起脏点
+  }
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderPreview, 120);
 });
@@ -620,12 +780,170 @@ async function save() {
   if (res.error) { setMsg("保存失败: " + res.error, "err"); return; }
   state.dirty = false;
   document.body.classList.remove("dirty");
+  const t = tabByPath(state.current);
+  if (t) { t.dirty = false; t.draft = $("#editor").value; renderTabs(); }
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
   if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
 }
 $("#btn-save").onclick = save;
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+});
+
+// ---------- Ctrl+P 快速打开 ----------
+let qoFiles = [];          // 全量相对路径缓存
+let qoFilesLoaded = false;
+let qoResults = [];        // 当前过滤结果（{path, marks}）
+let qoSel = 0;             // 当前高亮索引
+
+async function loadFlatFiles(force = false) {
+  if (qoFilesLoaded && !force) return;
+  try {
+    const data = await fetch("/api/files-flat").then(r => r.json());
+    qoFiles = Array.isArray(data.files) ? data.files : [];
+    qoFilesLoaded = true;
+  } catch { qoFiles = []; }
+}
+
+// 子序列模糊匹配：返回匹配的字符下标数组，不匹配返回 null。
+// 评分：连续命中、命中文件名（最后一段）的越靠前越优。
+function fuzzyMatch(query, path) {
+  const q = query.toLowerCase();
+  const s = path.toLowerCase();
+  if (!q) return { marks: [], score: 0 };
+  const marks = [];
+  let qi = 0, score = 0, prev = -2;
+  const slash = s.lastIndexOf("/");
+  for (let i = 0; i < s.length && qi < q.length; i++) {
+    if (s[i] === q[qi]) {
+      marks.push(i);
+      if (i === prev + 1) score += 6;       // 连续命中加权
+      if (i > slash) score += 3;            // 命中文件名部分加权
+      if (i === slash + 1) score += 4;      // 文件名首字符
+      score += 1;
+      prev = i; qi++;
+    }
+  }
+  if (qi < q.length) return null;
+  score -= (path.length - query.length) * 0.05;  // 越短越优
+  return { marks, score };
+}
+
+function quickOpenIsOpen() {
+  return !$("#quickopen").classList.contains("hidden");
+}
+
+async function openQuickOpen() {
+  if (quickOpenIsOpen()) return;
+  const input = $("#qo-input");
+  $("#quickopen").classList.remove("hidden");
+  input.value = "";
+  $("#qo-list").innerHTML = `<div class="qo-empty">加载文件列表…</div>`;
+  input.focus();
+  await loadFlatFiles();
+  qoRender("");
+}
+
+function closeQuickOpen() {
+  $("#quickopen").classList.add("hidden");
+}
+
+function qoRender(query) {
+  query = query.trim();
+  let items;
+  if (!query) {
+    // 空查询：先列最近打开的标签，再补充其他文件，限量
+    const tabPaths = state.tabs.map(t => t.path);
+    const rest = qoFiles.filter(p => !tabPaths.includes(p));
+    items = [...tabPaths, ...rest].slice(0, 200).map(p => ({ path: p, marks: [] }));
+  } else {
+    const scored = [];
+    for (const p of qoFiles) {
+      const m = fuzzyMatch(query, p);
+      if (m) scored.push({ path: p, marks: m.marks, score: m.score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    items = scored.slice(0, 200);
+  }
+  qoResults = items;
+  qoSel = 0;
+  const list = $("#qo-list");
+  if (items.length === 0) {
+    list.innerHTML = `<div class="qo-empty">无匹配文件</div>`;
+    return;
+  }
+  list.innerHTML = items.map((it, idx) => {
+    const slash = it.path.lastIndexOf("/");
+    const dir = slash >= 0 ? it.path.slice(0, slash) : "";
+    const fname = slash >= 0 ? it.path.slice(slash + 1) : it.path;
+    const [iconName, iconCls] = fileIcon({ type: "file", name: fname, kind: guessKind(fname) });
+    // 高亮：marks 是 path 维度下标，转换到 fname 维度
+    const base = slash >= 0 ? slash + 1 : 0;
+    const hlSet = new Set(it.marks.filter(m => m >= base).map(m => m - base));
+    let nameHtml = "";
+    for (let i = 0; i < fname.length; i++) {
+      const ch = escHtml(fname[i]);
+      nameHtml += hlSet.has(i) ? `<span class="qo-hl">${ch}</span>` : ch;
+    }
+    return `<div class="qo-item${idx === 0 ? " sel" : ""}" data-idx="${idx}">`
+      + `<span class="qo-ico ${iconCls}">${svgIcon(iconName, 15)}</span>`
+      + `<span class="qo-text"><div class="qo-fname">${nameHtml}</div>`
+      + (dir ? `<div class="qo-dir">${escHtml(dir)}</div>` : "")
+      + `</span></div>`;
+  }).join("");
+  list.querySelectorAll(".qo-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const idx = parseInt(el.dataset.idx, 10);
+      qoChoose(idx);
+    });
+    el.addEventListener("mousemove", () => {
+      const idx = parseInt(el.dataset.idx, 10);
+      if (idx !== qoSel) qoSetSel(idx);
+    });
+  });
+}
+
+// 依扩展名粗判类型（仅用于快速打开的图标）
+function guessKind(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const imgs = ["png","jpg","jpeg","gif","webp","svg","bmp","ico"];
+  if (imgs.includes(ext)) return "image";
+  return "text";
+}
+
+function qoSetSel(idx) {
+  const list = $("#qo-list");
+  const items = list.querySelectorAll(".qo-item");
+  if (!items.length) return;
+  idx = Math.max(0, Math.min(items.length - 1, idx));
+  items[qoSel]?.classList.remove("sel");
+  qoSel = idx;
+  items[qoSel].classList.add("sel");
+  items[qoSel].scrollIntoView({ block: "nearest" });
+}
+
+function qoChoose(idx) {
+  const it = qoResults[idx];
+  if (!it) return;
+  closeQuickOpen();
+  openFile(it.path, true);  // 传 true 触发树高亮
+}
+
+$("#qo-input").addEventListener("input", (e) => qoRender(e.target.value));
+$("#qo-input").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { e.preventDefault(); qoSetSel(qoSel + 1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); qoSetSel(qoSel - 1); }
+  else if (e.key === "Enter") { e.preventDefault(); qoChoose(qoSel); }
+  else if (e.key === "Escape") { e.preventDefault(); closeQuickOpen(); }
+});
+$("#quickopen").addEventListener("mousedown", (e) => {
+  if (e.target === $("#quickopen")) closeQuickOpen();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+    e.preventDefault();
+    if (quickOpenIsOpen()) closeQuickOpen(); else openQuickOpen();
+  }
 });
 
 // ---------- 活动栏：视图切换 ----------

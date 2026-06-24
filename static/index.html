@@ -116,6 +116,9 @@
 
     <!-- 中：编辑 / 预览 / diff -->
     <section id="content">
+      <!-- 标签栏 -->
+      <div id="tabbar" class="hidden"></div>
+      <div id="content-body">
       <div id="welcome" class="welcome">
         <div class="welcome-logo" data-icon="tools"></div>
         <h1>Workbench</h1>
@@ -141,7 +144,20 @@
         <p>二进制文件，无法编辑</p>
         <p class="muted" id="binary-info"></p>
       </div>
+      </div><!-- /#content-body -->
     </section>
+  </div>
+
+  <!-- Ctrl+P 快速打开浮层 -->
+  <div id="quickopen" class="hidden">
+    <div class="qo-box">
+      <div class="qo-input-wrap">
+        <span class="qo-search-i" data-icon="search"></span>
+        <input id="qo-input" type="text" spellcheck="false" autocomplete="off"
+               placeholder="按文件名搜索…（↑↓ 选择，Enter 打开，Esc 关闭）">
+      </div>
+      <div id="qo-list"></div>
+    </div>
   </div>
 
   <footer id="statusbar">

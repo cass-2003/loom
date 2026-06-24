@@ -156,6 +156,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tree(qs.get("path", [""])[0])
         if path == "/api/file":
             return self._api_file(qs.get("path", [""])[0])
+        if path == "/api/files-flat":
+            return self._api_files_flat()
         if path == "/api/git/status":
             return self._api_git_status(qs.get("path", [""])[0])
         if path == "/api/git/diff":
@@ -259,6 +261,37 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"kind": "binary", "size": size, "name": fp.name})
         return self._json({"kind": "text", "name": fp.name, "ext": fp.suffix.lower(),
                            "content": content, "size": size})
+
+    # 忽略遍历的目录名（避免巨量/无关文件拖慢快速打开）
+    _FLAT_SKIP_DIRS = {
+        ".git", "node_modules", ".venv", "venv", "__pycache__", ".mypy_cache",
+        ".pytest_cache", "dist", "build", ".next", ".nuxt", "target",
+        ".idea", ".vscode", ".cache", "System Volume Information",
+    }
+    _FLAT_LIMIT = 2000
+
+    def _api_files_flat(self):
+        """递归遍历 ROOT，返回相对路径字符串数组（供 Ctrl+P 快速打开）。"""
+        out = []
+        skip = self._FLAT_SKIP_DIRS
+        limit = self._FLAT_LIMIT
+        for dirpath, dirnames, filenames in os.walk(ROOT):
+            # 原地裁剪要进入的子目录（忽略隐藏的 $ 卷目录与黑名单目录）
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in skip and not d.startswith("$")
+            ]
+            dirnames.sort(key=str.lower)
+            for name in sorted(filenames, key=str.lower):
+                fp = Path(dirpath) / name
+                try:
+                    rel = str(fp.relative_to(ROOT)).replace("\\", "/")
+                except ValueError:
+                    continue
+                out.append(rel)
+                if len(out) >= limit:
+                    return self._json({"files": out, "truncated": True})
+        return self._json({"files": out, "truncated": False})
 
     def _api_save(self, body):
         rel = body.get("path")
