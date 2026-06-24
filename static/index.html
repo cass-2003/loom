@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Workbench</title>
 <link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -109,12 +110,25 @@
             <div id="git-files" class="scm-list"></div>
           </div>
 
+          <div class="scm-section" id="scm-stash">
+            <div class="scm-section-head">
+              <span class="scm-twist" data-icon="chevron"></span>
+              <span class="scm-title">储藏 (Stash)</span>
+              <span class="scm-count hidden" id="git-stash-count">0</span>
+              <span class="scm-group-actions">
+                <button class="scm-gact" id="git-stash-save" title="储藏当前更改（含未跟踪）">+</button>
+              </span>
+            </div>
+            <div id="git-stash-list" class="scm-list"></div>
+          </div>
+
           <div class="scm-section" id="scm-graph">
             <div class="scm-section-head">
               <span class="scm-twist" data-icon="chevron"></span>
               <span class="scm-title">图形</span>
               <span class="scm-head-extra">
                 <select id="git-branch-sel" class="git-branch-sel" title="选择要查看的分支"></select>
+                <button id="git-branch-ops" class="icon-btn" data-icon="branch" title="分支操作（新建/检出/删除）"></button>
               </span>
             </div>
             <div id="git-log" class="scm-list git-graph"></div>
@@ -217,6 +231,14 @@
       <div id="diff-view" class="hidden">
         <div class="diff-head" id="diff-head"></div>
         <pre id="diff-body" class="git-diff"></pre>
+      </div>
+      <div id="filehist-view" class="hidden">
+        <div class="diff-head" id="filehist-head"></div>
+        <div id="filehist-body"></div>
+      </div>
+      <div id="blame-view" class="hidden">
+        <div class="diff-head" id="blame-head"></div>
+        <div id="blame-body"></div>
       </div>
       <div id="image-view" class="hidden"><img id="image-el" alt=""></div>
       <div id="binary-view" class="hidden">
@@ -324,6 +346,8 @@
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/mermaid.min.js"></script>
 <script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/katex/auto-render.min.js"></script>
 <script src="/static/icons.js"></script>
 <script src="/static/tools.js"></script>
 <script src="/static/git.js"></script>

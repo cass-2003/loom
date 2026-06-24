@@ -434,6 +434,17 @@ function bindRowContextMenu(row, entry) {
       });
       items.push({ sep: true });
     }
+    if (!isDir) {
+      items.push({
+        icon: "history", label: "文件历史 (Git)",
+        action: () => { if (window.showFileHistory) window.showFileHistory(entry.path); },
+      });
+      items.push({
+        icon: "list", label: "Blame (逐行作者)",
+        action: () => { if (window.showBlame) window.showBlame(entry.path); },
+      });
+      items.push({ sep: true });
+    }
     items.push({
       icon: "pencil", label: "重命名",
       action: () => fsRename(entry.path, entry.name, isDir, container, parentRel),
@@ -756,6 +767,8 @@ function hideAllViews() {
   $("#diff-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
+  const fh = $("#filehist-view"); if (fh) fh.classList.add("hidden");
+  const bl = $("#blame-view"); if (bl) bl.classList.add("hidden");
 }
 
 // 在中间区域显示 diff (源代码管理点文件时调用)
@@ -896,7 +909,63 @@ function renderPreview() {
   if (!isMd) return;
   assignHeadingIds(preview);
   buildTOC(preview);
+  renderMath(preview);
   renderMermaid(preview);
+  decorateTaskList(preview);
+}
+
+// ---------- KaTeX 数学公式渲染 ----------
+// 用 auto-render 扫描 $...$ 行内与 $$...$$ 块级。代码块内不渲染（delimiters 不进 pre/code）。
+function renderMath(root) {
+  if (!window.renderMathInElement) return;
+  try {
+    window.renderMathInElement(root, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true },
+      ],
+      ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+      throwOnError: false,
+    });
+  } catch (e) { /* 公式渲染失败不影响其余预览 */ }
+}
+
+// ---------- 预览任务清单可勾选 ----------
+// marked 渲染的 GFM 任务项形如 <li class="task-list-item"><input type=checkbox ...>...
+// 给每个复选框打上「在源码里的序号」，点击后回写对应行的 [ ]<->[x]。
+function decorateTaskList(root) {
+  const boxes = root.querySelectorAll('li.task-list-item > input[type="checkbox"], li > input[type="checkbox"].task-list-item-checkbox');
+  let i = 0;
+  boxes.forEach(cb => {
+    cb.disabled = false;
+    cb.dataset.taskIndex = String(i++);
+    cb.addEventListener("change", onTaskCheckboxToggle);
+  });
+}
+
+// 源码中所有任务项行（- [ ] / - [x]）的正则
+const TASK_LINE_RE = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\](\s)/;
+
+function onTaskCheckboxToggle(e) {
+  const cb = e.currentTarget;
+  const idx = parseInt(cb.dataset.taskIndex, 10);
+  if (Number.isNaN(idx)) return;
+  const ta = $("#editor");
+  const lines = ta.value.split("\n");
+  let seen = -1;
+  for (let li = 0; li < lines.length; li++) {
+    const m = lines[li].match(TASK_LINE_RE);
+    if (!m) continue;
+    seen++;
+    if (seen !== idx) continue;
+    const mark = cb.checked ? "x" : " ";
+    lines[li] = lines[li].replace(TASK_LINE_RE, (full, pre, _old, sp) => pre + "[" + mark + "]" + sp);
+    break;
+  }
+  ta.value = lines.join("\n");
+  fireEditorInput();   // 触发脏标记 + 行号 + 防抖预览刷新
 }
 
 // 给预览里的 h1–h6 加唯一 id（供大纲跳转）

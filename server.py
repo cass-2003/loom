@@ -7,6 +7,7 @@
 不传根目录时默认当前盘符根 (脚本所在盘)。浏览器打开 http://localhost:<port>
 """
 import argparse
+import base64
 import json
 import mimetypes
 import os
@@ -14,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
@@ -58,6 +60,89 @@ def run_git(args, cwd):
         return -1, "", "未找到 git 命令"
     except subprocess.TimeoutExpired:
         return -1, "", "git 执行超时"
+
+
+# ---------- 终端 / 运行 辅助 ----------
+EXEC_TIMEOUT = 120  # 命令执行超时（秒）
+
+# 按扩展名选解释器（运行当前文件）。值是参数列表前缀，文件路径追加在后。
+RUN_INTERPRETERS = {
+    ".py": [sys.executable or "python"],
+    ".js": ["node"],
+    ".mjs": ["node"],
+    ".cjs": ["node"],
+    ".ts": ["node"],  # 需 ts-node/bun 之类；退化为 node 由用户自负
+    ".sh": ["bash"],
+    ".bash": ["bash"],
+    ".rb": ["ruby"],
+    ".php": ["php"],
+    ".pl": ["perl"],
+    ".ps1": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"],
+}
+
+
+def resolve_cwd(rel: str) -> Path:
+    """把可选 cwd 解析到 ROOT 内的目录。空/非目录 → ROOT。越界抛 PermissionError。"""
+    rel = (rel or "").strip()
+    if not rel:
+        return ROOT
+    d = safe_resolve(rel)
+    if not d.is_dir():
+        d = d.parent
+    # safe_resolve 已确保在 ROOT 内
+    return d
+
+
+def run_shell(cmd: str, cwd: Path, timeout: int = EXEC_TIMEOUT):
+    """执行 shell 命令，返回 (code, stdout, stderr)。超时/异常有兜底文案。"""
+    try:
+        p = subprocess.run(
+            cmd, cwd=str(cwd), shell=True, capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=timeout,
+        )
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired as e:
+        out = e.stdout or ""
+        err = (e.stderr or "")
+        if isinstance(out, bytes):
+            out = out.decode("utf-8", "replace")
+        if isinstance(err, bytes):
+            err = err.decode("utf-8", "replace")
+        return -1, out, (err + f"\n[执行超时：超过 {timeout} 秒已终止]").strip()
+    except OSError as e:
+        return -1, "", f"执行失败: {e}"
+
+
+def run_argv(argv, cwd: Path, timeout: int = EXEC_TIMEOUT):
+    """以参数数组执行（不过 shell），返回 (code, stdout, stderr)。"""
+    try:
+        p = subprocess.run(
+            argv, cwd=str(cwd), shell=False, capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=timeout,
+        )
+        return p.returncode, p.stdout, p.stderr
+    except FileNotFoundError:
+        return -1, "", f"未找到解释器: {argv[0]}"
+    except subprocess.TimeoutExpired:
+        return -1, "", f"[执行超时：超过 {timeout} 秒已终止]"
+    except OSError as e:
+        return -1, "", f"执行失败: {e}"
+
+
+def parse_makefile_targets(text: str):
+    """从 Makefile 文本里提取目标名（粗解析，忽略以 . 开头与含 % 的模式规则）。"""
+    targets = []
+    seen = set()
+    for line in text.splitlines():
+        m = re.match(r"^([A-Za-z0-9][\w.\-/]*)\s*:(?!=)", line)
+        if not m:
+            continue
+        name = m.group(1)
+        if name.startswith(".") or "%" in name or name in seen:
+            continue
+        seen.add(name)
+        targets.append(name)
+    return targets
 
 
 def find_repo(start: Path):
@@ -179,8 +264,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/git/commit_diff":
             return self._api_git_commit_diff(
                 qs.get("path", [""])[0], qs.get("hash", [""])[0], qs.get("file", [""])[0])
+        if path == "/api/git/file-log":
+            return self._api_git_file_log(qs.get("path", [""])[0])
+        if path == "/api/git/blame":
+            return self._api_git_blame(qs.get("path", [""])[0])
+        if path == "/api/git/stash-list":
+            return self._api_git_stash_list(qs.get("path", [""])[0])
         if path == "/api/notes":
             return self._api_notes_get()
+        if path == "/api/tasks":
+            return self._api_tasks(qs.get("path", [""])[0])
         return self._err("not found", 404)
 
     def do_POST(self):
@@ -192,23 +285,36 @@ class Handler(BaseHTTPRequestHandler):
             if body is None:
                 return
             return self._api_save(body)
+        # 路由 → 处理方法名（用名字而非绑定方法，缺失的处理器不会让整个 POST 分发崩溃）
         post_routes = {
-            "/api/git/commit": self._api_git_commit,
-            "/api/git/push": self._api_git_push,
-            "/api/git/init": self._api_git_init,
-            "/api/git/stage": self._api_git_stage,
-            "/api/git/unstage": self._api_git_unstage,
-            "/api/git/discard": self._api_git_discard,
-            "/api/fs/create": self._api_fs_create,
-            "/api/fs/rename": self._api_fs_rename,
-            "/api/fs/delete": self._api_fs_delete,
-            "/api/notes": self._api_notes_save,
+            "/api/git/commit": "_api_git_commit",
+            "/api/git/push": "_api_git_push",
+            "/api/git/init": "_api_git_init",
+            "/api/git/stage": "_api_git_stage",
+            "/api/git/unstage": "_api_git_unstage",
+            "/api/git/discard": "_api_git_discard",
+            "/api/git/checkout": "_api_git_checkout",
+            "/api/git/branch-create": "_api_git_branch_create",
+            "/api/git/branch-delete": "_api_git_branch_delete",
+            "/api/git/stash-save": "_api_git_stash_save",
+            "/api/git/stash-pop": "_api_git_stash_pop",
+            "/api/fs/create": "_api_fs_create",
+            "/api/fs/rename": "_api_fs_rename",
+            "/api/fs/delete": "_api_fs_delete",
+            "/api/notes": "_api_notes_save",
+            "/api/upload-image": "_api_upload_image",
+            "/api/exec": "_api_exec",
+            "/api/run-file": "_api_run_file",
+            "/api/run-task": "_api_run_task",
         }
         if parsed.path in post_routes:
+            handler = getattr(self, post_routes[parsed.path], None)
+            if handler is None:
+                return self._err("not implemented", 404)
             body = self._read_json_body()
             if body is None:
                 return
-            return post_routes[parsed.path](body)
+            return handler(body)
         return self._err("not found", 404)
 
     # ---------- static ----------
@@ -537,6 +643,71 @@ class Handler(BaseHTTPRequestHandler):
             return self._err(f"保存失败: {e}", 500)
         return self._json({"ok": True})
 
+    # ---------- 粘贴图片存盘 ----------
+    _IMG_EXT_BY_MIME = {
+        "image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg",
+        "image/gif": ".gif", "image/webp": ".webp", "image/bmp": ".bmp",
+        "image/svg+xml": ".svg", "image/x-icon": ".ico",
+    }
+    _MAX_IMG_BYTES = 20 * 1024 * 1024  # 单图上限 20MB
+
+    def _api_upload_image(self, body):
+        """把 base64 图片存到 ROOT/assets/ 下，返回相对路径。
+
+        body: {dataB64: str(可含 data:URL 前缀), name?: str, mime?: str}
+        """
+        raw_b64 = body.get("dataB64") or body.get("data") or ""
+        if not isinstance(raw_b64, str) or not raw_b64.strip():
+            return self._err("缺少图片数据")
+        mime = body.get("mime") or ""
+        # 兼容 data:URL 形式（data:image/png;base64,xxxx）
+        m = re.match(r"^data:([^;,]+)[^,]*,", raw_b64)
+        if m:
+            if not mime:
+                mime = m.group(1)
+            raw_b64 = raw_b64[m.end():]
+        raw_b64 = raw_b64.strip().replace("\n", "").replace("\r", "")
+        try:
+            data = base64.b64decode(raw_b64, validate=False)
+        except (ValueError, Exception):
+            return self._err("图片数据不是合法的 base64")
+        if not data:
+            return self._err("图片数据为空")
+        if len(data) > self._MAX_IMG_BYTES:
+            return self._err(f"图片过大（>{self._MAX_IMG_BYTES // (1024*1024)}MB）")
+        # 推断扩展名：优先 mime，其次原文件名，默认 .png
+        ext = self._IMG_EXT_BY_MIME.get(mime.lower(), "")
+        if not ext:
+            orig = str(body.get("name") or "")
+            oext = os.path.splitext(orig)[1].lower()
+            if oext in IMAGE_EXTS:
+                ext = oext
+        if not ext:
+            ext = ".png"
+        # 文件名带时间戳避免重名
+        stem = "img"
+        orig_name = str(body.get("name") or "").strip()
+        if orig_name:
+            base_stem = os.path.splitext(os.path.basename(orig_name))[0]
+            base_stem = re.sub(r'[^\w.\-]+', "-", base_stem).strip("-")
+            if base_stem:
+                stem = base_stem
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        fname = f"{stem}-{ts}-{int(time.time() * 1000) % 1000:03d}{ext}"
+        assets_dir = ROOT / "assets"
+        try:
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            fp = assets_dir / fname
+            # 极小概率撞名时再补随机
+            if fp.exists():
+                fname = f"{stem}-{ts}-{int(time.time() * 1000000) % 1000000:06d}{ext}"
+                fp = assets_dir / fname
+            fp.write_bytes(data)
+        except OSError as e:
+            return self._err(f"保存失败: {e}", 500)
+        rel = self._rel_of(fp)
+        return self._json({"ok": True, "path": rel, "size": len(data)})
+
     # ---------- git api ----------
     def _resolve_repo(self, rel):
         """返回 (repo_path, error_response_called)。找不到仓库时已发送响应。"""
@@ -835,6 +1006,165 @@ class Handler(BaseHTTPRequestHandler):
         if code != 0:
             return self._err(err.strip() or "读取 diff 失败", 500)
         return self._json({"diff": out, "path": path, "hash": h})
+
+    # ---------- 单文件历史 / blame ----------
+    def _api_git_file_log(self, rel):
+        """某文件的提交历史（沿重命名追踪）。"""
+        info = self._repo_and_relpath(rel)
+        if info is None:
+            return
+        repo, repo_rel, _ = info
+        code, out, err = run_git(
+            ["log", "-100", "--follow",
+             "--pretty=format:%h\x1f%an\x1f%ar\x1f%ad\x1f%s",
+             "--date=format:%Y-%m-%d %H:%M", "--", repo_rel], repo)
+        if code != 0:
+            return self._err(err.strip() or "读取文件历史失败", 500)
+        commits = []
+        for line in out.splitlines():
+            parts = line.split("\x1f")
+            if len(parts) >= 5:
+                commits.append({"hash": parts[0], "author": parts[1],
+                                "when": parts[2], "date": parts[3],
+                                "subject": parts[4]})
+        return self._json({"path": repo_rel, "commits": commits})
+
+    def _api_git_blame(self, rel):
+        """git blame --porcelain 解析，逐行返回 作者 / 短hash / 内容。"""
+        info = self._repo_and_relpath(rel)
+        if info is None:
+            return
+        repo, repo_rel, fp = info
+        if not fp.is_file():
+            return self._err("不是文件", 404)
+        code, out, err = run_git(
+            ["blame", "--porcelain", "--", repo_rel], repo)
+        if code != 0:
+            return self._err(err.strip() or "blame 失败", 500)
+        lines = []
+        commit_meta = {}   # hash -> {author, summary}
+        cur_hash = None
+        cur_author = ""
+        cur_summary = ""
+        it = iter(out.split("\n"))
+        for raw in it:
+            if not raw:
+                continue
+            # 头行: <40hex> <orig-line> <final-line> [num]
+            m = re.match(r"^([0-9a-f]{40})\s+\d+\s+\d+", raw)
+            if m:
+                cur_hash = m.group(1)
+                meta = commit_meta.get(cur_hash, {})
+                cur_author = meta.get("author", "")
+                cur_summary = meta.get("summary", "")
+                continue
+            if raw.startswith("author "):
+                cur_author = raw[len("author "):]
+                commit_meta.setdefault(cur_hash, {})["author"] = cur_author
+                continue
+            if raw.startswith("summary "):
+                cur_summary = raw[len("summary "):]
+                commit_meta.setdefault(cur_hash, {})["summary"] = cur_summary
+                continue
+            if raw.startswith("\t"):
+                lines.append({
+                    "hash": (cur_hash or "")[:8],
+                    "author": cur_author,
+                    "summary": cur_summary,
+                    "text": raw[1:],
+                })
+        return self._json({"path": repo_rel, "lines": lines})
+
+    # ---------- 分支操作 ----------
+    @staticmethod
+    def _valid_ref(name):
+        """合法的分支/引用名（保守白名单）。"""
+        name = (name or "").strip()
+        if not name or len(name) > 200:
+            return False
+        if name.startswith("-") or name.startswith("/") or name.endswith("/"):
+            return False
+        if ".." in name or name.endswith(".lock"):
+            return False
+        # 允许字母数字 / . _ - 及命名空间分隔 /
+        return bool(re.fullmatch(r"[\w./-]+", name))
+
+    def _api_git_checkout(self, body):
+        ref = (body.get("ref") or "").strip()
+        if not self._valid_ref(ref):
+            return self._err("非法分支/引用名")
+        repo = self._resolve_repo(body.get("path", ""))
+        if repo is None:
+            return
+        code, out, err = run_git(["checkout", ref], repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_branch_create(self, body):
+        name = (body.get("name") or "").strip()
+        if not self._valid_ref(name):
+            return self._err("非法分支名")
+        repo = self._resolve_repo(body.get("path", ""))
+        if repo is None:
+            return
+        # 默认创建并切换；可选 from 起点
+        start = (body.get("from") or "").strip()
+        args = ["checkout", "-b", name]
+        if start and self._valid_ref(start):
+            args.append(start)
+        code, out, err = run_git(args, repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_branch_delete(self, body):
+        name = (body.get("name") or "").strip()
+        if not self._valid_ref(name):
+            return self._err("非法分支名")
+        repo = self._resolve_repo(body.get("path", ""))
+        if repo is None:
+            return
+        flag = "-D" if body.get("force") else "-d"
+        code, out, err = run_git(["branch", flag, name], repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    # ---------- stash ----------
+    def _api_git_stash_list(self, rel):
+        repo = self._resolve_repo(rel)
+        if repo is None:
+            return
+        code, out, err = run_git(
+            ["stash", "list", "--pretty=format:%gd\x1f%s\x1f%cr"], repo)
+        if code != 0:
+            return self._err(err.strip() or "stash list 失败", 500)
+        stashes = []
+        for line in out.splitlines():
+            parts = line.split("\x1f")
+            if len(parts) >= 2:
+                stashes.append({"ref": parts[0], "subject": parts[1],
+                                "when": parts[2] if len(parts) > 2 else ""})
+        return self._json({"stashes": stashes})
+
+    def _api_git_stash_save(self, body):
+        repo = self._resolve_repo(body.get("path", ""))
+        if repo is None:
+            return
+        msg = (body.get("message") or "").strip()
+        args = ["stash", "push", "-u"]
+        if msg:
+            args += ["-m", msg]
+        code, out, err = run_git(args, repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
+
+    def _api_git_stash_pop(self, body):
+        repo = self._resolve_repo(body.get("path", ""))
+        if repo is None:
+            return
+        ref = (body.get("ref") or "").strip()
+        args = ["stash", "pop"]
+        if ref:
+            if not re.fullmatch(r"stash@\{\d+\}", ref):
+                return self._err("非法 stash 引用")
+            args.append(ref)
+        code, out, err = run_git(args, repo)
+        return self._json({"ok": code == 0, "output": (out + err).strip()})
 
 
 def main():

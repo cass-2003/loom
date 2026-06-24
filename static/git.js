@@ -103,6 +103,43 @@ async function refreshGit() {
   // 侧栏提交图
   populateBranches(branch);
   renderSidebarGraph();
+  renderStashList();
+}
+
+/* ============ Stash（储藏）侧栏 ============ */
+async function renderStashList() {
+  const listEl = document.querySelector("#git-stash-list");
+  const sec = document.querySelector("#scm-stash");
+  const cnt = document.querySelector("#git-stash-count");
+  if (!listEl) return;
+  const d = await gjson(`/api/git/stash-list?path=${encodeURIComponent(gitCurPath())}`);
+  const stashes = d.stashes || [];
+  if (cnt) {
+    if (stashes.length) { cnt.textContent = stashes.length; cnt.classList.remove("hidden"); }
+    else cnt.classList.add("hidden");
+  }
+  if (!stashes.length) { sec.classList.add("hidden"); listEl.innerHTML = ""; return; }
+  sec.classList.remove("hidden");
+  listEl.innerHTML = "";
+  stashes.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "scm-file";
+    row.title = s.subject;
+    row.innerHTML =
+      `<span class="scm-file-ico ic-text">${svgIcon("git", 14)}</span>`
+      + `<span class="scm-file-name">${escapeHtml(s.ref)}</span>`
+      + `<span class="scm-file-dir">${escapeHtml(s.subject)}</span>`
+      + `<span class="scm-file-actions">`
+      + `<button class="scm-act" data-act="pop" title="弹出（应用并删除）">${svgIcon("download", 14)}</button>`
+      + `</span>`;
+    row.querySelector(".scm-act").onclick = async (e) => {
+      e.stopPropagation();
+      const r = await gpost("/api/git/stash-pop", { path: gitCurPath(), ref: s.ref });
+      setGitOut(r.output || r.error || "", r.ok);
+      refreshGit();
+    };
+    listEl.appendChild(row);
+  });
 }
 
 function renderFileRow(f, group) {
@@ -474,4 +511,163 @@ function initGit() {
   // 分支选择 → 切换图形显示的分支
   const sel = document.querySelector("#git-branch-sel");
   if (sel) sel.onchange = () => { gitState.ref = sel.value; renderSidebarGraph(); };
+
+  // 储藏（保存当前更改）
+  const stashSave = document.querySelector("#git-stash-save");
+  if (stashSave) stashSave.onclick = async (e) => {
+    e.stopPropagation();
+    const msg = prompt("储藏说明（可留空）：", "");
+    if (msg === null) return;
+    setGitOut("储藏中…");
+    const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
+    setGitOut(r.output || r.error || "", r.ok);
+    refreshGit();
+  };
+
+  // 分支操作菜单
+  const branchOps = document.querySelector("#git-branch-ops");
+  if (branchOps) branchOps.onclick = (e) => {
+    e.stopPropagation();
+    showBranchOps(branchOps);
+  };
 }
+
+/* ============ 分支操作（新建 / 检出 / 删除） ============ */
+async function showBranchOps(anchor) {
+  document.querySelectorAll(".branch-pop").forEach(p => p.remove());
+  const d = await gjson(`/api/git/branches?path=${encodeURIComponent(gitCurPath())}`);
+  const branches = d.branches || [];
+  const cur = d.current || "";
+  const pop = document.createElement("div");
+  pop.className = "branch-pop";
+  let html = `<div class="bp-head">分支操作</div>`;
+  html += `<button class="bp-item" data-act="new">${svgIcon("plus", 14)}<span>新建分支…</span></button>`;
+  html += `<div class="bp-sep"></div>`;
+  html += `<div class="bp-label">检出 / 删除</div>`;
+  for (const b of branches) {
+    const isCur = b === cur;
+    html += `<div class="bp-branch${isCur ? " current" : ""}" data-branch="${escapeHtml(b)}">`
+      + `<button class="bp-checkout" data-act="checkout" data-branch="${escapeHtml(b)}" title="检出">`
+      + svgIcon("branch", 13) + `<span>${escapeHtml(b)}${isCur ? " ✓" : ""}</span></button>`
+      + (isCur ? "" : `<button class="bp-del" data-act="delete" data-branch="${escapeHtml(b)}" title="删除分支">${svgIcon("trash", 13)}</button>`)
+      + `</div>`;
+  }
+  pop.innerHTML = html;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  let left = r.right - 220;
+  if (left < 8) left = 8;
+  pop.style.left = left + "px";
+  pop.style.top = (r.bottom + 4) + "px";
+
+  const close = () => pop.remove();
+  pop.querySelector('[data-act="new"]').onclick = async () => {
+    close();
+    const name = prompt("新分支名（基于当前分支创建并切换）：", "");
+    if (!name) return;
+    const rr = await gpost("/api/git/branch-create", { path: gitCurPath(), name: name.trim() });
+    setGitOut(rr.output || rr.error || "", rr.ok);
+    gitState.ref = ""; branchesLoaded = "";
+    refreshGit();
+  };
+  pop.querySelectorAll('[data-act="checkout"]').forEach(b => {
+    b.onclick = async () => {
+      close();
+      setGitOut("检出中…");
+      const rr = await gpost("/api/git/checkout", { path: gitCurPath(), ref: b.dataset.branch });
+      setGitOut(rr.output || rr.error || "", rr.ok);
+      gitState.ref = ""; branchesLoaded = "";
+      refreshGit();
+    };
+  });
+  pop.querySelectorAll('[data-act="delete"]').forEach(b => {
+    b.onclick = async () => {
+      const name = b.dataset.branch;
+      close();
+      if (!confirm(`删除分支 ${name}？`)) return;
+      let rr = await gpost("/api/git/branch-delete", { path: gitCurPath(), name });
+      if (!rr.ok && /not fully merged/i.test(rr.output || "")) {
+        if (confirm(`分支 ${name} 未完全合并，强制删除？`))
+          rr = await gpost("/api/git/branch-delete", { path: gitCurPath(), name, force: true });
+        else return;
+      }
+      setGitOut(rr.output || rr.error || "", rr.ok);
+      branchesLoaded = "";
+      refreshGit();
+    };
+  });
+  setTimeout(() => {
+    const off = (ev) => {
+      if (!pop.contains(ev.target) && ev.target !== anchor) { close(); document.removeEventListener("mousedown", off); }
+    };
+    document.addEventListener("mousedown", off);
+  }, 0);
+}
+
+/* ============ 单文件历史（提交列表 → 点击看该文件 diff） ============ */
+window.showFileHistory = async function (path) {
+  document.querySelector("#activitybar .act[data-view='git']")?.click?.();
+  const view = document.querySelector("#filehist-view");
+  const head = document.querySelector("#filehist-head");
+  const body = document.querySelector("#filehist-body");
+  if (!view) return;
+  window.hideAllViews && window.hideAllViews();
+  view.classList.remove("hidden");
+  head.innerHTML = svgIcon("history", 14) + `<span>文件历史: ${escapeHtml(path)}</span>`;
+  body.innerHTML = `<div class="scm-empty">加载中…</div>`;
+  document.querySelector("#crumb").textContent = "历史: " + path;
+  const d = await gjson(`/api/git/file-log?path=${encodeURIComponent(path)}`);
+  if (d.error) { body.innerHTML = `<div class="scm-empty">${escapeHtml(d.error)}</div>`; return; }
+  const commits = d.commits || [];
+  if (!commits.length) { body.innerHTML = `<div class="scm-empty">该文件暂无提交历史</div>`; return; }
+  body.innerHTML = "";
+  commits.forEach(c => {
+    const row = document.createElement("div");
+    row.className = "fh-row";
+    row.innerHTML =
+      `<span class="fh-hash">${escapeHtml(c.hash)}</span>`
+      + `<span class="fh-subject">${escapeHtml(c.subject)}</span>`
+      + `<span class="fh-meta">${escapeHtml(c.author)} · ${escapeHtml(c.when)}</span>`;
+    row.onclick = async () => {
+      body.querySelectorAll(".fh-row.active").forEach(x => x.classList.remove("active"));
+      row.classList.add("active");
+      const dd = await gjson(
+        `/api/git/commit_diff?path=${encodeURIComponent(path)}&hash=${c.hash}&file=${encodeURIComponent(d.path)}`);
+      window.showDiffView(`${path} @ ${c.hash}`, dd.diff || "(无文本差异 / 二进制文件)");
+    };
+    body.appendChild(row);
+  });
+};
+
+/* ============ Blame（逐行作者 + 短 hash） ============ */
+window.showBlame = async function (path) {
+  document.querySelector("#activitybar .act[data-view='git']")?.click?.();
+  const view = document.querySelector("#blame-view");
+  const head = document.querySelector("#blame-head");
+  const body = document.querySelector("#blame-body");
+  if (!view) return;
+  window.hideAllViews && window.hideAllViews();
+  view.classList.remove("hidden");
+  head.innerHTML = svgIcon("list", 14) + `<span>Blame: ${escapeHtml(path)}</span>`;
+  body.innerHTML = `<div class="scm-empty">加载中…</div>`;
+  document.querySelector("#crumb").textContent = "blame: " + path;
+  const d = await gjson(`/api/git/blame?path=${encodeURIComponent(path)}`);
+  if (d.error) { body.innerHTML = `<div class="scm-empty">${escapeHtml(d.error)}</div>`; return; }
+  const lines = d.lines || [];
+  if (!lines.length) { body.innerHTML = `<div class="scm-empty">无内容</div>`; return; }
+  // 给每个 commit 配一个稳定的淡色，便于视觉分组
+  const colorOf = (h) => {
+    let n = 0; for (const ch of h) n = (n * 31 + ch.charCodeAt(0)) % 360;
+    return `hsla(${n}, 60%, 50%, .14)`;
+  };
+  let html = "";
+  lines.forEach((ln, i) => {
+    html += `<div class="bl-row" style="background:${colorOf(ln.hash)}">`
+      + `<span class="bl-author" title="${escapeHtml(ln.summary)}">${escapeHtml(ln.author)}</span>`
+      + `<span class="bl-hash">${escapeHtml(ln.hash)}</span>`
+      + `<span class="bl-num">${i + 1}</span>`
+      + `<span class="bl-code">${escapeHtml(ln.text) || "&nbsp;"}</span>`
+      + `</div>`;
+  });
+  body.innerHTML = html;
+};
