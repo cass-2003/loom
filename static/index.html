@@ -266,8 +266,10 @@
       <div id="terminal-panel" class="collapsed">
         <div id="term-head">
           <span class="term-title"><span class="i" data-icon="terminal"></span>终端</span>
-          <select id="term-shell-sel" class="term-shell-sel" title="选择 Shell（仅列出已安装的）"></select>
-          <button id="term-new" class="icon-btn" data-icon="refresh" title="新建 / 重启会话"></button>
+          <!-- 已开终端标签条（VS Code 风格：每个终端一个标签，点击切换，× 关闭） -->
+          <div id="term-tabs" class="term-tabs" title="已打开的终端"></div>
+          <select id="term-shell-sel" class="term-shell-sel" title="选择 Shell（用于新建终端）"></select>
+          <button id="term-new" class="icon-btn" data-icon="plus" title="新建终端（用当前所选 Shell）"></button>
           <span class="term-safe" title="命令在服务器本机执行">⚠ 在服务器本机执行命令</span>
           <span class="term-cwd" id="term-cwd" title="工作目录（相对根）">/</span>
           <span class="term-spacer"></span>
@@ -275,9 +277,10 @@
             <select id="term-task-sel" class="term-task-sel" title="npm / make 任务"></select>
             <button id="term-task-run" class="icon-btn" data-icon="play" title="运行选中任务"></button>
           </div>
-          <button id="term-clear" class="icon-btn" data-icon="trash" title="清屏"></button>
+          <button id="term-clear" class="icon-btn" data-icon="trash" title="清屏（仅当前终端）"></button>
           <button id="term-collapse" class="icon-btn" data-icon="chevron" title="折叠 / 展开"></button>
         </div>
+        <!-- 多个 xterm 容器叠在此区，用 display 切换，切回内容仍在 -->
         <div id="term-xterm" class="term-xterm"></div>
       </div>
     </section>

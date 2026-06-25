@@ -194,12 +194,79 @@ def _shell_cmdline(shell_id: str):
     if shell_id == "powershell":
         return f'"{path}" -NoLogo'
     if shell_id == "cmd":
-        return f'"{path}"'
+        # /Q 关闭命令回显（pipe 模式由后端负责回显，避免 cmd 自身再回显造成双显）。
+        return f'"{path}" /Q'
     if shell_id == "gitbash":
-        return f'"{path}" -i -l'
+        # 去掉 -i：pipe 模式下无 PTY，-i 会刷 "cannot set terminal process group /
+        # no job control" 告警。--noprofile 不必，保留 -l 走登录环境即可正常交互。
+        return f'"{path}" -l'
     if shell_id == "wsl":
         return f'"{path}"'
     return f'"{path}"'
+
+
+# pipe 模式下"由谁回显"策略：
+#   - cmd  ：以 /Q 关掉自身回显 → 后端回显（敲字即时可见）。
+#   - bash ：无 PTY 自身不回显 → 后端回显。
+#   - powershell：管道模式 PS 会把读到的 stdin 整行回显 → 后端不回显（否则双份）。
+#   - wsl  ：底层多为 bash，无 PTY 不回显 → 后端回显。
+_SHELL_BACKEND_ECHO = {
+    "cmd": True,
+    "gitbash": True,
+    "wsl": True,
+    "powershell": False,
+}
+
+
+def _oem_codepage_name():
+    """返回控制台 OEM 码页对应的 Python 编码名（cmd 原生码页，用于收发转码）。
+    取不到或不被 Python 识别时回退到 'mbcs'（Windows ANSI 码页，标准库内置）。"""
+    if not _IS_WIN:
+        return "utf-8"
+    try:
+        import ctypes
+        cp = ctypes.windll.kernel32.GetOEMCP()
+        name = "cp%d" % cp
+        import codecs
+        codecs.lookup(name)  # 验证 Python 能识别
+        return name
+    except Exception:
+        return "mbcs"  # 'mbcs' = 当前 Windows ANSI 码页，永远可用
+
+
+# 每个 shell 在 pipe 模式下的"原生编码"：
+#   - cmd  ：跑在原生 OEM 码页（如简体中文 936=GBK）。不改 chcp（chcp 65001 在管道
+#            stdin 上会触发 cmd 的多字节读取错乱→"More?" 续行假象），改由后端在收/发
+#            两侧做 OEM↔UTF-8 转码，对前端始终是干净 UTF-8。
+#   - powershell：init 里把控制台编码设成 UTF-8，原生即 UTF-8。
+#   - gitbash/wsl：原生 UTF-8。
+_OEM_ENC = _oem_codepage_name()
+_SHELL_TERM_ENC = {
+    "cmd": _OEM_ENC,
+    "powershell": "utf-8",
+    "gitbash": "utf-8",
+    "wsl": "utf-8",
+}
+
+
+def _shell_init_lines(shell_id: str):
+    """会话起始注入的初始化命令（每行末尾自动补 \\n）。
+    统一编码、清屏隐藏初始化噪音。"""
+    if shell_id == "cmd":
+        # 不切 chcp（见 _SHELL_TERM_ENC 说明）；仅 cls 清掉启动横幅噪音。
+        return ["cls"]
+    if shell_id == "powershell":
+        # 输入/输出都设 UTF-8，避免中文乱码；Clear-Host 清屏。
+        return [
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
+            "[Console]::InputEncoding=[Text.Encoding]::UTF8;"
+            "$OutputEncoding=[Text.Encoding]::UTF8",
+            "Clear-Host",
+        ]
+    if shell_id in ("gitbash", "wsl"):
+        # bash 默认 UTF-8；clear 清掉登录横幅噪音。
+        return ["clear"]
+    return []
 
 
 if _IS_WIN:
@@ -352,6 +419,17 @@ class TermSession:
         self._alive = True
         self._mode = None  # "conpty" | "pipe"
         self._closed = False
+        # pipe 模式：是否由后端负责回显（见 _SHELL_BACKEND_ECHO）。
+        # conpty 模式有真 PTY，shell 自身回显，后端绝不回灌。
+        self._backend_echo = _SHELL_BACKEND_ECHO.get(shell_id, True)
+        # shell 原生编码（cmd=OEM 码页，其余=utf-8）。_buf 内永远存 UTF-8，
+        # 收到非 UTF-8 原生输出时在 reader 里增量解码再转回 UTF-8。
+        self._term_enc = _SHELL_TERM_ENC.get(shell_id, "utf-8")
+        self._decoder = None
+        if self._term_enc != "utf-8":
+            import codecs
+            self._decoder = codecs.getincrementaldecoder(
+                self._term_enc)(errors="replace")
 
         cmdline = _shell_cmdline(shell_id)
         if not cmdline:
@@ -521,6 +599,20 @@ class TermSession:
             stderr=subprocess.STDOUT, bufsize=0,
             creationflags=flags,
         )
+        # 注入初始化命令（统一编码 / 清屏去噪），直接写 stdin、不经回显逻辑，
+        # 这些非用户输入不该回灌到屏幕；末尾的 cls/clear 也会抹掉初始化痕迹。
+        init = _shell_init_lines(self.shell_id)
+        if init:
+            text = "".join(line + "\n" for line in init)
+            try:
+                payload = text.encode(self._term_enc, "replace")
+            except Exception:
+                payload = text.encode("utf-8", "replace")
+            try:
+                self._proc.stdin.write(payload)
+                self._proc.stdin.flush()
+            except (OSError, ValueError):
+                pass
 
     # ---------- 读循环 ----------
     def _reader(self):
@@ -564,8 +656,16 @@ class TermSession:
                 break
             if not chunk:
                 break
-            with self._lock:
-                self._buf.extend(chunk)
+            if self._decoder is not None:
+                # cmd 原生 OEM 码页 → 增量解码（跨块多字节安全）→ 转 UTF-8 进缓冲，
+                # 保证 _buf 始终是干净 UTF-8（前端按 UTF-8 解码）。
+                text = self._decoder.decode(chunk)
+                if text:
+                    with self._lock:
+                        self._buf.extend(text.encode("utf-8"))
+            else:
+                with self._lock:
+                    self._buf.extend(chunk)
 
     # ---------- 输入 / 缩放 ----------
     def write(self, data: bytes):
@@ -578,14 +678,25 @@ class TermSession:
                                   ctypes.byref(nwrote), None):
                 raise _winerr("WriteFile 失败")
         else:
-            # 管道回退模式：无真 PTY，存在两处差异需补偿——
+            # 管道回退模式：无真 PTY，需补偿——
             # ① xterm 回车只发裸 \r，但管道里的 cmd/powershell 需要换行(\n)才会处理整行；
-            #    把不带 \n 的 \r 规整成 \r\n。
-            # ② 无 PTY 回显——把用户输入回灌进输出缓冲，终端上才能看到自己敲的字。
+            #    把不带 \n 的 \r 规整成 \n 写进 shell stdin。
+            # ② 回显单一份：仅当 _backend_echo=True 时由后端回灌输入（cmd 已 /Q 关自身回显、
+            #    bash/wsl 无 PTY 不回显）；powershell 管道模式 PS 自己会回显 stdin，后端不回灌，
+            #    确保每个字符只显示一次。
+            # ③ data 是 UTF-8 字节（请求里的字符串解码而来）。回显进 _buf 保持 UTF-8；
+            #    写进 shell stdin 则转成该 shell 的原生编码（cmd=OEM 码页），避免中文乱码。
             out = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-            with self._lock:
-                # 回显：\n 显示为 \r\n 让 xterm 正确换行回到行首
-                self._buf.extend(out.replace(b"\n", b"\r\n"))
+            if self._backend_echo:
+                with self._lock:
+                    # 回显：\n 显示为 \r\n 让 xterm 正确换行回到行首
+                    self._buf.extend(out.replace(b"\n", b"\r\n"))
+            if self._term_enc != "utf-8":
+                try:
+                    out = out.decode("utf-8", "replace").encode(
+                        self._term_enc, "replace")
+                except Exception:
+                    pass
             try:
                 self._proc.stdin.write(out)
                 self._proc.stdin.flush()
