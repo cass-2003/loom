@@ -1154,3 +1154,81 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 }
 .tab-run-btn:hover { background: var(--accent-press); }
 .tab-run-btn .icn { color: #11131e; }
+
+/* ===== Vditor 代码块（CodeMirror 6）深/浅色修复 =====
+   Vditor 这套 vscode-office fork 的代码块走 CodeMirror，其 Auto 主题把
+   --cm-fg-color 等取自 var(--vscode-editor-foreground, #24292e) —— 这些 --vscode-*
+   变量只有在 VS Code webview 里才有值，独立运行时全为空 → 一律回退到深色 #24292e，
+   于是深色模式下代码与语言条变成"近黑压在深底上"几乎不可见。这里显式补全这些变量
+   并给 CodeMirror token 上 github 配色，深浅色都清晰且彩色。 */
+.vditor--dark {
+  --cm-bg-color: #161b22;
+  --cm-fg-color: #c9d1d9;
+  --cm-lang-trigger-bg: #21262d;
+  --cm-active-line-bg: rgba(177, 186, 199, .07);
+  --cm-line-number-fg: rgba(201, 209, 217, .40);
+  --cm-line-number-active-fg: #c9d1d9;
+  --cm-cursor-fg: #58a6ff;
+}
+.vditor:not(.vditor--dark) {
+  --cm-bg-color: #f6f8fa;
+  --cm-fg-color: #24292e;
+  --cm-lang-trigger-bg: #eaeef2;
+  --cm-active-line-bg: rgba(27, 31, 36, .05);
+  --cm-line-number-fg: rgba(27, 31, 36, .35);
+  --cm-line-number-active-fg: #24292e;
+  --cm-cursor-fg: #0969da;
+}
+/* 基础文字（兜底，token 未命中也可读） */
+.vditor--dark .cm-editor,
+.vditor--dark .cm-editor .cm-content,
+.vditor--dark .cm-editor .cm-line { color: #c9d1d9; }
+/* 语言工具条（"js" 标签）在深色下可见 */
+.vditor--dark .vditor-cm-chrome__lang-trigger,
+.vditor--dark .vditor-cm-chrome__lang-label,
+.vditor--dark .vditor-cm-chrome__lang-chevron { color: #c9d1d9; }
+
+/* github-dark CodeMirror token 配色 */
+.vditor--dark .cm-keyword          { color: #ff7b72; }
+.vditor--dark .cm-def              { color: #d2a8ff; }
+.vditor--dark .cm-variable,
+.vditor--dark .cm-variable-2,
+.vditor--dark .cm-property         { color: #c9d1d9; }
+.vditor--dark .cm-string,
+.vditor--dark .cm-string-2         { color: #a5d6ff; }
+.vditor--dark .cm-number,
+.vditor--dark .cm-atom             { color: #79c0ff; }
+.vditor--dark .cm-comment          { color: #8b949e; font-style: italic; }
+.vditor--dark .cm-operator,
+.vditor--dark .cm-bracket,
+.vditor--dark .cm-punctuation      { color: #c9d1d9; }
+.vditor--dark .cm-tag              { color: #7ee787; }
+.vditor--dark .cm-attribute,
+.vditor--dark .cm-qualifier        { color: #79c0ff; }
+.vditor--dark .cm-builtin,
+.vditor--dark .cm-type             { color: #ffa657; }
+.vditor--dark .cm-meta,
+.vditor--dark .cm-header           { color: #8b949e; }
+.vditor--dark .cm-link             { color: #a5d6ff; }
+
+/* github-light CodeMirror token 配色（浅色彩色一致，浅色本就可读） */
+.vditor:not(.vditor--dark) .cm-keyword      { color: #cf222e; }
+.vditor:not(.vditor--dark) .cm-def          { color: #8250df; }
+.vditor:not(.vditor--dark) .cm-string,
+.vditor:not(.vditor--dark) .cm-string-2     { color: #0a3069; }
+.vditor:not(.vditor--dark) .cm-number,
+.vditor:not(.vditor--dark) .cm-atom         { color: #0550ae; }
+.vditor:not(.vditor--dark) .cm-comment      { color: #6e7781; font-style: italic; }
+.vditor:not(.vditor--dark) .cm-tag          { color: #116329; }
+.vditor:not(.vditor--dark) .cm-builtin,
+.vditor:not(.vditor--dark) .cm-type         { color: #953800; }
+.vditor:not(.vditor--dark) .cm-attribute    { color: #0550ae; }
+
+/* 兜底「所见即所得 / 分屏预览」里 hljs 渲染的代码（若命中 .hljs-* 类） */
+.vditor--dark .vditor-reset pre > code { color: #c9d1d9; }
+.vditor--dark .hljs-keyword, .vditor--dark .hljs-built_in, .vditor--dark .hljs-type { color: #ff7b72; }
+.vditor--dark .hljs-string, .vditor--dark .hljs-regexp { color: #a5d6ff; }
+.vditor--dark .hljs-number, .vditor--dark .hljs-literal { color: #79c0ff; }
+.vditor--dark .hljs-comment { color: #8b949e; font-style: italic; }
+.vditor--dark .hljs-title, .vditor--dark .hljs-title.function_ { color: #d2a8ff; }
+.vditor--dark .hljs-attr, .vditor--dark .hljs-name { color: #7ee787; }
