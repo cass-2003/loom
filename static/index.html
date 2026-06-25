@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/vendor/github-dark.min.css">
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
 <link rel="stylesheet" href="/static/vendor/vditor/dist/index.css">
+<link rel="stylesheet" href="/static/vendor/xterm/xterm.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -265,6 +266,8 @@
       <div id="terminal-panel" class="collapsed">
         <div id="term-head">
           <span class="term-title"><span class="i" data-icon="terminal"></span>终端</span>
+          <select id="term-shell-sel" class="term-shell-sel" title="选择 Shell（仅列出已安装的）"></select>
+          <button id="term-new" class="icon-btn" data-icon="refresh" title="新建 / 重启会话"></button>
           <span class="term-safe" title="命令在服务器本机执行">⚠ 在服务器本机执行命令</span>
           <span class="term-cwd" id="term-cwd" title="工作目录（相对根）">/</span>
           <span class="term-spacer"></span>
@@ -275,12 +278,7 @@
           <button id="term-clear" class="icon-btn" data-icon="trash" title="清屏"></button>
           <button id="term-collapse" class="icon-btn" data-icon="chevron" title="折叠 / 展开"></button>
         </div>
-        <div id="term-out" class="term-out"></div>
-        <div id="term-input-row">
-          <span class="term-prompt" id="term-prompt">$</span>
-          <input id="term-input" type="text" spellcheck="false" autocomplete="off"
-                 placeholder="输入命令，回车执行（↑↓ 历史）">
-        </div>
+        <div id="term-xterm" class="term-xterm"></div>
       </div>
     </section>
   </div>
@@ -391,6 +389,8 @@
 <script src="/static/search.js"></script>
 <script src="/static/notes.js"></script>
 <script src="/static/workbench.js"></script>
+<script src="/static/vendor/xterm/xterm.js"></script>
+<script src="/static/vendor/xterm/xterm-addon-fit.js"></script>
 <script src="/static/terminal.js"></script>
 <!-- 多格式查看器：共享依赖 jszip → 注册表契约 → 各查看器（在 app.js 之前，app.js 会消费注册表） -->
 <script src="/static/vendor/jszip/jszip.min.js"></script>
