@@ -416,6 +416,9 @@
     }
   }
 
+  // 外部（如分隔条拖拽）调用：立即对当前可见终端重排 fit
+  window.termRefit = function () { try { relayout(active()); } catch {} };
+
   function attachResizeObserver(t) {
     if (!t || !t.host || t.ro || typeof ResizeObserver === "undefined") return;
     let raf = 0;

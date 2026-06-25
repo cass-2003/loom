@@ -1803,33 +1803,6 @@ $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
 $("#btn-new-file").onclick = () => fsCreate("", $("#tree"));
 $("#btn-new-dir").onclick = () => fsCreateDir("", $("#tree"));
 
-// ---------- 侧栏宽度拖动 ----------
-function initSidebarResize() {
-  const sidebar = $("#sidebar"), handle = $("#sidebar-resizer");
-  const MIN = 200, MAX = 620;
-  const saved = parseInt(localStorage.getItem("wb-sidebar-w") || "", 10);
-  if (saved >= MIN && saved <= MAX) sidebar.style.width = saved + "px";
-  let dragging = false;
-  handle.addEventListener("mousedown", (e) => {
-    dragging = true; e.preventDefault();
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  });
-  window.addEventListener("mousemove", (e) => {
-    if (!dragging) return;
-    let w = e.clientX - sidebar.getBoundingClientRect().left;
-    w = Math.max(MIN, Math.min(MAX, w));
-    sidebar.style.width = w + "px";
-  });
-  window.addEventListener("mouseup", () => {
-    if (!dragging) return;
-    dragging = false;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-    localStorage.setItem("wb-sidebar-w", parseInt(sidebar.style.width, 10));
-  });
-}
-
 // ---------- 杂项 ----------
 let msgTimer = null;
 function setMsg(text, cls = "") {
@@ -1962,7 +1935,6 @@ initTools();
 initGit();
 initSearch();
 initNotes();
-initSidebarResize();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
 (async () => {

@@ -395,6 +395,9 @@ body.desktop.maximized #app { border: none; }
 #editor-wrap.mode-edit #preview { display: none; }
 #editor-wrap.mode-preview #editor-pane { display: none; }
 #editor-wrap.mode-preview #preview { border-left: none; }
+/* 单栏模式下忽略分屏拖拽设的 flex-basis，让可见窗格填满 */
+#editor-wrap.mode-edit #editor-pane,
+#editor-wrap.mode-preview #preview { flex: 1 1 auto !important; }
 
 /* Vditor 所见即所得容器：填满内容区 */
 #vditor { flex: 1; min-width: 0; min-height: 0; display: flex; }
@@ -639,10 +642,31 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 :root[data-theme="dark"] { --graph: #4c9aff; }
 :root[data-theme="light"] { --graph: #2f81f7; }
 
-/* ===== 侧栏宽度拖动条 ===== */
+/* ===== 可拖拽分隔条（VS Code 风格） ===== */
+/* 侧栏宽度（竖向） */
 #sidebar-resizer { width: 5px; flex-shrink: 0; cursor: col-resize; background: transparent;
   margin-left: -3px; z-index: 5; transition: background .15s; }
-#sidebar-resizer:hover { background: var(--accent); }
+#sidebar-resizer:hover, #sidebar-resizer.dragging { background: var(--accent); }
+
+/* 终端面板高度（横向）——位于 #content 内、#content-body 与 #terminal-panel 之间。
+   仅终端展开时显示（折叠时由 :has 隐藏）。 */
+#term-resizer { height: 5px; flex-shrink: 0; cursor: row-resize; background: transparent;
+  margin-bottom: -3px; z-index: 5; position: relative; transition: background .15s; }
+#term-resizer:hover, #term-resizer.dragging { background: var(--accent); }
+#content:has(#terminal-panel.collapsed) #term-resizer { display: none; }
+
+/* 编辑 / 预览 分屏宽度（竖向）——位于 #editor-pane 与 #preview 之间。
+   仅 Markdown 分屏模式显示；单栏（mode-edit / mode-preview）时隐藏。 */
+#editor-split-resizer { width: 5px; flex-shrink: 0; cursor: col-resize; background: transparent;
+  align-self: stretch; z-index: 4; transition: background .15s; }
+#editor-split-resizer:hover, #editor-split-resizer.dragging { background: var(--accent); }
+#editor-wrap.mode-edit #editor-split-resizer,
+#editor-wrap.mode-preview #editor-split-resizer { display: none; }
+
+/* 拖动期间盖在最上层的透明遮罩：接管 mousemove/mouseup，
+   防止 xterm / iframe（查看器）吞掉鼠标事件 */
+#wb-drag-overlay { position: fixed; inset: 0; z-index: 9999; display: none;
+  background: transparent; }
 
 /* 提交悬浮详情卡 */
 .commit-popover {
@@ -794,6 +818,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 /* 打印 / PDF：只输出预览内容 */
 @media print {
   #topbar, #activitybar, #sidebar, #sidebar-resizer, #tabbar,
+  #term-resizer, #editor-split-resizer, #terminal-panel,
   #statusbar, #editor-pane, #editor-find, #quickopen { display: none !important; }
   #app, #main, #content, #content-body, #editor-wrap { display: block; height: auto; overflow: visible; }
   #preview { display: block !important; border: none; padding: 0; background: #fff; overflow: visible; }
@@ -1075,7 +1100,9 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   height: 260px; border-top: 1px solid var(--border);
   background: var(--bg2); min-height: 0;
 }
-#terminal-panel.collapsed { height: 32px; }
+/* 折叠态固定高 32px：用 !important 压过分隔条拖拽设的 inline height，
+   保证折叠时仍是细条；展开（去掉 .collapsed）后 inline height 自然生效 */
+#terminal-panel.collapsed { height: 32px !important; }
 #terminal-panel.collapsed #term-xterm { display: none; }
 #term-head {
   display: flex; align-items: center; gap: 10px; height: 32px;

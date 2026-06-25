@@ -236,6 +236,8 @@
           <div id="editor-gutter" aria-hidden="true"></div>
           <textarea id="editor" spellcheck="false" placeholder="内容…"></textarea>
         </div>
+        <!-- 编辑/预览分屏拖动条（仅 Markdown 分屏模式显示，见 splitter.js / CSS） -->
+        <div id="editor-split-resizer" title="拖动调节编辑/预览宽度"></div>
         <div id="preview" class="markdown-body"></div>
       </div>
       <!-- Vditor 所见即所得编辑器（仅 .md/.markdown，默认隐藏） -->
@@ -261,6 +263,9 @@
         <p class="muted" id="binary-info"></p>
       </div>
       </div><!-- /#content-body -->
+
+      <!-- 终端面板高度拖动条（仅终端展开时显示，见 splitter.js / CSS） -->
+      <div id="term-resizer" title="拖动调节终端高度"></div>
 
       <!-- 集成终端面板（默认折叠） -->
       <div id="terminal-panel" class="collapsed">
@@ -406,6 +411,7 @@
 <script src="/static/viewers/font.js"></script>
 <script src="/static/viewers/imageplus.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/splitter.js"></script>
 <script src="/static/desktop-ui.js"></script>
 </body>
 </html>
