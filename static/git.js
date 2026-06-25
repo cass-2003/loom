@@ -124,7 +124,6 @@ async function renderStashList() {
   stashes.forEach(s => {
     const row = document.createElement("div");
     row.className = "scm-file";
-    row.title = s.subject;
     row.innerHTML =
       `<span class="scm-file-ico ic-text">${svgIcon("git", 14)}</span>`
       + `<span class="scm-file-name">${escapeHtml(s.ref)}</span>`
@@ -152,7 +151,6 @@ function renderFileRow(f, group) {
 
   const row = document.createElement("div");
   row.className = "scm-file";
-  row.title = repoPath;
   const acts = group === "staged"
     ? `<button class="scm-act" data-act="unstage" title="取消暂存">${svgIcon("minus", 15)}</button>`
     : `<button class="scm-act" data-act="discard" title="丢弃更改">${svgIcon("discard", 14)}</button>
@@ -294,7 +292,7 @@ async function renderSidebarGraph() {
   commits.forEach(c => {
     const refsHTML = (c.refs || []).map(r =>
       `<span class="ggraph-ref ${r.kind}">${escapeHtml(r.name)}</span>`).join("");
-    rows += `<div class="ggraph-row" data-hash="${c.hash}" style="height:${ROW_H}px" title="${escapeHtml(c.subject)}">`
+    rows += `<div class="ggraph-row" data-hash="${c.hash}" style="height:${ROW_H}px">`
       + `<span class="ggraph-msg">${escapeHtml(c.subject)}</span>${refsHTML}</div>`;
   });
   logEl.innerHTML =

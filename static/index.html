@@ -262,6 +262,15 @@
         <p>二进制文件，无法编辑</p>
         <p class="muted" id="binary-info"></p>
       </div>
+      <!-- 编辑器分屏：副组（把主组标签拖到右/下边缘生成；见 split.js；默认隐藏）-->
+      <div id="side-resizer" class="hidden" title="拖动调节分屏比例"></div>
+      <div id="side-group" class="hidden">
+        <div id="side-tabbar"></div>
+        <div id="side-pane">
+          <div id="side-gutter" aria-hidden="true"></div>
+          <textarea id="side-editor" spellcheck="false" placeholder="内容…"></textarea>
+        </div>
+      </div>
       </div><!-- /#content-body -->
 
       <!-- 终端面板高度拖动条（仅终端展开时显示，见 splitter.js / CSS） -->
@@ -297,6 +306,8 @@
             <!-- 杀掉当前活动终端 -->
             <button class="tb-btn" id="term-clear" title="清屏（仅当前窗格）"><span class="i" data-icon="eraser"></span></button>
             <button class="tb-btn" id="term-kill" title="关闭当前终端"><span class="i" data-icon="trash"></span></button>
+            <button class="tb-btn" id="term-dock" title="终端停靠：底部 / 右侧"><span class="i" data-icon="columns"></span></button>
+            <button class="tb-btn" id="term-maximize" title="向上铺满文件区 / 还原"><span class="i" data-icon="winMax"></span></button>
             <button class="tb-btn" id="term-collapse" title="折叠 / 展开"><span class="i" data-icon="chevron"></span></button>
           </div>
         </div>
@@ -431,6 +442,7 @@
 <script src="/static/viewers/font.js"></script>
 <script src="/static/viewers/imageplus.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/split.js"></script>
 <script src="/static/splitter.js"></script>
 <script src="/static/desktop-ui.js"></script>
 </body>

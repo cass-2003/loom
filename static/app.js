@@ -414,12 +414,14 @@ function handlePathMoved(oldPath, newPath, isDir) {
       state.activeTab = newPath + at.slice(oldPath.length);
   }
   renderTabs();
+  if (window.split && window.split.remapPath) window.split.remapPath(oldPath, newPath, isDir);
 }
 // 文件/目录被删除时关闭受影响的标签
 function handlePathDeleted(path, isDir) {
+  if (window.split && window.split.dropPath) window.split.dropPath(path, isDir);  // 副组可能也开着该文件（甚至只在副组）
   const affected = (p) => p === path || (isDir && p.startsWith(path + "/"));
   const survivors = state.tabs.filter(t => !affected(t.path));
-  if (survivors.length === state.tabs.length) return;  // 无影响
+  if (survivors.length === state.tabs.length) return;  // 主组无影响
   state.tabs = survivors;
   if (state.current && affected(state.current)) {
     state.activeTab = null;
@@ -718,6 +720,8 @@ function stashActiveTab() {
 async function openFile(path, row, opts) {
   const gotoLine = opts && opts.line ? opts.line : null;
   if (row) highlightTreeRow(path);
+  // 已在分屏副组里打开 → 切到副组，别在主组再开一份
+  if (window.split && window.split.has(path)) { window.split.activate(path); return; }
   const existing = tabByPath(path);
   if (existing) {
     if (gotoLine) existing.pendingLine = gotoLine;
@@ -810,6 +814,22 @@ function tabIcon(tab) {
 function addTab(tab) {
   if (!tabByPath(tab.path)) state.tabs.push(tab);
 }
+
+// 暴露给分屏模块（split.js）：在主组/副组间搬运标签、保存、状态栏路由都要用
+window.wb = {
+  state, addTab, tabByPath, renderTabs, setCurrent,
+  stashActiveTab, activateTab,
+  get current() { return state.current; },
+  closeCurrent: () => closeCurrent(),
+  saveMain: () => save(),
+  mdExt: (ext) => ext === ".md" || ext === ".markdown",
+};
+// split.js 复用的 UI 帮手（函数声明已提升，这里挂到 window 供分屏副组用）
+window.escHtml = escHtml;
+window.tabIconFor = tabIcon;
+window.highlightTreeRow = highlightTreeRow;
+window.setMsg = setMsg;
+window.fmtSize = fmtSize;
 
 // 激活某个标签：恢复其编辑器内容/视图模式，并渲染
 function activateTab(path) {
@@ -938,6 +958,7 @@ function renderTabs() {
     el.className = "tab" + (tab.path === state.activeTab ? " active" : "")
       + (isDirty ? " dirty" : "");
     el.title = tab.path;
+    el.dataset.path = tab.path;
     el.innerHTML =
       `<span class="tab-ico ${iconCls}">${svgIcon(iconName, 15)}</span>`
       + `<span class="tab-name">${escHtml(tab.name)}</span>`
@@ -950,8 +971,87 @@ function renderTabs() {
     el.addEventListener("mousedown", (e) => {
       if (e.button === 1) { e.preventDefault(); closeTab(tab.path); }
     });
+    attachTabReorder(el, tab);   // 左键拖动重排标签顺序
     bar.appendChild(el);
   }
+}
+
+// ---- 标签拖动重排（指针拖动，WebView2 下比 HTML5 拖放可靠）----
+function clearTabDropMarks() {
+  document.querySelectorAll("#tabbar .tab").forEach(t =>
+    t.classList.remove("tab-drop-before", "tab-drop-after"));
+}
+function reorderTab(fromPath, toPath, after) {
+  if (fromPath === toPath) return;
+  const from = state.tabs.findIndex(t => t.path === fromPath);
+  if (from < 0) return;
+  const [moved] = state.tabs.splice(from, 1);
+  let to = state.tabs.findIndex(t => t.path === toPath);
+  if (to < 0) { state.tabs.splice(from, 0, moved); return; }   // 目标没了，撤销
+  if (after) to += 1;
+  state.tabs.splice(to, 0, moved);
+  renderTabs();
+}
+function attachTabReorder(el, tab) {
+  el.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest(".tab-close")) return;
+    const startX = e.clientX, startY = e.clientY;
+    const bar = $("#tabbar");
+    let dragging = false, dropTarget = null, dropAfter = false, splitZone = null;
+    function onMove(ev) {
+      if (!dragging) {
+        if (Math.abs(ev.clientX - startX) < 5 && Math.abs(ev.clientY - startY) < 5) return;
+        dragging = true;
+        el.classList.add("tab-dragging");
+        document.body.style.cursor = "grabbing";
+      }
+      ev.preventDefault();
+      // 拖出标签条、进入编辑区右/下边缘 → 分屏落点（交给 split.js）
+      const br = bar.getBoundingClientRect();
+      const overBar = ev.clientX >= br.left && ev.clientX <= br.right
+                   && ev.clientY >= br.top && ev.clientY <= br.bottom;
+      if (!overBar && window.split) {
+        const z = window.split.splitDragHint(ev);
+        if (z) { splitZone = z; clearTabDropMarks(); dropTarget = null; return; }
+      }
+      splitZone = null;
+      if (window.split) window.split.clearSplitHint();
+      clearTabDropMarks();
+      dropTarget = null;
+      const tabs = [...bar.querySelectorAll(".tab")].filter(t => t !== el);
+      for (const t of tabs) {
+        const r = t.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right) {
+          dropTarget = t; dropAfter = (ev.clientX - r.left) > r.width / 2; break;
+        }
+      }
+      if (!dropTarget && tabs.length) {   // 指针在标签条左/右空白 → 放到首/尾
+        const first = tabs[0].getBoundingClientRect();
+        const last = tabs[tabs.length - 1].getBoundingClientRect();
+        if (ev.clientX < first.left) { dropTarget = tabs[0]; dropAfter = false; }
+        else if (ev.clientX > last.right) { dropTarget = tabs[tabs.length - 1]; dropAfter = true; }
+      }
+      if (dropTarget) dropTarget.classList.add(dropAfter ? "tab-drop-after" : "tab-drop-before");
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      document.body.style.cursor = "";
+      el.classList.remove("tab-dragging");
+      clearTabDropMarks();
+      if (window.split) window.split.clearSplitHint();
+      if (dragging) {
+        const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+        document.addEventListener("click", swallow, { capture: true, once: true });
+        setTimeout(() => { try { document.removeEventListener("click", swallow, true); } catch (_) {} }, 80);
+        if (splitZone && window.split) window.split.splitDrop(tab.path, splitZone);
+        else if (dropTarget) reorderTab(tab.path, dropTarget.dataset.path, dropAfter);
+      }
+    }
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+  });
 }
 
 // 高亮文件树中对应行（仅已渲染节点）
@@ -1153,9 +1253,9 @@ function renderMath(root) {
 // marked 渲染的 GFM 任务项形如 <li class="task-list-item"><input type=checkbox ...>...
 // 给每个复选框打上「在源码里的序号」，点击后回写对应行的 [ ]<->[x]。
 function decorateTaskList(root) {
-  // 本地 vendor 的 marked 渲染任务项不带 task-list-item 类，直接匹配列表项里的复选框。
-  // GFM 只为任务清单语法生成 li 内的 checkbox，故按 DOM 顺序与源码任务行一一对应。
-  const boxes = root.querySelectorAll('li input[type="checkbox"]');
+  // 只选「li 首个子元素且为复选框」——GFM 任务项把 checkbox 放在 li 开头，
+  // 这样与源码 TASK_LINE_RE（行首任务标记）一一对应；用户手写在文中的裸 checkbox 不计入、不会错位。
+  const boxes = root.querySelectorAll('li > input[type="checkbox"]:first-child');
   let i = 0;
   boxes.forEach(cb => {
     cb.disabled = false;
@@ -1586,8 +1686,9 @@ $("#find-case").onclick = () => {
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
-    // 仅在文本编辑视图激活时拦截，否则放行浏览器查找
-    if (state.kind === "text" && !$("#editor-wrap").classList.contains("hidden")) {
+    // 仅在「主」文本编辑视图激活时拦截；焦点在分屏副组(或非文本视图)时放行浏览器查找
+    const sideFocused = window.split && window.split.isSideFocused && window.split.isSideFocused();
+    if (state.kind === "text" && !$("#editor-wrap").classList.contains("hidden") && !sideFocused) {
       e.preventDefault();
       openFind();
     }
@@ -1610,22 +1711,34 @@ $("#editor").addEventListener("keydown", (e) => {
 // ---------- 保存 ----------
 async function save() {
   if (!state.current) return;
+  const path = state.current;          // 在 await 前固定目标路径，避免存盘往返中切换标签存错文件
   let content;
-  if (state.kind === "md") content = vditorGetValue();
-  else if (state.kind === "text") content = $("#editor").value;
+  if (state.kind === "md") {
+    // Vditor 未就绪 / 实例当前不是这个文件时 getValue 会返回空串——别用它覆盖文件（防截断）
+    if (!vd.inst || !vd.ready || vd.curPath !== path) { setMsg("编辑器尚未就绪，请稍候再保存", "warn"); return; }
+    content = vditorGetValue();
+  } else if (state.kind === "text") content = $("#editor").value;
   else return;
-  const res = await api.save(state.current, content);
+  const res = await api.save(path, content);
   if (res.error) { setMsg("保存失败: " + res.error, "err"); return; }
-  state.dirty = false;
-  document.body.classList.remove("dirty");
-  const t = tabByPath(state.current);
-  if (t) { t.dirty = false; t.draft = content; renderTabs(); }
+  const t = tabByPath(path);           // 按固定路径回写，而不是 await 后的 state.current
+  if (t) { t.dirty = false; t.draft = content; }
+  if (state.activeTab === path) {      // 仅当被存文件仍是当前标签，才清全局脏标
+    state.dirty = false;
+    document.body.classList.remove("dirty");
+  }
+  renderTabs();
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
   if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
 }
-$("#btn-save").onclick = save;
+// 焦点在副分屏组时存副组，否则存主组
+function saveRouted() {
+  if (window.split && window.split.isSideFocused()) return window.split.save();
+  return save();
+}
+$("#btn-save").onclick = saveRouted;
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveRouted(); }
 });
 
 // ---------- Ctrl+P 快速打开 ----------
@@ -1833,6 +1946,7 @@ async function reloadRoot(path) {
   state.expanded = new Set();
   if (typeof renderTabs === "function") renderTabs();
   if (typeof closeCurrent === "function") closeCurrent();
+  if (window.split && window.split.reset) window.split.reset();  // 切根目录时拆掉分屏副组，别留旧根的陈旧标签
   try { localStorage.removeItem("wb-workspace"); } catch {}
   $("#crumb").textContent = "根目录: " + path;
   await loadTree("", $("#tree"));
@@ -1843,7 +1957,11 @@ async function reloadRoot(path) {
 window.reloadRoot = reloadRoot;
 
 window.addEventListener("beforeunload", (e) => {
-  if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
+  // 活动主标签(state.dirty) + 任意未激活主标签 + 分屏副组 任一有未保存改动都要拦
+  const anyDirty = state.dirty
+    || state.tabs.some(t => t.dirty)
+    || (window.split && typeof window.split.hasUnsaved === "function" && window.split.hasUnsaved());
+  if (anyDirty) { e.preventDefault(); e.returnValue = ""; }
 });
 
 // ---------- 主题 ----------
@@ -1940,4 +2058,6 @@ if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状
 (async () => {
   await initTree();
   await restoreWorkspace();
+  // 主组恢复完毕后再恢复分屏副组（顺序固定，避免抢写 wb-workspace）
+  if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
 })();

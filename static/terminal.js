@@ -112,7 +112,9 @@
     const st = $("#status-term");
     if (st) st.classList.toggle("active", !v);
     if (!v) {
-      // 展开：首次确保有终端，随后 fit + 聚焦 + 续活动组各窗格轮询
+      // 展开：按停靠偏好应用「底部/右侧」，再确保有终端 + fit + 聚焦 + 续轮询
+      applyDock(dockPrefRight());
+      updateDockBtn(dockPrefRight());
       ensureSession().then(() => {
         const g = activeGroup();
         relayoutGroup(g);
@@ -121,7 +123,10 @@
         startGroupPoll(g);
       });
     } else {
-      // 折叠：暂停所有窗格轮询
+      // 折叠：退出"铺满"、回到底部细条（去掉右停靠类与内联宽度），暂停所有窗格轮询
+      setMaxed(false);
+      termContent()?.classList.remove("term-dock-right");
+      const pn = $("#terminal-panel"); if (pn) pn.style.width = "";
       allPanes().forEach(stopPoll);
     }
   }
@@ -129,6 +134,127 @@
   function toggle() { setCollapsed(!isCollapsed()); }
   window.toggleTerminal = toggle;
   window.openTerminal = expand;
+
+  // ---------- 铺满文件区（终端向上占满 #content，文件区暂时隐藏）----------
+  function termContent() { return document.getElementById("content"); }
+  function isMaxed() { const c = termContent(); return !!(c && c.classList.contains("term-maxed")); }
+  function setMaxed(v) {
+    const c = termContent();
+    if (!c) return;
+    if (v) expand();                       // 铺满前先确保展开
+    c.classList.toggle("term-maxed", v);
+    const b = $("#term-maximize");
+    if (b) {
+      const ic = b.querySelector(".i");
+      if (ic && window.svgIcon) ic.innerHTML = window.svgIcon(v ? "winRestore" : "winMax", 16);
+      b.title = v ? "还原终端高度" : "向上铺满文件区";
+      b.classList.toggle("active", v);
+    }
+    if (typeof window.termRefit === "function") { try { window.termRefit(); } catch {} }
+  }
+  // 经 applyDockZone 路由，保证「铺满」与「靠右停靠」互斥（不再共存出坏布局）
+  function toggleMaxed() { applyDockZone(isMaxed() ? "bottom" : "fill"); }
+  window.toggleTerminalMax = toggleMaxed;
+
+  // ---------- 停靠位置：底部 / 右侧（与文件区并排）----------
+  function dockPrefRight() { try { return localStorage.getItem("wb-term-dock") === "right"; } catch (_) { return false; } }
+  function applyDock(v) {
+    const c = termContent(); const panel = $("#terminal-panel");
+    if (!c) return;
+    if (panel) { panel.style.height = ""; panel.style.width = ""; }   // 清掉另一方向的内联尺寸
+    c.classList.toggle("term-dock-right", v);
+    if (panel) {
+      if (v) { const w = parseInt(localStorage.getItem("wb-term-w") || "", 10); if (w) panel.style.width = w + "px"; }
+      else   { const h = parseInt(localStorage.getItem("wb-term-h") || "", 10); if (h) panel.style.height = h + "px"; }
+    }
+    if (typeof window.termRefit === "function") { try { window.termRefit(); } catch {} }
+  }
+  function updateDockBtn(v) {
+    const b = $("#term-dock");
+    if (b) { b.classList.toggle("active", v); b.title = v ? "终端停靠：右侧（点击回到底部）" : "终端停靠：底部（点击移到右侧）"; }
+  }
+  function setDockRight(v) {
+    try { localStorage.setItem("wb-term-dock", v ? "right" : "bottom"); } catch (_) {}
+    updateDockBtn(v);
+    if (isCollapsed()) { expand(); return; }   // 折叠态：展开（展开过程里按 pref 应用靠右）
+    applyDock(v);
+  }
+  function toggleDock() { applyDockZone(dockPrefRight() ? "bottom" : "right"); }   // 同样经 applyDockZone 保证与铺满互斥
+  window.toggleTerminalDock = toggleDock;
+
+  // ---------- 拖终端头 → 拖到编辑区铺满 / 并排 / 回底部（仿 VS Code 拖拽停靠）----------
+  function applyDockZone(z) {
+    if (z === "fill")       { setDockRight(false); setMaxed(true); }   // 铺满编辑区
+    else if (z === "right") { setMaxed(false); setDockRight(true); }   // 并排到右侧
+    else                    { setMaxed(false); setDockRight(false); }  // 回到底部
+  }
+  function attachHeadDockDrag() {
+    const head = $("#term-head");
+    if (!head) return;
+    head.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      // 工具栏/按钮/下拉/任务区/输入框 等交给各自处理，不当拖动
+      if (e.target.closest("button") || e.target.closest("select") ||
+          e.target.closest(".term-toolbar") || e.target.closest(".term-shell-menu") ||
+          e.target.closest(".term-task-wrap") || e.target.closest("input")) return;
+      if (isCollapsed()) return;
+      const content = termContent();
+      if (!content) return;
+      const sx = e.clientX, sy = e.clientY;
+      let dragging = false, overlay = null, hint = null, label = null, zone = "bottom";
+      function ensureOverlay() {
+        overlay = document.createElement("div");
+        overlay.id = "term-dock-overlay";
+        hint = document.createElement("div");
+        hint.className = "term-dock-hint";
+        label = document.createElement("div");
+        label.className = "term-dock-hint-label";
+        hint.appendChild(label);
+        overlay.appendChild(hint);
+        document.body.appendChild(overlay);
+      }
+      function zoneFor(ev) {
+        const r = content.getBoundingClientRect();
+        const fx = (ev.clientX - r.left) / r.width;
+        const fy = (ev.clientY - r.top) / r.height;
+        if (fy > 0.78) return "bottom";
+        if (fx > 0.62) return "right";
+        return "fill";
+      }
+      function placeHint(z) {
+        const r = content.getBoundingClientRect();
+        let x = r.left, y = r.top, w = r.width, h = r.height, text = "铺满编辑区";
+        if (z === "right") { x = r.left + r.width * 0.5; w = r.width * 0.5; text = "并排到右侧"; }
+        else if (z === "bottom") { y = r.top + r.height * 0.7; h = r.height * 0.3; text = "停靠到底部"; }
+        hint.style.left = x + "px"; hint.style.top = y + "px";
+        hint.style.width = w + "px"; hint.style.height = h + "px";
+        label.textContent = text;
+      }
+      function onMove(ev) {
+        if (!dragging) {
+          if (Math.abs(ev.clientX - sx) < 6 && Math.abs(ev.clientY - sy) < 6) return;
+          dragging = true; ensureOverlay(); document.body.style.cursor = "grabbing";
+        }
+        ev.preventDefault();
+        zone = zoneFor(ev);
+        placeHint(zone);
+      }
+      function onUp() {
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", onUp, true);
+        document.body.style.cursor = "";
+        if (overlay) overlay.remove();
+        if (dragging) {
+          const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+          document.addEventListener("click", swallow, { capture: true, once: true });
+          setTimeout(() => { try { document.removeEventListener("click", swallow, true); } catch (_) {} }, 80);
+          applyDockZone(zone);
+        }
+      }
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", onUp, true);
+    });
+  }
 
   // 兼容旧 API：把信息以一行文本写进当前聚焦窗格（不再渲染 HTML 块）
   function termAppend(info) {
@@ -246,6 +372,13 @@
     // 列表显隐改变了挂载区宽度 → 重排活动组
     relayoutGroup(activeGroup());
   }
+  // 终端默认名（num: shell）；自定义名存 g.customName
+  function defaultGroupName(g) {
+    const ap = g.panes.find(p => p.pid === g.activePid) || g.panes[0];
+    return g.num + ": " + (ap ? shellNameOf(ap.shell) : "Shell");
+  }
+  function groupDisplayName(g) { return g.customName || defaultGroupName(g); }
+
   function renderList() {
     const list = $("#term-list");
     if (!list) return;
@@ -253,17 +386,21 @@
     groups.forEach((g) => {
       const ap = g.panes.find(p => p.pid === g.activePid) || g.panes[0];
       const allDead = g.panes.length > 0 && g.panes.every(p => !p.alive && !p.opening);
+      const dispName = groupDisplayName(g);
       const row = document.createElement("div");
       row.className = "term-list-row" + (g.gid === activeGid ? " active" : "")
                     + (allDead ? " dead" : "");
-      row.title = g.num + ": " + (ap ? shellNameOf(ap.shell) : "")
-                + (g.panes.length > 1 ? "（已拆分 ×" + g.panes.length + "）" : "");
+      row.title = dispName
+                + (g.panes.length > 1 ? "（已拆分 ×" + g.panes.length + "）" : "")
+                + " · 双击重命名 · 可拖动重排";
+      row.dataset.gid = String(g.gid);
       const ico = document.createElement("span");
       ico.className = "term-list-ico";
       ico.innerHTML = svgIcon(shellIcon(ap ? ap.shell : "powershell"), 14);
       const label = document.createElement("span");
       label.className = "term-list-label";
-      label.textContent = g.num + ": " + (ap ? shellNameOf(ap.shell) : "Shell");
+      label.textContent = dispName;
+      label.addEventListener("dblclick", (e) => { e.stopPropagation(); startRenameRow(g, row, label); });
       row.appendChild(ico);
       row.appendChild(label);
       if (g.panes.length > 1) {
@@ -280,8 +417,106 @@
       x.onclick = (e) => { e.stopPropagation(); closeGroup(g.gid); };
       row.appendChild(x);
       row.onclick = () => switchToGroup(g.gid);
+      attachRowDnd(g, row);
       list.appendChild(row);
     });
+  }
+
+  // ---- 双击重命名某终端 ----
+  function startRenameRow(g, row, label) {
+    row.draggable = false;                 // 编辑时禁拖，方便选字
+    const input = document.createElement("input");
+    input.className = "term-list-rename";
+    input.value = groupDisplayName(g);
+    input.spellcheck = false;
+    row.replaceChild(input, label);
+    input.focus(); input.select();
+    let done = false;
+    function commit(save) {
+      if (done) return; done = true;
+      if (save) {
+        const v = input.value.trim();
+        // 空 或 与默认名相同 → 清除自定义名，回到自动命名
+        g.customName = (v && v !== defaultGroupName(g)) ? v : null;
+      }
+      renderList();
+    }
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); commit(true); }
+      else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+    });
+    input.addEventListener("blur", () => commit(true));
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("dblclick", (e) => e.stopPropagation());
+  }
+
+  // ---- 指针拖动终端条重排顺序（用 mouse 事件；WebView2 下比 HTML5 原生拖放可靠得多）----
+  function clearDropMarks() {
+    const list = $("#term-list");
+    if (list) list.querySelectorAll(".term-list-row").forEach(r => r.classList.remove("drop-before", "drop-after"));
+  }
+  function attachRowDnd(g, row) {
+    row.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".term-list-x") || e.target.closest(".term-list-rename")) return;
+      const startY = e.clientY;
+      const list = $("#term-list");
+      let dragging = false, dropTarget = null, dropAfter = false;
+      function onMove(ev) {
+        if (!dragging) {
+          if (Math.abs(ev.clientY - startY) < 4) return;   // 超阈值才算拖动（保留单击切换）
+          dragging = true;
+          row.classList.add("dragging");
+          document.body.style.cursor = "grabbing";
+        }
+        ev.preventDefault();
+        clearDropMarks();
+        dropTarget = null;
+        const rows = [...list.querySelectorAll(".term-list-row")].filter(r => r !== row);
+        for (const r of rows) {
+          const rect = r.getBoundingClientRect();
+          if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+            dropTarget = r; dropAfter = (ev.clientY - rect.top) > rect.height / 2; break;
+          }
+        }
+        if (!dropTarget && rows.length) {   // 指针在列表上/下方 → 放到首/尾
+          const first = rows[0].getBoundingClientRect(), last = rows[rows.length - 1].getBoundingClientRect();
+          if (ev.clientY < first.top) { dropTarget = rows[0]; dropAfter = false; }
+          else if (ev.clientY > last.bottom) { dropTarget = rows[rows.length - 1]; dropAfter = true; }
+        }
+        if (dropTarget) dropTarget.classList.add(dropAfter ? "drop-after" : "drop-before");
+      }
+      function onUp() {
+        document.removeEventListener("mousemove", onMove, true);
+        document.removeEventListener("mouseup", onUp, true);
+        document.body.style.cursor = "";
+        row.classList.remove("dragging");
+        clearDropMarks();
+        if (dragging) {
+          // 吞掉拖动后紧跟的那次 click，避免误触切换组
+          const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+          document.addEventListener("click", swallow, { capture: true, once: true });
+          setTimeout(() => { try { document.removeEventListener("click", swallow, true); } catch (_) {} }, 80);
+          if (dropTarget) {
+            const toGid = Number(dropTarget.dataset.gid);
+            if (!Number.isNaN(toGid)) reorderGroup(g.gid, toGid, dropAfter);
+          }
+        }
+      }
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onUp, true);
+    });
+  }
+  function reorderGroup(fromGid, toGid, after) {
+    const fromIdx = groups.findIndex(x => x.gid === fromGid);
+    if (fromIdx < 0) return;
+    const [moved] = groups.splice(fromIdx, 1);
+    let toIdx = groups.findIndex(x => x.gid === toGid);
+    if (toIdx < 0) { groups.splice(fromIdx, 0, moved); return; }
+    if (after) toIdx += 1;
+    groups.splice(toIdx, 0, moved);
+    renderList();
   }
 
   // ---------- 创建一个窗格（xterm + host + 后端会话） ----------
@@ -332,8 +567,9 @@
   function updatePaneFocusClass(group) {
     if (!group) return;
     group.panes.forEach((p) => {
+      // p.pid != null：两个窗格同时开启时(都 pid=null, activePid=null) null===null 会误高亮两个，加此守卫
       if (p.host) p.host.classList.toggle("focused",
-        group.panes.length > 1 && p.pid === group.activePid);
+        group.panes.length > 1 && p.pid != null && p.pid === group.activePid);
     });
   }
 
@@ -420,7 +656,7 @@
     const ghost = document.createElement("div");
     ghost.className = "term-group";
     $("#term-xterm").appendChild(ghost);
-    const group = { gid, num, panes: [], activePid: null, host: ghost, basis: {} };
+    const group = { gid, num, customName: null, panes: [], activePid: null, host: ghost, basis: {} };
     groups.push(group);
 
     // 先激活并显示（即便后端还在开，UI 已就绪）
@@ -530,13 +766,20 @@
   async function closeGroup(gid) {
     const g = groupById(gid);
     if (!g) return;
-    const idx = groups.indexOf(g);
+    // 用对象引用记住前后相邻组（按身份而非索引）：await 期间若 groups 被拖动重排/增删，
+    // 陈旧的数字 idx 会选错相邻组，故改用仍在数组中的邻居引用，都不在则退回 groups[0]。
+    const before = groups.indexOf(g);
+    const nextRef = before >= 0 ? groups[before + 1] : null;
+    const prevRef = before >= 0 ? groups[before - 1] : null;
     for (const p of g.panes.slice()) {
       if (p.pid != null) { try { await fsPost("/api/term/close", { id: p.pid }); } catch {} }
     }
     removeGroupLocal(g);
     if (activeGid === gid || !groupById(activeGid)) {
-      const next = groups[idx] || groups[idx - 1] || groups[0] || null;
+      let next = null;
+      if (nextRef && groups.indexOf(nextRef) >= 0) next = nextRef;
+      else if (prevRef && groups.indexOf(prevRef) >= 0) next = prevRef;
+      else next = groups[0] || null;
       activeGid = next ? next.gid : null;
     }
     renderList();
@@ -669,13 +912,6 @@
   // sp 分隔条紧跟在 pane(左侧窗格) 之后：拖动调整左侧窗格宽度（右侧窗格 flex:1 占余）
   function bindPaneSplitter(sp, group, pane) {
     let dragging = false;
-    sp.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      dragging = true;
-      sp.classList.add("dragging");
-      showPaneOverlay();
-    });
     function move(e) {
       if (!dragging) return;
       const rect = pane.host.getBoundingClientRect();
@@ -696,10 +932,20 @@
       dragging = false;
       sp.classList.remove("dragging");
       hidePaneOverlay();
+      window.removeEventListener("mousemove", move);   // 仅在拖动期间挂 window 监听，松手即摘
+      window.removeEventListener("mouseup", up);
       relayoutGroup(group);
     }
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
+    // 每次 relayout 会新建 sp 元素；监听只在按下→松手之间存在，避免随 relayout 无限累积泄漏
+    sp.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      sp.classList.add("dragging");
+      showPaneOverlay();
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    });
   }
 
   // ---------- 主题跟随：监听 data-theme 变化（所有窗格跟随） ----------
@@ -906,6 +1152,14 @@
 
     const collapseBtn = $("#term-collapse");
     if (collapseBtn) collapseBtn.onclick = (e) => { e.stopPropagation(); toggle(); };
+
+    const maxBtn = $("#term-maximize");
+    if (maxBtn) maxBtn.onclick = (e) => { e.stopPropagation(); toggleMaxed(); };
+
+    const dockBtn = $("#term-dock");
+    if (dockBtn) dockBtn.onclick = (e) => { e.stopPropagation(); toggleDock(); };
+    updateDockBtn(dockPrefRight());   // 初始按钮态跟随持久化偏好
+    attachHeadDockDrag();             // 拖终端头 → 编辑区停靠
 
     const head = $("#term-head");
     if (head) head.addEventListener("click", (e) => {

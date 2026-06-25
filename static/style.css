@@ -297,6 +297,15 @@ body.desktop.maximized #app { border: none; }
 }
 .tab.dirty .tab-close:hover::before { display: none; }
 .tab.dirty .tab-close:hover .icn { display: block; }
+/* 标签拖动重排：被拖标签半透明，落点用左/右竖线指示 */
+.tab.tab-dragging { opacity: .45; }
+.tab.tab-drop-before::after,
+.tab.tab-drop-after::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--accent); z-index: 5; pointer-events: none;
+}
+.tab.tab-drop-before::after { left: -1px; }
+.tab.tab-drop-after::after { right: -1px; }
 /* 文件类型图标配色（沿用文件树 ic-* 语义） */
 .tab .ic-md { color: var(--purple); }
 .tab .ic-img { color: var(--cyan); }
@@ -388,6 +397,79 @@ body.desktop.maximized #app { border: none; }
   font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 13px;
   line-height: 1.65; tab-size: 2;
 }
+
+/* ===== 编辑器分屏副组（split.js）===== */
+#content-body.split-v { flex-direction: column; }
+/* 分屏时让可见的主视图与副组各占一半（按需补 flex） */
+#content-body.has-side > #editor-wrap,
+#content-body.has-side > #vditor,
+#content-body.has-side > #viewer-host,
+#content-body.has-side > #image-view,
+#content-body.has-side > #diff-view,
+#content-body.has-side > #welcome { flex: 1 1 0; min-width: 0; min-height: 0; }
+
+#side-group {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--bg); overflow: hidden;
+}
+#content-body:not(.split-v) > #side-group { border-left: 1px solid var(--border); }
+#content-body.split-v > #side-group { border-top: 1px solid var(--border); }
+
+#side-tabbar {
+  display: flex; align-items: stretch; height: 35px; flex-shrink: 0;
+  background: var(--bg2); border-bottom: 1px solid var(--border-soft);
+  overflow-x: auto; overflow-y: hidden;
+}
+#side-tabbar::-webkit-scrollbar { height: 0; width: 0; display: none; }
+#side-tabbar .side-tools {
+  margin-left: auto; display: flex; align-items: center; flex-shrink: 0;
+  padding: 0 4px; gap: 2px;
+}
+#side-tabbar .side-tools .tb-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 5px; color: var(--muted);
+  background: transparent; border: none; cursor: pointer;
+}
+#side-tabbar .side-tools .tb-btn:hover { background: var(--hover); color: var(--text); }
+
+#side-pane { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; background: var(--bg); }
+#side-gutter {
+  flex: none; overflow: hidden; box-sizing: border-box;
+  padding: 18px 10px 18px 14px; text-align: right;
+  background: var(--bg); color: var(--muted);
+  border-right: 1px solid var(--border-soft);
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 13px;
+  line-height: 1.65; tab-size: 2; white-space: pre; user-select: none; -webkit-user-select: none;
+}
+#side-editor {
+  flex: 1; min-width: 0; resize: none; border: none; outline: none;
+  background: var(--bg); color: var(--text); padding: 18px 20px;
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 13px;
+  line-height: 1.65; tab-size: 2; white-space: pre; overflow: auto;
+}
+/* 副组聚焦：内嵌一条高亮边，提示焦点所在 */
+#content-body.side-focused:not(.split-v) > #side-group { box-shadow: inset 2px 0 0 var(--accent); }
+#content-body.side-focused.split-v > #side-group { box-shadow: inset 0 2px 0 var(--accent); }
+
+/* 分屏比例拖动条（方向自适应）*/
+#side-resizer { flex-shrink: 0; background: transparent; z-index: 4; transition: background .15s; }
+#content-body:not(.split-v) > #side-resizer { width: 5px; cursor: col-resize; align-self: stretch; }
+#content-body.split-v > #side-resizer { height: 5px; cursor: row-resize; }
+#side-resizer:hover { background: var(--accent); }
+
+/* 拖标签到编辑区时的分屏落点提示 */
+#split-drop-overlay { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; }
+.split-drop-hint {
+  position: fixed; border: 2px solid var(--accent); border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text); font-size: 13px; font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  transition: left .07s ease, top .07s ease, width .07s ease, height .07s ease;
+}
+/* 副组标签拖回主组时，主标签条整体高亮 */
+#tabbar.tab-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+
 #preview {
   flex: 1; min-width: 0; overflow: auto; padding: 22px 30px;
   border-left: 1px solid var(--border-soft); background: var(--bg-soft);
@@ -1111,7 +1193,40 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 #terminal-panel.collapsed #term-list-toggle,
 #terminal-panel.collapsed #term-clear,
 #terminal-panel.collapsed #term-kill,
+#terminal-panel.collapsed #term-maximize,
+#terminal-panel.collapsed #term-dock,
 #terminal-panel.collapsed .term-task-wrap { display: none; }
+
+/* 终端"铺满文件区"：拖到顶 / 点铺满按钮 → 终端占满 #content，上方文件区暂时隐藏。
+   再拖下来或点还原即恢复正常分屏高度（inline height 自然生效）。 */
+#content.term-maxed > #content-body,
+#content.term-maxed > #editor-wrap { display: none !important; }
+#content.term-maxed > #terminal-panel { flex: 1 1 auto !important; height: auto !important; }
+
+/* 终端停靠右侧：#content 改横向排布，终端与文件区并排（仿 VS Code 面板靠右）。
+   折叠时会去掉本类回到底部细条，故无需单独处理折叠态。 */
+#content.term-dock-right { flex-direction: row; }
+#content.term-dock-right > #term-resizer { width: 5px; height: auto; cursor: col-resize; }
+#content.term-dock-right > #terminal-panel {
+  height: auto !important; width: 420px;
+  border-top: none; border-left: 1px solid var(--border);
+}
+/* 拖终端头停靠时的全屏遮罩 + 落点高亮（盖住 iframe/xterm，避免吞鼠标）*/
+#term-dock-overlay { position: fixed; inset: 0; z-index: 2147483000; cursor: grabbing; }
+.term-dock-hint {
+  position: fixed; border: 2px solid var(--accent); border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  transition: left .07s ease, top .07s ease, width .07s ease, height .07s ease;
+  pointer-events: none;
+}
+.term-dock-hint-label {
+  color: #fff; font-size: 13px; font-weight: 600;
+  background: var(--accent); padding: 4px 11px; border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+}
+/* 终端头标题区给个可拖的光标提示 */
+#term-head .term-title { cursor: grab; }
 #term-head {
   display: flex; align-items: center; gap: 10px; height: 32px;
   flex-shrink: 0; padding: 0 6px 0 12px; cursor: pointer;
@@ -1270,6 +1385,17 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .term-list-x .icn { width: 13px; height: 13px; }
 .term-list-row:hover .term-list-x { display: inline-flex; }
 .term-list-x:hover { background: var(--bg3); color: var(--text); }
+/* 拖动重排：被拖行半透明，落点上/下缘高亮指示 */
+.term-list-row.dragging { opacity: .45; }
+.term-list-row.drop-before { box-shadow: inset 0 2px 0 0 var(--accent); }
+.term-list-row.drop-after { box-shadow: inset 0 -2px 0 0 var(--accent); }
+/* 双击重命名的内联输入 */
+.term-list-rename {
+  flex: 1; min-width: 0; height: 20px; padding: 0 4px; margin: 0;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 3px;
+  font-size: 12px; font-family: inherit; outline: none;
+}
 
 /* 状态栏终端入口 */
 .status-clickable { cursor: pointer; gap: 4px; }

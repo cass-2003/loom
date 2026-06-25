@@ -966,16 +966,28 @@ class Handler(BaseHTTPRequestHandler):
     def _err(self, msg, status=400):
         self._json({"error": msg}, status)
 
+    def _host_is_loopback(self):
+        """Host 头主机名是否为本地回环。绝对白名单，用于击穿 DNS rebinding：
+        重绑攻击页发来的请求 Host 仍是 evil.example（非回环）→ 直接拒。"""
+        try:
+            host_only = urlparse("//" + self.headers.get("Host", "")).hostname
+        except ValueError:
+            return False
+        return host_only in ("localhost", "127.0.0.1", "::1")
+
     def _check_csrf(self):
         """阻止跨站请求伪造：写操作必须同源 + Content-Type 为 application/json。
 
         - 要求 application/json：跨站的表单/简单请求无法设置该类型，会触发预检，
           而本服务不应答 CORS 预检，浏览器即拦截，从根上挡住无预检的简单请求 CSRF。
+        - Host 必须是回环主机名：击穿 DNS rebinding（相对的 Origin==Host 比较挡不住）。
         - Sec-Fetch-Site 若存在，必须是 same-origin/same-site/none。
         - Origin 若存在，其 host 必须与 Host 头一致。
         """
         ctype = self.headers.get("Content-Type", "")
         if not ctype.startswith("application/json"):
+            return False
+        if not self._host_is_loopback():   # DNS rebinding 防护
             return False
         site = self.headers.get("Sec-Fetch-Site")
         if site and site not in ("same-origin", "same-site", "none"):
@@ -1015,6 +1027,10 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+
+        # 读侧 DNS rebinding 防护：/api 读接口（文件/树/搜索…）要求回环 Host；静态壳子不限制
+        if path.startswith("/api/") and not self._host_is_loopback():
+            return self._err("forbidden", 403)
 
         if path == "/" or path == "":
             return self._serve_static("index.html")
@@ -2189,6 +2205,22 @@ def main():
     if not ROOT.is_dir():
         print(f"根目录不存在: {ROOT}", file=sys.stderr)
         sys.exit(1)
+
+    # 非回环绑定守卫：默认拒绝把无鉴权的 /api/exec(任意命令) 与 /api/file(任意读) 暴露到局域网
+    def _is_loopback(host):
+        import ipaddress
+        if host == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
+    if not _is_loopback(args.host):
+        print(f"[!] 警告: 绑定到非本地地址 {args.host} 会把无鉴权的 /api/exec(任意命令执行) 与 "
+              f"/api/file(任意文件读取) 暴露给局域网。", file=sys.stderr)
+        if os.environ.get("WORKBENCH_ALLOW_REMOTE") != "1":
+            print("    已拒绝启动。如确需远程绑定，请显式设置环境变量 WORKBENCH_ALLOW_REMOTE=1。", file=sys.stderr)
+            sys.exit(1)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"

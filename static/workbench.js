@@ -37,21 +37,30 @@
   // 应用设置到 DOM（即时生效）
   function applySettings() {
     const ed = $("#editor"), gutter = $("#editor-gutter");
+    const sideEd = $("#side-editor"), sideGutter = $("#side-gutter");   // 分屏副组同样跟随设置
     const md = document.querySelectorAll(".markdown-body");
     // 字号
     const fs = settings.fontSize + "px";
     if (ed) ed.style.fontSize = fs;
     if (gutter) gutter.style.fontSize = fs;
+    if (sideEd) sideEd.style.fontSize = fs;
+    if (sideGutter) sideGutter.style.fontSize = fs;
     md.forEach(m => m.style.fontSize = fs);
     // Tab 宽度
     const tw = settings.tabWidth === "tab" ? 4 : parseInt(settings.tabWidth, 10);
     if (ed) ed.style.tabSize = tw;
     if (gutter) gutter.style.tabSize = tw;
+    if (sideEd) sideEd.style.tabSize = tw;
+    if (sideGutter) sideGutter.style.tabSize = tw;
     // 自动换行
     const wrapVal = settings.wrap ? "pre-wrap" : "pre";
     if (ed) {
       ed.style.whiteSpace = wrapVal;
       ed.setAttribute("wrap", settings.wrap ? "soft" : "off");
+    }
+    if (sideEd) {
+      sideEd.style.whiteSpace = wrapVal;
+      sideEd.setAttribute("wrap", settings.wrap ? "soft" : "off");
     }
     // 强调色
     const ac = ACCENTS.find(a => a.v === settings.accent) || ACCENTS[0];

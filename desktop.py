@@ -46,6 +46,49 @@ class WindowApi:
         if self._win:
             self._win.destroy()
 
+    # ---- 无边框窗口的四边四角缩放（前端透明热区驱动，原生 MoveWindow，无可见边框）----
+    def _hwnd(self):
+        """取本窗口原生 HWND（优先 pywebview 句柄，退回按标题查找）。"""
+        try:
+            h = int(self._win.native.Handle)
+            if h:
+                return h
+        except Exception:
+            pass
+        try:
+            import ctypes
+            return ctypes.windll.user32.FindWindowW(None, "Workbench")
+        except Exception:
+            return 0
+
+    def get_window_rect(self):
+        """窗口屏幕物理像素几何 {x,y,w,h}，供前端缩放热区起拖取基准。"""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            hwnd = self._hwnd()
+            if not hwnd:
+                return None
+            r = wintypes.RECT()
+            ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(r))
+            return {"x": r.left, "y": r.top,
+                    "w": r.right - r.left, "h": r.bottom - r.top}
+        except Exception:
+            return None
+
+    def set_window_rect(self, x, y, w, h):
+        """把窗口移到/缩放到给定物理像素几何（前端缩放热区拖动时调用）。"""
+        try:
+            import ctypes
+            hwnd = self._hwnd()
+            if not hwnd:
+                return False
+            ctypes.windll.user32.MoveWindow(
+                hwnd, int(x), int(y), int(w), int(h), True)
+            return True
+        except Exception:
+            return False
+
     def open_folder(self):
         """弹系统文件夹选择框，选中后切换工作根目录，返回新路径。"""
         if not self._win:

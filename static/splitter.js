@@ -52,7 +52,7 @@
       dragging = true;
       e.preventDefault();
       handle.classList.add("dragging");
-      showOverlay(opts.cursor);
+      showOverlay(typeof opts.cursor === "function" ? opts.cursor() : opts.cursor);
     });
     function move(e) {
       if (!dragging) return;
@@ -102,20 +102,36 @@
     // 恢复持久化高度（折叠时不应用，由 .collapsed 的固定高度接管）
     const saved = parseInt(localStorage.getItem("wb-term-h") || "", 10);
     if (saved >= MIN) panel.style.height = clamp(saved, MIN, maxH()) + "px";
+    const content = $("#content");
+    const SNAP = 36;   // 拖到离边 36px 内 → 铺满文件区
+    function dockRight() { return !!(content && content.classList.contains("term-dock-right")); }
     bindDrag({
-      handle, cursor: "row-resize",
+      handle,
+      cursor: function () { return dockRight() ? "col-resize" : "row-resize"; },
       canDrag: function () { return !isCollapsed(); },
       onMove: function (e) {
-        // 终端在底部：高度 = 面板底边 - 鼠标 Y
-        const rect = panel.getBoundingClientRect();
-        let h = rect.bottom - e.clientY;
-        h = clamp(h, MIN, maxH());
-        panel.style.height = h + "px";
+        const crect = content ? content.getBoundingClientRect() : null;
+        const prect = panel.getBoundingClientRect();
+        if (dockRight()) {
+          // 终端在右侧：宽度 = 面板右边 - 鼠标 X
+          const fullW = crect ? crect.width : window.innerWidth;
+          let w = prect.right - e.clientX;
+          if (w >= fullW - SNAP) { if (content) content.classList.add("term-maxed"); }
+          else { if (content) content.classList.remove("term-maxed"); w = clamp(w, MIN, fullW - SNAP); panel.style.width = w + "px"; }
+        } else {
+          // 终端在底部：高度 = 面板底边 - 鼠标 Y
+          const fullH = crect ? crect.height : window.innerHeight;
+          let h = prect.bottom - e.clientY;
+          if (h >= fullH - SNAP) { if (content) content.classList.add("term-maxed"); }
+          else { if (content) content.classList.remove("term-maxed"); h = clamp(h, MIN, fullH - SNAP); panel.style.height = h + "px"; }
+        }
         if (typeof window.termRefit === "function") { try { window.termRefit(); } catch {} }
       },
       onEnd: function () {
-        const h = parseInt(panel.style.height, 10);
-        if (h) localStorage.setItem("wb-term-h", h);
+        // 铺满态不持久化尺寸（靠 .term-maxed 接管）
+        if (content && content.classList.contains("term-maxed")) return;
+        if (dockRight()) { const w = parseInt(panel.style.width, 10); if (w) localStorage.setItem("wb-term-w", w); }
+        else { const h = parseInt(panel.style.height, 10); if (h) localStorage.setItem("wb-term-h", h); }
       }
     });
   }
