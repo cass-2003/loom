@@ -257,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tree(qs.get("path", [""])[0])
         if path == "/api/file":
             return self._api_file(qs.get("path", [""])[0])
+        if path == "/api/raw":
+            return self._api_raw(qs.get("path", [""])[0])
         if path == "/api/files-flat":
             return self._api_files_flat()
         if path == "/api/search":
@@ -392,6 +394,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"kind": "binary", "size": size, "name": fp.name})
         return self._json({"kind": "text", "name": fp.name, "ext": fp.suffix.lower(),
                            "content": content, "size": size})
+
+    def _api_raw(self, rel):
+        """GET /api/raw?path= —— 原样返回文件字节（供多格式查看器读原始数据）。
+
+        - safe_resolve 限定 ROOT 内（越界 403）。
+        - 不存在 / 不是文件 → 404。
+        - Content-Type 用 mimetypes 猜，猜不到回退 application/octet-stream。
+        """
+        try:
+            fp = safe_resolve(rel)
+        except PermissionError:
+            return self._err("forbidden", 403)
+        if not fp.is_file():
+            return self._err("not found", 404)
+        ctype = mimetypes.guess_type(str(fp))[0] or "application/octet-stream"
+        try:
+            data = fp.read_bytes()
+        except OSError as e:
+            return self._err(f"read failed: {e}", 500)
+        return self._send_bytes(data, ctype)
 
     # 忽略遍历的目录名（避免巨量/无关文件拖慢快速打开）
     _FLAT_SKIP_DIRS = {

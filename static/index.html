@@ -239,6 +239,8 @@
       </div>
       <!-- Vditor 所见即所得编辑器（仅 .md/.markdown，默认隐藏） -->
       <div id="vditor" class="hidden"></div>
+      <!-- 多格式查看器挂载点（PDF/表格/Word/压缩包/EPUB/字体 等，默认隐藏） -->
+      <div id="viewer-host" class="hidden"></div>
       <div id="diff-view" class="hidden">
         <div class="diff-head" id="diff-head"></div>
         <pre id="diff-body" class="git-diff"></pre>
@@ -390,6 +392,16 @@
 <script src="/static/notes.js"></script>
 <script src="/static/workbench.js"></script>
 <script src="/static/terminal.js"></script>
+<!-- 多格式查看器：共享依赖 jszip → 注册表契约 → 各查看器（在 app.js 之前，app.js 会消费注册表） -->
+<script src="/static/vendor/jszip/jszip.min.js"></script>
+<script src="/static/viewers/_registry.js"></script>
+<script src="/static/viewers/pdf.js"></script>
+<script src="/static/viewers/sheet.js"></script>
+<script src="/static/viewers/docx.js"></script>
+<script src="/static/viewers/archive.js"></script>
+<script src="/static/viewers/epub.js"></script>
+<script src="/static/viewers/font.js"></script>
+<script src="/static/viewers/imageplus.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/desktop-ui.js"></script>
 </body>

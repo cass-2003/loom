@@ -26,6 +26,8 @@ const state = {
   imageUrl: null,  // 当前图片 blob URL（用于释放）
   tabs: [],        // 已打开标签：{path,kind,name,ext,dirty,draft,viewMode,loaded}
   activeTab: null, // 当前激活标签的 path
+  viewer: null,    // 当前已 mount 的查看器对象（kind==="viewer" 时）
+  viewerHost: null,// 当前查看器的挂载容器（#viewer-host 内的干净 div）
 };
 window.state = state;  // 供工具箱 (Git) 读取当前文件
 
@@ -656,6 +658,44 @@ function showConfirm({ title, message, okLabel = "确定", danger = false, onCon
   ov.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 }
 
+// ---------- 多格式查看器：分派与挂载 ----------
+// 从路径/文件名取小写无点扩展名
+function extOf(nameOrPath) {
+  const base = String(nameOrPath || "").split("/").pop();
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return "";  // 无扩展名 或 隐藏文件(.gitignore) 不算扩展名
+  return base.slice(dot + 1).toLowerCase();
+}
+
+// 卸载当前已 mount 的查看器（若有），并清空挂载容器
+function unmountViewer() {
+  if (state.viewer && typeof state.viewer.unmount === "function") {
+    try { state.viewer.unmount(); } catch (e) { /* 卸载失败不影响后续 */ }
+  }
+  state.viewer = null;
+  const hostWrap = $("#viewer-host");
+  if (hostWrap) hostWrap.innerHTML = "";   // 清掉旧的内部容器
+  state.viewerHost = null;
+}
+
+// 挂载某查看器到 #viewer-host：先卸载上一个，再造一个干净容器交给 viewer.mount
+function mountViewer(viewer, info) {
+  unmountViewer();
+  const hostWrap = $("#viewer-host");
+  hostWrap.classList.remove("hidden");
+  const host = document.createElement("div");
+  host.className = "viewer-mount";
+  hostWrap.appendChild(host);
+  state.viewer = viewer;
+  state.viewerHost = host;
+  try {
+    viewer.mount(host, info);
+  } catch (e) {
+    host.innerHTML = '<div class="viewer-error">查看器加载失败：'
+      + escHtml(String(e && e.message || e)) + "</div>";
+  }
+}
+
 // ---------- 打开文件 ----------
 window.openFile = openFile;
 
@@ -688,13 +728,26 @@ async function openFile(path, row, opts) {
   // 先把当前标签的编辑状态暂存，避免被新文件覆盖
   stashActiveTab();
 
+  const name = path.split("/").pop();
+  // 多格式查看器分派：按扩展名命中则不走 text/image/binary，直接交给查看器
+  // （普通图片不在任何查看器的 exts 里，会落空 → 走下方原 image 逻辑）
+  const vext = extOf(path);
+  const viewer = (typeof window.findViewer === "function") ? window.findViewer(vext) : null;
+  if (viewer) {
+    const tab = { path, kind: "viewer", name, ext: vext,
+                  dirty: false, draft: null, viewMode: "split",
+                  viewer, info: { path, name, ext: vext } };
+    addTab(tab);
+    activateTab(path);
+    return;
+  }
+
   // 请求令牌：连续切换文件时，只让最后一次请求生效，丢弃过期响应
   const token = ++state.openSeq;
   const res = await api.file(path);
   if (token !== state.openSeq) return;
   const ctype = res.headers.get("Content-Type") || "";
 
-  const name = path.split("/").pop();
   if (ctype.startsWith("image/")) {
     const blob = await res.blob();
     if (token !== state.openSeq) return;
@@ -772,7 +825,21 @@ function activateTab(path) {
   revokeImage();
   hideAllViews();
 
-  if (tab.kind === "image") {
+  if (tab.kind === "viewer") {
+    // 多格式查看器：挂到 #viewer-host（hideAllViews 已卸载上一个查看器）
+    const viewer = tab.viewer
+      || (typeof window.findViewer === "function" ? window.findViewer(tab.ext) : null);
+    if (viewer) {
+      tab.viewer = viewer;
+      mountViewer(viewer, tab.info || { path, name: tab.name, ext: tab.ext });
+      setCurrent(path, "viewer");
+    } else {
+      // 兜底：查看器没注册上（脚本缺失等）→ 退化为二进制提示
+      $("#binary-info").textContent = `${tab.name}（无可用查看器）`;
+      $("#binary-view").classList.remove("hidden");
+      setCurrent(path, "binary");
+    }
+  } else if (tab.kind === "image") {
     state.imageUrl = URL.createObjectURL(tab.blob);
     $("#image-el").src = state.imageUrl;
     $("#image-view").classList.remove("hidden");
@@ -902,6 +969,9 @@ function hideAllViews() {
   $("#welcome").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
   const vdEl = $("#vditor"); if (vdEl) vdEl.classList.add("hidden");
+  // 多格式查看器：切走时卸载并隐藏挂载点
+  unmountViewer();
+  const vh = $("#viewer-host"); if (vh) vh.classList.add("hidden");
   $("#diff-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
@@ -1806,8 +1876,13 @@ function applyTheme(t) {
 function toggleTheme() {
   const cur = document.documentElement.getAttribute("data-theme") || "dark";
   applyTheme(cur === "dark" ? "light" : "dark");
+  const newTheme = document.documentElement.getAttribute("data-theme") || "dark";
   // 主题切换后重渲染预览，让 mermaid 图跟随深浅色
   if (state.kind === "text") renderPreview();
+  // 多格式查看器：把新主题告知当前查看器
+  if (state.kind === "viewer" && state.viewer && typeof state.viewer.onTheme === "function") {
+    try { state.viewer.onTheme(newTheme); } catch (e) { /* 主题回调失败不影响切换 */ }
+  }
   // Vditor 主题跟随（4.x：setTheme(theme, codeMirrorTheme) 只两参；editorTheme 另调）
   if (vd.inst && vd.ready) {
     try {

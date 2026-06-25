@@ -399,6 +399,15 @@ body.desktop.maximized #app { border: none; }
 #vditor.hidden { display: none !important; }
 #vditor .vditor { flex: 1; min-width: 0; min-height: 0; border: none; }
 
+/* 多格式查看器挂载点：填满内容区，内部容器自行排布 */
+#viewer-host { flex: 1; min-width: 0; min-height: 0; display: flex; overflow: auto;
+  background: var(--bg); color: var(--text); }
+#viewer-host.hidden { display: none !important; }
+#viewer-host .viewer-mount { flex: 1; min-width: 0; min-height: 0; display: flex;
+  flex-direction: column; }
+#viewer-host .viewer-error { margin: auto; padding: 20px; color: var(--text-dim);
+  text-align: center; }
+
 /* 文件内查找/替换条 */
 #editor-find {
   position: absolute; top: 8px; right: 16px; z-index: 20;
