@@ -15,10 +15,7 @@ Start-Sleep -Milliseconds 500
 
 # --add-data "static;static"：把整个 static/（含 vendor 离线库）打进 exe，
 # 运行时解压到 sys._MEIPASS；server.py 已做 frozen 适配。
-pyinstaller --noconfirm --onefile --name Workbench `
-    --add-data "static;static" `
-    --console `
-    server.py
+pyinstaller --noconfirm --onefile --name Workbench --add-data "static;static" --icon icon.ico --console server.py
 
 if (Test-Path dist\Workbench.exe) {
     $mb = [math]::Round((Get-Item dist\Workbench.exe).Length / 1MB, 1)
