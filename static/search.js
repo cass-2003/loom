@@ -120,9 +120,12 @@
   // 整行文本 + 匹配段高亮（col 起、len 长）
   function highlightLine(text, col, len) {
     if (col == null || len == null || col < 0) return esc(text);
-    const before = text.slice(0, col);
-    const mid = text.slice(col, col + len);
-    const after = text.slice(col + len);
+    // 后端 col/len 是 Python 码位下标；用 Array.from 按码位切分(而非 UTF-16 半代理对)，
+    // 否则行内星平面字符(emoji/罕见汉字)前导时高亮段错位、甚至切出乱码 U+FFFD
+    const cps = Array.from(text);
+    const before = cps.slice(0, col).join("");
+    const mid = cps.slice(col, col + len).join("");
+    const after = cps.slice(col + len).join("");
     return esc(before) + `<span class="sr-mark">${esc(mid)}</span>` + esc(after);
   }
 

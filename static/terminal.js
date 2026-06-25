@@ -842,6 +842,7 @@
   function startPoll(p) {
     if (!p || p.poll) return;
     if (p.pid == null) return;
+    if (p.alive === false) return;   // 已知死会话别再起轮询(switchToGroup/展开会重入)，否则死窗格空转打后端
     p.poll = setInterval(() => pollRead(p), 60);
   }
   function stopPoll(p) {
@@ -856,7 +857,15 @@
       const url = "/api/term/read?id=" + encodeURIComponent(p.pid) +
                   "&offset=" + encodeURIComponent(p.offset);
       const res = await fetch(url, { cache: "no-store" }).then(r => r.json());
-      if (res && !res.error) {
+      if (res && res.error) {
+        // 会话已被后端回收(404 {error:"会话不存在"})：必须停轮询，否则 60ms 间隔永久空转
+        stopPoll(p);
+        if (p.alive) {
+          p.alive = false;
+          if (p.term) p.term.write("\r\n\x1b[33m[进程已退出]\x1b[0m\r\n");
+          renderList();
+        }
+      } else if (res) {
         if (res.data) {
           const bytes = b64ToBytes(res.data);
           if (bytes.length && p.term) p.term.write(bytes);

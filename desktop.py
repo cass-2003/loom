@@ -30,10 +30,21 @@ class WindowApi:
         if self._win:
             self._win.minimize()
 
+    def _is_zoomed(self):
+        """以 OS 真实状态为准(IsZoomed)，避免与 Aero Snap / Win+↑ 等外部最大化失同步；取不到退回内部标记。"""
+        try:
+            import ctypes
+            hwnd = self._hwnd()
+            if hwnd:
+                return bool(ctypes.windll.user32.IsZoomed(hwnd))
+        except Exception:
+            pass
+        return self._maximized
+
     def toggle_maximize(self):
         if not self._win:
             return "normal"
-        if self._maximized:
+        if self._is_zoomed():
             self._win.restore()
             self._maximized = False
         else:

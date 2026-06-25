@@ -634,11 +634,18 @@ function showModal({ title, sub, placeholder, value = "", okLabel = "确定", on
   const submit = async () => {
     const name = input.value.trim();
     if (!name) { errEl.textContent = "名称不能为空"; return; }
-    ov.querySelector('[data-act="ok"]').disabled = true;
-    const err = await onSubmit(name);
+    const okBtn = ov.querySelector('[data-act="ok"]');
+    okBtn.disabled = true;
+    let err;
+    try {
+      err = await onSubmit(name);
+    } catch (e) {
+      // onSubmit(fsPost) 可能 reject(网络失败/非 JSON 响应)；不兜底则 OK 按钮永久禁用、模态卡死
+      err = "操作失败：" + (e && e.message ? e.message : e);
+    }
     if (err) {
       errEl.textContent = err;
-      ov.querySelector('[data-act="ok"]').disabled = false;
+      okBtn.disabled = false;
       return;
     }
     closeModal();
@@ -776,7 +783,7 @@ async function openFile(path, row, opts) {
   }
   const data = await res.json();
   if (token !== state.openSeq) return;
-  if (data.error) { setMsg(data.error, "err"); return; }
+  if (data.error) { if (!(opts && opts.quiet)) setMsg(data.error, "err"); return; }
 
   if (data.kind === "binary") {
     const tab = { path, kind: "binary", name: data.name || name, ext: "",
@@ -1198,7 +1205,17 @@ function exportHtml() {
   const title = (state.current || "document").split("/").pop().replace(/\.(md|markdown)$/i, "");
   const theme = document.documentElement.getAttribute("data-theme") || "dark";
   const css = collectStyleText();
-  const bodyHtml = sanitizeHtml(preview.innerHTML);   // 导出文件会在任意上下文打开，显式再消毒一次
+  // Markdown 文件用 Vditor 编辑(kind "md")，#preview 不会被填充(renderPreview 对非 text 直接 return)，
+  // 直读会导出空/陈旧内容 → 对当前 md 标签实时渲染 Vditor 源；其余(文本预览)仍读 #preview。
+  let bodyHtml;
+  const _t = tabByPath(state.activeTab);
+  const _isMd = _t && (_t.ext === ".md" || _t.ext === ".markdown");
+  if (_isMd && state.kind === "md" && vd.curPath === state.current && typeof marked !== "undefined") {
+    bodyHtml = sanitizeHtml(marked.parse(vditorGetValue() || ""));
+  } else {
+    bodyHtml = sanitizeHtml(preview.innerHTML);
+  }
+  // 导出文件会在任意上下文打开，已显式消毒一次
   const doc =
 `<!DOCTYPE html>
 <html lang="zh" data-theme="${theme}">
@@ -2077,15 +2094,11 @@ async function restoreWorkspace() {
   if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
   wsRestoring = true;
   try {
-    // 校验路径仍存在：仅当 files-flat 未被截断时才当存在性判据（截断会误删超 2000 项之外的标签）
-    let valid = null;
-    try {
-      const flat = await fetch("/api/files-flat").then(r => r.json());
-      if (flat && Array.isArray(flat.files) && !flat.truncated) valid = new Set(flat.files);
-    } catch {}
+    // 不能用 /api/files-flat 当存在性判据：它会被截断(>2000)、且故意剔除 node_modules/.git/dist
+    // 等忽略目录——会误删这些目录下已打开的标签并永久遗忘。改为直接尝试打开，让 openFile 自身的
+    // 404 处理丢弃真正不存在的文件(quiet 模式不弹错误提示)，存在的(含忽略目录内)正常恢复。
     for (const p of data.tabs) {
-      if (valid && !valid.has(p)) continue;
-      try { await openFile(p, true); } catch (_) {}   // 单个坏标签不阻断其余恢复
+      try { await openFile(p, false, { quiet: true }); } catch (_) {}   // 单个坏标签不阻断其余恢复
     }
   } finally {
     wsRestoring = false;   // 任何异常都不能让 wsRestoring 永久卡 true（否则整会话工作区记忆失效）

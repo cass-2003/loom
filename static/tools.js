@@ -91,6 +91,9 @@ const TOOLS = [
         if (isNaN(v)) { out.value = "❌ 无效"; return; }
         if (v < 1e12) v *= 1000;
         const d = new Date(v);
+        // 超出 Date 可表示范围(±8.64e15)时 d 为 Invalid Date，toISOString() 会抛 RangeError
+        // 致输出残留旧值；先判 Invalid 再格式化
+        if (isNaN(d.getTime())) { out.value = "❌ 超出可表示日期范围"; return; }
         out.value = `本地: ${d.toLocaleString()}\nUTC:  ${d.toUTCString()}\nISO:  ${d.toISOString()}`;
       };
       box.querySelector("#t-time-toTs").onclick = () => {
@@ -193,7 +196,14 @@ const TOOLS = [
       box.querySelector("#t-diff-go").onclick = () => {
         const a = box.querySelector("#t-diff-a").value.split("\n");
         const b = box.querySelector("#t-diff-b").value.split("\n");
-        const rows = lcsDiff(a, b);
+        // LCS 是 O(n*m) 空间/时间：两份大文件直接撑爆内存/冻结主线程。先卡阈值再算。
+        if (a.length * b.length > 4e6) {
+          out.innerHTML = `<div class="td-stat">文本过大，无法逐行对比（约 ${a.length}×${b.length} 行，请缩小或分段）</div>`;
+          return;
+        }
+        let rows;
+        try { rows = lcsDiff(a, b); }
+        catch (e) { out.innerHTML = `<div class="td-stat">❌ 对比失败：${esc(e && e.message ? e.message : String(e))}</div>`; return; }
         let adds = 0, dels = 0;
         let html = "";
         for (const [t, line] of rows) {
@@ -420,12 +430,19 @@ const TOOLS = [
         for (const part of f.split(",")) {
           let step = 1, range = part;
           const sl = part.split("/");
-          if (sl.length === 2) { range = sl[0]; step = parseInt(sl[1]) || 1; }
+          if (sl.length === 2) {
+            range = sl[0];
+            step = parseInt(sl[1], 10);
+            // 步进必须是 ≥1 的有限整数——否则 */-1 之类会让下面的 for 死循环冻结标签页
+            if (!Number.isFinite(step) || step < 1) throw new Error("步进非法: " + part);
+          }
           let lo, hi;
           if (range === "*") { lo = min; hi = max; }
           else if (range.includes("-")) { const [a, b] = range.split("-"); lo = +a; hi = +b; }
           else { lo = hi = +range; }
           if (isNaN(lo) || isNaN(hi)) throw new Error("字段非法: " + part);
+          // 钳制到合法区间——否则 1-99999999 之类会构建巨型 Set 冻结/撑爆标签页
+          if (lo < min || hi > max || hi < lo) throw new Error("字段超范围: " + part);
           for (let v = lo; v <= hi; v += step) set.add(v);
         }
         return set;

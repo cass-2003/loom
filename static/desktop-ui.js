@@ -79,7 +79,10 @@
 
     function apply() {
       raf = 0;
-      if (pending) api.set_window_rect(pending[0], pending[1], pending[2], pending[3]);
+      if (pending) {
+        // 桥调用是 Promise；不挂 .catch 桥异常会变成未处理拒绝
+        Promise.resolve(api.set_window_rect(pending[0], pending[1], pending[2], pending[3])).catch(() => {});
+      }
     }
     function onMove(ev) {
       if (!drag) return;
@@ -119,7 +122,7 @@
         showOverlay(z.cur);
         document.addEventListener("mousemove", onMove, true);
         document.addEventListener("mouseup", onUp, true);
-      });
+      }).catch(() => { window.removeEventListener("mouseup", cancelIfUp, true); });
     }
     ZONES.forEach((z) => {
       const d = document.createElement("div");

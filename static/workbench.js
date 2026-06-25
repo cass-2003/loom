@@ -39,8 +39,11 @@
     const ed = $("#editor"), gutter = $("#editor-gutter");
     const sideEd = $("#side-editor"), sideGutter = $("#side-gutter");   // 分屏副组同样跟随设置
     const md = document.querySelectorAll(".markdown-body");
-    // 字号
-    const fs = settings.fontSize + "px";
+    // 字号：损坏/越界的持久值(NaN/负/超大)会让编辑器不可用 → 钳到合理区间
+    let fsNum = parseInt(settings.fontSize, 10);
+    if (!Number.isFinite(fsNum)) fsNum = DEFAULTS.fontSize;
+    fsNum = Math.max(8, Math.min(40, fsNum));
+    const fs = fsNum + "px";
     if (ed) ed.style.fontSize = fs;
     if (gutter) gutter.style.fontSize = fs;
     if (sideEd) sideEd.style.fontSize = fs;
@@ -226,7 +229,13 @@
           run: () => { typeof switchView === "function" && switchView(view); } }));
     // Markdown 导出
     A({ name: "导出为 HTML", hint: "Markdown", icon: "download",
-        run: () => { typeof exportHtml === "function" && exportHtml(); } });
+        run: () => {
+          // 导出读 Markdown 预览；非 Markdown 下 #preview 为空/陈旧 → 静默导出空文件，先 gate
+          const t = window.wb && window.wb.tabByPath && window.state ? window.wb.tabByPath(window.state.activeTab) : null;
+          const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
+          if (!isMd) { if (window.setMsg) window.setMsg("导出为 HTML 仅在 Markdown 下可用", "warn"); return; }
+          if (typeof exportHtml === "function") exportHtml();
+        } });
     A({ name: "打印 / 另存 PDF", hint: "Markdown", icon: "printer",
         run: () => {
           // 打印样式表只为 Markdown 预览写死；非 Markdown / 编辑态打印会泄漏或空白 → 先 gate

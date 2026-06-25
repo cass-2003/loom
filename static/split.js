@@ -17,6 +17,7 @@
   let focus = "main";                                  // "main" | "side"
   let orient = localStorage.getItem(ORIENT_KEY) === "v" ? "v" : "h";  // h=左右, v=上下
   let restoring = false;
+  let sideGutterN = -1;   // 行号槽行数缓存：行数不变就跳过重建（同主编辑器 gutterLineCount）
 
   const wb = () => window.wb || {};
   const isMd = (ext) => ext === ".md" || ext === ".markdown";
@@ -49,7 +50,9 @@
     const avail = (orient === "v" ? cb.clientHeight : cb.clientWidth) || 0;
     const saved = parseInt(localStorage.getItem(SIZE_KEY) || "", 10);
     let px = saved >= 120 ? saved : Math.round(avail * 0.42) || 480;
-    if (avail > 240) px = Math.max(120, Math.min(px, avail - 120));   // 上界：给主编辑区至少留 120px，防越界/损坏值吃满
+    // 始终钳制：上界给主编辑区留空间，防越界/损坏的 saved 值吃满布局把主编辑区挤出视口
+    if (avail > 240) px = Math.max(120, Math.min(px, avail - 120));
+    else if (avail > 0) px = Math.max(60, Math.min(px, Math.max(60, avail - 60)));  // 小窗口下也要钳制
     grp.style.flex = "0 0 " + px + "px";
     grp.style.width = ""; grp.style.height = "";
     refit();
@@ -124,6 +127,7 @@
     ed.value = tab.draft != null ? tab.draft : "";
     side.dirty = !!tab.dirty;
     if (!noFocus) setFocus("side");
+    sideGutterN = -1;   // 换文件强制重建行号槽（即使行数相同也要刷）
     sideGutter();
     renderSideTabs();
     if (window.highlightTreeRow) window.highlightTreeRow(path);
@@ -223,6 +227,8 @@
     const ed = $("#side-editor"), g = $("#side-gutter");
     if (!ed || !g) return;
     const n = (ed.value.match(/\n/g) || []).length + 1;
+    if (n === sideGutterN) { g.scrollTop = ed.scrollTop; return; }  // 行数不变只同步滚动，免每次按键全量重建
+    sideGutterN = n;
     let html = "";
     for (let i = 1; i <= n; i++) html += i + "\n";
     g.textContent = html;
@@ -492,6 +498,7 @@
     const ed = $("#side-editor"); if (ed) ed.value = "";
     setFocus("main");
     renderSideTabs();   // 空组 → applyLayout 收起 #side-group/#side-resizer
+    sideGutterN = -1;
     sideGutter();
     try { localStorage.removeItem(WS_KEY); } catch (_) {}   // 最后删，避免被 persist 写回旧根标签
   }

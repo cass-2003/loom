@@ -1108,15 +1108,33 @@ class Handler(BaseHTTPRequestHandler):
                 return False
         return True
 
+    _MAX_BODY = 64 * 1024 * 1024  # 请求体上限 64MB（图片上传 base64 也够），防超大/负数 Content-Length
+
     def _read_json_body(self):
-        """读取并解析 POST 的 JSON。出错时已发响应并返回 None。"""
-        length = int(self.headers.get("Content-Length", 0))
+        """读取并解析 POST 的 JSON。出错时已发响应并返回 None。
+        防御：畸形 Content-Length(垃圾值抛 ValueError、负值致 read(-1) 阻塞 worker)、
+        超大体、非对象顶层(list/数字等使 handler 的 body.get 抛 AttributeError)。"""
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except (TypeError, ValueError):
+            self._err("Content-Length 非法")
+            return None
+        if length < 0:
+            self._err("Content-Length 非法")
+            return None
+        if length > self._MAX_BODY:
+            self._err("请求体过大", 413)
+            return None
         raw = self.rfile.read(length)
         try:
-            return json.loads(raw.decode("utf-8")) if raw else {}
+            obj = json.loads(raw.decode("utf-8")) if raw else {}
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._err("请求体必须是合法的 UTF-8 JSON")
             return None
+        if not isinstance(obj, dict):
+            self._err("请求体必须是 JSON 对象")
+            return None
+        return obj
 
     def _send_bytes(self, data: bytes, ctype: str):
         self.send_response(200)
@@ -1132,12 +1150,21 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- routing ----------
     def do_GET(self):
         parsed = urlparse(self.path)
+        # 读侧 DNS rebinding 防护：/api 读接口（文件/树/搜索…）要求回环 Host；静态壳子不限制
+        if parsed.path.startswith("/api/") and not self._host_is_loopback():
+            return self._err("forbidden", 403)
+        try:
+            return self._dispatch_get(parsed)
+        except PermissionError:
+            return self._safe_err("forbidden", 403)
+        except (BrokenPipeError, ConnectionError):
+            raise
+        except Exception:
+            return self._safe_err("请求处理失败", 500)
+
+    def _dispatch_get(self, parsed):
         path = parsed.path
         qs = parse_qs(parsed.query)
-
-        # 读侧 DNS rebinding 防护：/api 读接口（文件/树/搜索…）要求回环 Host；静态壳子不限制
-        if path.startswith("/api/") and not self._host_is_loopback():
-            return self._err("forbidden", 403)
 
         if path == "/" or path == "":
             return self._serve_static("index.html")
@@ -1195,6 +1222,24 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if not self._check_csrf():
             return self._err("拒绝跨站请求（需同源且 Content-Type: application/json）", 403)
+        try:
+            return self._dispatch_post(parsed)
+        except PermissionError:
+            return self._safe_err("forbidden", 403)
+        except (BrokenPipeError, ConnectionError):
+            raise   # 连接已断，无法再回写，交给上层收尾
+        except Exception:
+            # 任何 handler 异常(畸形字段类型/越界等)都回落成 JSON，而不是把连接直接断开
+            return self._safe_err("请求处理失败", 500)
+
+    def _safe_err(self, msg, status):
+        """尝试回写 JSON 错误；若响应已部分写出则静默放弃。"""
+        try:
+            return self._err(msg, status)
+        except Exception:
+            return None
+
+    def _dispatch_post(self, parsed):
         if parsed.path == "/api/save":
             body = self._read_json_body()
             if body is None:
@@ -1264,10 +1309,14 @@ class Handler(BaseHTTPRequestHandler):
                 if entry.is_dir():
                     dirs.append({"name": entry.name, "path": rel_path, "type": "dir"})
                 else:
+                    try:
+                        size = entry.stat().st_size
+                    except OSError:
+                        size = 0   # 坏软链/junction(目标缺失)或枚举期间被删(TOCTOU)：跳过尺寸而非整树报错
                     files.append({
                         "name": entry.name, "path": rel_path, "type": "file",
                         "kind": classify(entry),
-                        "size": entry.stat().st_size,
+                        "size": size,
                     })
         except PermissionError:
             return self._err("permission denied", 403)
@@ -1424,7 +1473,10 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     continue
                 file_hits = 0
-                for lineno, line in enumerate(text.splitlines(), 1):
+                # 与编辑器一致：仅按 \n 分行(规整 CRLF/CR)；不能用 splitlines()——它还会在
+                # \x0b\x0c\x85/U+2028/U+2029 等处断行，导致行号与前端 split("\n") 错位、点击跳错行
+                lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                for lineno, line in enumerate(lines, 1):
                     m = matcher(line)
                     if not m:
                         continue
