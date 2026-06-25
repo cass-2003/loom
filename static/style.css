@@ -394,6 +394,11 @@ body.desktop.maximized #app { border: none; }
 #editor-wrap.mode-preview #editor-pane { display: none; }
 #editor-wrap.mode-preview #preview { border-left: none; }
 
+/* Vditor 所见即所得容器：填满内容区 */
+#vditor { flex: 1; min-width: 0; min-height: 0; display: flex; }
+#vditor.hidden { display: none !important; }
+#vditor .vditor { flex: 1; min-width: 0; min-height: 0; border: none; }
+
 /* 文件内查找/替换条 */
 #editor-find {
   position: absolute; top: 8px; right: 16px; z-index: 20;

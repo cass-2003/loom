@@ -60,6 +60,102 @@ if (window.mermaid) {
   } catch (e) { /* 容错：mermaid 初始化失败不影响其余功能 */ }
 }
 
+// ========== Vditor 所见即所得（.md/.markdown）==========
+// 全局单例：一个 Vditor 实例复用于所有 markdown 标签，靠 setValue/getValue 切换内容。
+const vd = {
+  inst: null,        // Vditor 实例
+  ready: false,      // onAfterRender 触发后置 true
+  pending: null,     // 实例就绪前要 setValue 的内容
+  curPath: null,     // 当前挂载内容所属的标签 path
+};
+window.vd = vd;  // 暴露给调试/自测
+
+// 当前 app 主题 -> Vditor 主题映射
+function vditorTheme() {
+  return (document.documentElement.getAttribute("data-theme") === "light") ? "classic" : "dark";
+}
+function vditorContentTheme() {
+  return (document.documentElement.getAttribute("data-theme") === "light") ? "light" : "dark";
+}
+function vditorCodeTheme() {
+  return (document.documentElement.getAttribute("data-theme") === "light") ? "github" : "github-dark";
+}
+
+// 自定义图片上传：走我们的 JSON 接口，返回 null 阻止 Vditor 默认 multipart
+async function vditorUploadHandler(files) {
+  for (const file of files) {
+    if (!file || !file.type || !file.type.startsWith("image/")) continue;
+    try {
+      const dataUrl = await blobToDataURL(file);
+      const res = await fsPost("/api/upload-image", {
+        dataB64: dataUrl, mime: file.type, name: file.name || "",
+      });
+      if (res && res.path) {
+        vd.inst.insertValue(`![](/${res.path})\n`);
+        setMsg("已插入图片 " + res.path, "ok");
+      } else {
+        setMsg("图片上传失败: " + ((res && res.error) || "未知错误"), "err");
+      }
+    } catch (err) {
+      setMsg("图片上传失败: " + (err && err.message ? err.message : err), "err");
+    }
+  }
+  return null;  // 阻止默认上传
+}
+
+// 懒创建 Vditor 实例（首次打开 md 时）
+function ensureVditor(initialValue, onReady) {
+  if (vd.inst) { onReady && onReady(); return; }
+  vd.ready = false;
+  vd.inst = new Vditor("vditor", {
+    cdn: "/static/vendor/vditor",
+    mode: "ir",                       // 默认即时渲染
+    value: initialValue || "",
+    cache: { enable: false },
+    theme: vditorTheme(),
+    icon: "material",
+    outline: { enable: true, position: "left" },
+    preview: {
+      theme: { current: vditorContentTheme(), path: "/static/vendor/vditor/dist/css/content-theme" },
+      hljs: { style: vditorCodeTheme(), lineNumber: false },
+      math: { engine: "KaTeX" },
+    },
+    toolbar: [
+      "headings", "bold", "italic", "strike", "|",
+      "list", "ordered-list", "check", "|",
+      "quote", "line", "code", "inline-code", "|",
+      "table", "link", "upload", "|",
+      "undo", "redo", "|",
+      "outline", "edit-mode", "preview", "|",
+      "fullscreen",
+    ],
+    upload: { handler: vditorUploadHandler },
+    input() {
+      // 标记当前 md 标签为脏（复用现有 dirty 机制）
+      if (!vd.ready) return;
+      if (!state.dirty) { state.dirty = true; document.body.classList.add("dirty"); }
+      const t = tabByPath(state.activeTab);
+      if (t && t.kind === "md") { if (!t.dirty) { t.dirty = true; } renderTabs(); }
+    },
+    after() {
+      vd.ready = true;
+      if (vd.pending != null) { vd.inst.setValue(vd.pending); vd.pending = null; }
+      onReady && onReady();
+    },
+  });
+}
+
+// 把内容塞进 Vditor（实例未就绪则缓存到 after 回调里再灌）
+function vditorSetValue(text) {
+  if (vd.inst && vd.ready) { vd.inst.setValue(text || ""); }
+  else { vd.pending = text || ""; }
+}
+function vditorGetValue() {
+  if (vd.inst && vd.ready) return vd.inst.getValue();
+  if (vd.pending != null) return vd.pending;
+  return "";
+}
+
 const CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
   "c","cpp","h","css","scss","html","htm","xml","yaml","yml","toml","sh",
   "bash","ps1","bat","sql","vue","svelte"]);
@@ -552,6 +648,10 @@ function stashActiveTab() {
     t.draft = $("#editor").value;
     t.viewMode = viewMode;
     t.dirty = state.dirty;
+  } else if (t && t.kind === "md") {
+    // markdown 标签：把 Vditor 当前内容存进草稿
+    if (vd.inst && vd.ready && vd.curPath === t.path) t.draft = vd.inst.getValue();
+    t.dirty = state.dirty;
   }
 }
 
@@ -599,8 +699,10 @@ async function openFile(path, row, opts) {
     return;
   }
   // 文本
-  const tab = { path, kind: "text", name: data.name || name,
-                ext: data.ext || "", dirty: false, draft: data.content,
+  const ext = data.ext || "";
+  const isMdFile = ext === ".md" || ext === ".markdown";
+  const tab = { path, kind: isMdFile ? "md" : "text", name: data.name || name,
+                ext, dirty: false, draft: data.content,
                 viewMode: "split", pendingLine: gotoLine };
   addTab(tab);
   activateTab(path);
@@ -661,6 +763,21 @@ function activateTab(path) {
     $("#binary-info").textContent = `${tab.name} · ${fmtSize(tab.size)}`;
     $("#binary-view").classList.remove("hidden");
     setCurrent(path, "binary");
+  } else if (tab.kind === "md") {
+    // ---- Markdown：用 Vditor 所见即所得 ----
+    const content = tab.draft != null ? tab.draft : "";
+    $("#vditor").classList.remove("hidden");
+    $("#md-toolbar").classList.add("hidden");  // 原 marked 工具栏对 Vditor 不适用
+    setCurrent(path, "md");
+    state.dirty = !!tab.dirty;
+    document.body.classList.toggle("dirty", state.dirty);
+    // Vditor 自带模式切换工具，禁用顶栏的分屏/源码/预览按钮
+    const vbtn = $("#btn-view-edit");
+    if (vbtn) { vbtn.textContent = "所见即所得"; vbtn.disabled = true; }
+    const mount = () => { vd.curPath = path; vditorSetValue(content); };
+    ensureVditor(content, mount);
+    // 实例已存在则直接切内容（ensureVditor 的 onReady 仅首建时在 after 里触发）
+    if (vd.inst && vd.ready) mount();
   } else {
     $("#editor").value = tab.draft != null ? tab.draft : "";
     gutterLineCount = -1; curGLine = -1;  // 强制重建行号
@@ -766,6 +883,7 @@ function setCurrent(path, kind) {
 function hideAllViews() {
   $("#welcome").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
+  const vdEl = $("#vditor"); if (vdEl) vdEl.classList.add("hidden");
   $("#diff-view").classList.add("hidden");
   $("#image-view").classList.add("hidden");
   $("#binary-view").classList.add("hidden");
@@ -1394,13 +1512,17 @@ $("#editor").addEventListener("keydown", (e) => {
 
 // ---------- 保存 ----------
 async function save() {
-  if (state.kind !== "text" || !state.current) return;
-  const res = await api.save(state.current, $("#editor").value);
+  if (!state.current) return;
+  let content;
+  if (state.kind === "md") content = vditorGetValue();
+  else if (state.kind === "text") content = $("#editor").value;
+  else return;
+  const res = await api.save(state.current, content);
   if (res.error) { setMsg("保存失败: " + res.error, "err"); return; }
   state.dirty = false;
   document.body.classList.remove("dirty");
   const t = tabByPath(state.current);
-  if (t) { t.dirty = false; t.draft = $("#editor").value; renderTabs(); }
+  if (t) { t.dirty = false; t.draft = content; renderTabs(); }
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
   if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
 }
@@ -1668,6 +1790,10 @@ function toggleTheme() {
   applyTheme(cur === "dark" ? "light" : "dark");
   // 主题切换后重渲染预览，让 mermaid 图跟随深浅色
   if (state.kind === "text") renderPreview();
+  // Vditor 主题跟随
+  if (vd.inst && vd.ready) {
+    try { vd.inst.setTheme(vditorTheme(), vditorContentTheme(), vditorCodeTheme()); } catch {}
+  }
 }
 window.toggleTheme = toggleTheme;
 $("#btn-theme").onclick = toggleTheme;
