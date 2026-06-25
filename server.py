@@ -65,6 +65,7 @@ def run_git(args, cwd):
             ["git", "-c", "core.quotepath=false"] + args,
             cwd=str(cwd), capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=30,
+            creationflags=_NO_WINDOW,
         )
         return p.returncode, p.stdout, p.stderr
     except FileNotFoundError:
