@@ -34,13 +34,18 @@ BASE_DIR = BUNDLE_DIR
 # 而 _serve_static 里 fp 是 resolve() 后的长名，不一致会导致包含性校验误判 403。
 STATIC_DIR = (BUNDLE_DIR / "static").resolve()
 
-# 这些扩展名按文本编辑处理
+# 这些扩展名按文本编辑处理。注：扩展名不在表里的文件，_api_file 还会做内容嗅探
+# （无 NUL 字节且能 UTF-8 解码即当可编辑文本），所以杂项/无扩展名文本也能打开。
 TEXT_EXTS = {
     ".md", ".markdown", ".txt", ".json", ".js", ".ts", ".jsx", ".tsx",
     ".py", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp", ".css",
     ".scss", ".html", ".htm", ".xml", ".yaml", ".yml", ".toml", ".ini",
     ".cfg", ".conf", ".sh", ".bash", ".ps1", ".bat", ".sql", ".csv",
     ".log", ".env", ".gitignore", ".dockerfile", ".vue", ".svelte",
+    ".spec", ".properties", ".editorconfig", ".gitattributes", ".dockerignore",
+    ".rb", ".php", ".lua", ".kt", ".kts", ".swift", ".dart", ".r", ".pl",
+    ".tex", ".rst", ".diff", ".patch", ".tsv", ".proto", ".graphql", ".gql",
+    ".tf", ".gradle", ".cmake", ".mk", ".lock", ".cs", ".scala", ".clj",
 }
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"}
 MAX_TEXT_BYTES = 5 * 1024 * 1024  # 5MB 以上不当文本读
@@ -194,6 +199,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.end_headers()
         self.wfile.write(data)
 
@@ -238,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        # 禁缓存：本地单用户工具，且 pywebview/WebView2 会缓存 app.js/style.css，
+        # 重新打包后窗口仍显示旧前端。no-store 强制每次取最新。
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.end_headers()
         self.wfile.write(data)
 
@@ -385,11 +394,19 @@ class Handler(BaseHTTPRequestHandler):
             ctype = mimetypes.guess_type(str(fp))[0] or "application/octet-stream"
             return self._send_bytes(fp.read_bytes(), ctype)
         size = fp.stat().st_size
-        if kind == "binary" or size > MAX_TEXT_BYTES:
-            return self._json({"kind": "binary", "size": size,
-                               "name": fp.name})
+        if size > MAX_TEXT_BYTES:
+            return self._json({"kind": "binary", "size": size, "name": fp.name})
+        # 不再仅凭扩展名判 binary 就拒绝——读出字节做内容嗅探：含 NUL 字节(典型二进制)
+        # 才当二进制；否则尝试 UTF-8 解码，成功即作可编辑文本（覆盖 .spec 等未列入
+        # TEXT_EXTS 的杂项文本/配置/无扩展名文件）。
         try:
-            content = fp.read_text(encoding="utf-8")
+            raw = fp.read_bytes()
+        except OSError as e:
+            return self._err(f"read failed: {e}", 500)
+        if b"\x00" in raw:
+            return self._json({"kind": "binary", "size": size, "name": fp.name})
+        try:
+            content = raw.decode("utf-8")
         except UnicodeDecodeError:
             return self._json({"kind": "binary", "size": size, "name": fp.name})
         return self._json({"kind": "text", "name": fp.name, "ext": fp.suffix.lower(),
