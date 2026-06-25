@@ -71,14 +71,28 @@ const vd = {
 window.vd = vd;  // 暴露给调试/自测
 
 // 当前 app 主题 -> Vditor 主题映射
+function isLightTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light";
+}
+// Vditor 顶层 theme：只控制 .vditor--dark 类（深色界面）
 function vditorTheme() {
-  return (document.documentElement.getAttribute("data-theme") === "light") ? "classic" : "dark";
+  return isLightTheme() ? "classic" : "dark";
 }
-function vditorContentTheme() {
-  return (document.documentElement.getAttribute("data-theme") === "light") ? "light" : "dark";
+// Vditor 4.x editorTheme：提供 --bg-color/--front-color 等具体颜色变量，
+// 深色下正文/标题/代码/表格的可读性以及 mermaid 取色全靠它。
+// 这些 editor-theme 配色块（Light / Github Dark 等）已内联打包进 vditor/dist/index.css
+// （选择器形如 #vditor[data-editor-theme=Github\ Dark]{--bg-color:#0d1117;...}），无需额外引 CSS。
+function vditorEditorTheme() {
+  return isLightTheme() ? "Light" : "Github Dark";
 }
+// Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
+// 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
+function vditorMermaidTheme() {
+  return isLightTheme() ? "Light" : "Dark";
+}
+// 代码块高亮主题（codeMirrorTheme 用于 ``` 块的代码主题）
 function vditorCodeTheme() {
-  return (document.documentElement.getAttribute("data-theme") === "light") ? "github" : "github-dark";
+  return isLightTheme() ? "github" : "github-dark";
 }
 
 // 自定义图片上传：走我们的 JSON 接口，返回 null 阻止 Vditor 默认 multipart
@@ -113,10 +127,14 @@ function ensureVditor(initialValue, onReady) {
     value: initialValue || "",
     cache: { enable: false },
     theme: vditorTheme(),
+    // Vditor 4.x 用 editorTheme/mermaidTheme/codeMirrorTheme 顶层选项驱动内容/代码/图表配色，
+    // 不再有 preview.theme.path（content-theme 目录已不存在，旧写法会 404 且变量为空）。
+    editorTheme: vditorEditorTheme(),
+    mermaidTheme: vditorMermaidTheme(),
+    codeMirrorTheme: vditorCodeTheme(),
     icon: "material",
     outline: { enable: true, position: "left" },
     preview: {
-      theme: { current: vditorContentTheme(), path: "/static/vendor/vditor/dist/css/content-theme" },
       hljs: { style: vditorCodeTheme(), lineNumber: false },
       math: { engine: "KaTeX" },
     },
@@ -1790,9 +1808,28 @@ function toggleTheme() {
   applyTheme(cur === "dark" ? "light" : "dark");
   // 主题切换后重渲染预览，让 mermaid 图跟随深浅色
   if (state.kind === "text") renderPreview();
-  // Vditor 主题跟随
+  // Vditor 主题跟随（4.x：setTheme(theme, codeMirrorTheme) 只两参；editorTheme 另调）
   if (vd.inst && vd.ready) {
-    try { vd.inst.setTheme(vditorTheme(), vditorContentTheme(), vditorCodeTheme()); } catch {}
+    try {
+      // 1) 界面深浅 + 代码块主题
+      vd.inst.setTheme(vditorTheme(), vditorCodeTheme());
+      // 2) editorTheme：换 --bg-color/--front-color 等具体颜色变量（正文/标题/表格/代码可读性）
+      if (typeof vd.inst.setEditorTheme === "function") vd.inst.setEditorTheme(vditorEditorTheme());
+      // 3) mermaidTheme：切换内置命名主题，并重渲染图（mermaid 不会自动跟随，需强制重灌内容）
+      vd.inst.vditor.options.mermaidTheme = vditorMermaidTheme();
+      try {
+        const cur = document.getElementById("vditor");
+        if (cur) cur.setAttribute("data-mermaid-theme", vditorMermaidTheme());
+        document.documentElement.setAttribute("data-mermaid-theme", vditorMermaidTheme());
+      } catch {}
+      // 重灌内容触发 mermaid 用新主题重绘（保留脏标记，不影响 dirty 状态）
+      const wasDirty = state.dirty;
+      const t = tabByPath(state.activeTab);
+      const wasTabDirty = t && t.dirty;
+      vd.inst.setValue(vd.inst.getValue());
+      state.dirty = wasDirty;
+      if (t) t.dirty = !!wasTabDirty;
+    } catch {}
   }
 }
 window.toggleTheme = toggleTheme;
