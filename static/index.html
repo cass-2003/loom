@@ -271,22 +271,42 @@
       <div id="terminal-panel" class="collapsed">
         <div id="term-head">
           <span class="term-title"><span class="i" data-icon="terminal"></span>终端</span>
-          <!-- 已开终端标签条（VS Code 风格：每个终端一个标签，点击切换，× 关闭） -->
-          <div id="term-tabs" class="term-tabs" title="已打开的终端"></div>
-          <select id="term-shell-sel" class="term-shell-sel" title="选择 Shell（用于新建终端）"></select>
-          <button id="term-new" class="icon-btn" data-icon="plus" title="新建终端（用当前所选 Shell）"></button>
           <span class="term-safe" title="命令在服务器本机执行">⚠ 在服务器本机执行命令</span>
           <span class="term-cwd" id="term-cwd" title="工作目录（相对根）">/</span>
           <span class="term-spacer"></span>
+          <!-- 任务下拉（送进当前聚焦窗格） -->
           <div class="term-task-wrap">
             <select id="term-task-sel" class="term-task-sel" title="npm / make 任务"></select>
             <button id="term-task-run" class="icon-btn" data-icon="play" title="运行选中任务"></button>
           </div>
-          <button id="term-clear" class="icon-btn" data-icon="trash" title="清屏（仅当前终端）"></button>
-          <button id="term-collapse" class="icon-btn" data-icon="chevron" title="折叠 / 展开"></button>
+          <!-- ===== 右侧工具栏（VS Code 风格图标条）===== -->
+          <div class="term-toolbar" id="term-toolbar">
+            <!-- 当前聚焦窗格的 shell 名 + 图标 -->
+            <span class="term-active-shell" id="term-active-shell" title="当前终端的 Shell"></span>
+            <!-- 新建终端分裂按钮：左主体（当前默认 shell）+ 右下拉箭头（选 shell） -->
+            <span class="term-split-btn" id="term-new-split">
+              <button class="tb-btn tb-main" id="term-new" title="新建终端"><span class="i" data-icon="plus"></span></button>
+              <button class="tb-btn tb-caret" id="term-new-caret" title="选择 Shell 新建终端"><span class="i" data-icon="chevron"></span></button>
+              <!-- shell 下拉菜单（点击下拉箭头弹出） -->
+              <div class="term-shell-menu hidden" id="term-shell-menu"></div>
+            </span>
+            <!-- 拆分终端 -->
+            <button class="tb-btn" id="term-split" title="拆分终端 (Ctrl+Shift+5)"><span class="i" data-icon="splitH"></span></button>
+            <!-- 显隐右侧终端列表 -->
+            <button class="tb-btn" id="term-list-toggle" title="切换终端列表"><span class="i" data-icon="sidebarRight"></span></button>
+            <!-- 杀掉当前活动终端 -->
+            <button class="tb-btn" id="term-clear" title="清屏（仅当前窗格）"><span class="i" data-icon="eraser"></span></button>
+            <button class="tb-btn" id="term-kill" title="关闭当前终端"><span class="i" data-icon="trash"></span></button>
+            <button class="tb-btn" id="term-collapse" title="折叠 / 展开"><span class="i" data-icon="chevron"></span></button>
+          </div>
         </div>
-        <!-- 多个 xterm 容器叠在此区，用 display 切换，切回内容仍在 -->
-        <div id="term-xterm" class="term-xterm"></div>
+        <!-- 终端主体：左挂载区 + 右终端列表 -->
+        <div id="term-body" class="term-body">
+          <!-- 多个 xterm 窗格挂这里；非活动组隐藏，活动组的窗格横向并排 -->
+          <div id="term-xterm" class="term-xterm"></div>
+          <!-- 右缘竖排终端列表（VS Code 默认形态；单终端时默认隐藏） -->
+          <div id="term-list" class="term-list hidden" title="终端列表"></div>
+        </div>
       </div>
     </section>
   </div>

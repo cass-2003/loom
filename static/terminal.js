@@ -1,8 +1,12 @@
-/* Workbench 集成终端（xterm.js + 后端持久 shell，IDE 式多终端）
-   每个终端对应后端一个持久 shell 会话（首选 ConPTY，环境不支持时回退管道）。
+/* Workbench 集成终端（xterm.js + 后端持久 shell，VS Code 风格多终端 + 拆分）
+   —— 模型：groups[] / panes ——
+   - 每个「组(group)」对应右侧列表的一行；组内含 1+ 个「窗格(pane)」。
+   - 每个窗格是一个独立 xterm + 一个独立后端 shell 会话（/api/term/open 起的会话）。
+   - 单窗格组 = 普通终端；拆分(Split) = 给活动组加一个并排窗格（独立进程）。
+   - 同一时刻只显示「活动组」，组内多窗格在挂载区横向并排、可拖拽竖直分隔条调宽。
+   - 右侧列表点击行 → 切组；hover 行出 × → 关组。工具栏分裂按钮新建组、拆分按钮加窗格。
    命令仅在服务器本机（127.0.0.1）执行，写操作复用 fsPost 的 CSRF。
-   消费后端协议 /api/term/*。支持同时存在多个终端、标签切换、单独关闭，
-   切换/新建/关闭某个不影响其它已开终端的进程。 */
+   消费后端协议 /api/term/*（后端本就支持多会话，拆分=多开会话并存）。 */
 (function () {
   const $ = (s) => document.querySelector(s);
 
@@ -14,19 +18,30 @@
   };
   window.wbIsRunnable = (path) => RUNNABLE.has(extOf(path || ""));
 
-  // ---------- 多终端状态 ----------
-  // 每个终端: {id, shell, shellName, term, fit, host, offset, poll, alive,
-  //            reading, opening, ro, lastCols, lastRows, title, num}
-  const terms = [];      // 终端实例数组（顺序即标签顺序）
-  let activeId = null;   // 当前激活终端的后端 id
-  let seq = 0;           // 终端编号（标签显示 "1: CMD"）
-  let shells = [];       // /api/term/shells 结果
+  // ---------- 状态：组 / 窗格 ----------
+  // pane:  {pid, shell, term, fit, host, offset, poll, alive, reading, opening,
+  //         ro, lastCols, lastRows}
+  //   pid = 后端会话 id（/api/term/open 返回）。
+  // group: {gid, num, panes:[pane], activePid, host(.term-group), basis:{pid:flex}}
+  const groups = [];        // 组数组（顺序即列表顺序）
+  let activeGid = null;     // 当前活动组本地 id
+  let gseq = 0;             // 组编号（列表行显示 "1: PowerShell"）
+  let localSeq = 0;         // 本地唯一 id 生成器（组/窗格用）
+  let shells = [];          // /api/term/shells 结果
   let shellsLoaded = false;
+  let defaultShellId = null; // 工具栏 + 主体默认 shell（最近一次新建/选择的）
+  let listForced = false;    // 用户是否手动开了列表（即使只剩 1 个组也保持显示）
 
   function panel() { return $("#terminal-panel"); }
   function isCollapsed() { return panel().classList.contains("collapsed"); }
-  function active() { return terms.find(t => t.id === activeId) || null; }
-  function byId(id) { return terms.find(t => t.id === id) || null; }
+  function activeGroup() { return groups.find(g => g.gid === activeGid) || null; }
+  function groupById(gid) { return groups.find(g => g.gid === gid) || null; }
+  function activePane() {
+    const g = activeGroup();
+    if (!g) return null;
+    return g.panes.find(p => p.pid === g.activePid) || g.panes[0] || null;
+  }
+  function allPanes() { const a = []; groups.forEach(g => g.panes.forEach(p => a.push(p))); return a; }
 
   // ---------- base64 解码为字节 ----------
   function b64ToBytes(b64) {
@@ -78,6 +93,17 @@
     return F.FitAddon || F;
   }
 
+  // shell → 图标名（沿用 icons.js 现有图标）
+  function shellIcon(id) {
+    switch (id) {
+      case "powershell": return "terminal";
+      case "cmd": return "terminal";
+      case "gitbash": return "git";
+      case "wsl": return "terminal";
+      default: return "terminal";
+    }
+  }
+
   // ---------- 折叠/展开 ----------
   function setCollapsed(v) {
     panel().classList.toggle("collapsed", v);
@@ -86,16 +112,17 @@
     const st = $("#status-term");
     if (st) st.classList.toggle("active", !v);
     if (!v) {
-      // 展开：首次确保有终端，随后 fit + 聚焦 + 续当前终端轮询
+      // 展开：首次确保有终端，随后 fit + 聚焦 + 续活动组各窗格轮询
       ensureSession().then(() => {
-        const t = active();
-        relayout(t);
-        if (t && t.term) setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
-        startPoll(t);
+        const g = activeGroup();
+        relayoutGroup(g);
+        const p = activePane();
+        if (p && p.term) setTimeout(() => { try { p.term.focus(); } catch {} }, 0);
+        startGroupPoll(g);
       });
     } else {
-      // 折叠：暂停所有终端轮询
-      terms.forEach(stopPoll);
+      // 折叠：暂停所有窗格轮询
+      allPanes().forEach(stopPoll);
     }
   }
   function expand() { if (isCollapsed()) setCollapsed(false); }
@@ -103,18 +130,18 @@
   window.toggleTerminal = toggle;
   window.openTerminal = expand;
 
-  // 兼容旧 API：把信息以一行文本写进当前终端（不再渲染 HTML 块）
+  // 兼容旧 API：把信息以一行文本写进当前聚焦窗格（不再渲染 HTML 块）
   function termAppend(info) {
     if (!info) return;
-    const t = active();
-    if (!t || !t.term) return;
+    const p = activePane();
+    if (!p || !p.term) return;
     const parts = [];
     if (info.cmd) parts.push(info.cmd);
     if (info.note) parts.push(info.note);
     if (info.stdout) parts.push(info.stdout);
     if (info.stderr) parts.push(info.stderr);
     const text = parts.join("\r\n");
-    if (text) t.term.write("\r\n" + text.replace(/\n/g, "\r\n") + "\r\n");
+    if (text) p.term.write("\r\n" + text.replace(/\n/g, "\r\n") + "\r\n");
   }
   window.termAppend = termAppend;
 
@@ -123,10 +150,9 @@
     if (el) el.textContent = cwd ? "/" + cwd : "/";
   }
 
-  // ---------- shell 选择器 ----------
+  // ---------- shell 列表 ----------
   async function loadShells(force) {
     if (shellsLoaded && !force) return shells;
-    const sel = $("#term-shell-sel");
     try {
       const data = await fetch("/api/term/shells", { cache: "no-store" }).then(r => r.json());
       shells = Array.isArray(data.shells) ? data.shells : [];
@@ -134,32 +160,16 @@
       shells = [];
     }
     shellsLoaded = true;
-    if (sel) {
-      sel.innerHTML = "";
-      if (!shells.length) {
-        const o = document.createElement("option");
-        o.value = ""; o.textContent = "无可用 Shell"; o.disabled = true; o.selected = true;
-        sel.appendChild(o);
-        sel.disabled = true;
-      } else {
-        sel.disabled = false;
-        shells.forEach((sh) => {
-          const o = document.createElement("option");
-          o.value = sh.id;
-          o.textContent = sh.exists ? sh.name : sh.name + "（未安装）";
-          if (!sh.exists) o.disabled = true;
-          sel.appendChild(o);
-        });
-        const first = shells.find(s => s.exists);
-        if (first) sel.value = first.id;
-      }
+    if (!defaultShellId) {
+      const first = shells.find(s => s.exists);
+      defaultShellId = first ? first.id : "powershell";
     }
+    renderShellMenu();
     return shells;
   }
 
   function selectedShellId() {
-    const sel = $("#term-shell-sel");
-    if (sel && sel.value) return sel.value;
+    if (defaultShellId) return defaultShellId;
     const first = shells.find(s => s.exists);
     return first ? first.id : "powershell";
   }
@@ -168,67 +178,172 @@
     return sh ? sh.name : (id || "Shell");
   }
 
-  // ---------- 标签条渲染 ----------
-  function renderTabs() {
-    const bar = $("#term-tabs");
-    if (!bar) return;
-    bar.innerHTML = "";
-    terms.forEach((t) => {
-      const tab = document.createElement("div");
-      tab.className = "term-tab" + (t.id === activeId ? " active" : "")
-                    + (t.alive ? "" : " dead");
-      tab.title = t.title + (t.alive ? "" : "（已退出）");
+  // shell 下拉菜单（点分裂按钮的下拉箭头弹出）
+  function renderShellMenu() {
+    const menu = $("#term-shell-menu");
+    if (!menu) return;
+    menu.innerHTML = "";
+    if (!shells.length) {
+      const o = document.createElement("div");
+      o.className = "term-shell-item disabled";
+      o.textContent = "无可用 Shell";
+      menu.appendChild(o);
+      return;
+    }
+    shells.forEach((sh) => {
+      const it = document.createElement("div");
+      it.className = "term-shell-item" + (sh.exists ? "" : " disabled");
+      it.innerHTML = svgIcon(shellIcon(sh.id), 14) +
+        "<span>" + (sh.exists ? sh.name : sh.name + "（未安装）") + "</span>";
+      if (sh.exists) {
+        it.onclick = () => {
+          hideShellMenu();
+          defaultShellId = sh.id;
+          updateToolbar();
+          expand();
+          newGroup(sh.id);
+        };
+      }
+      menu.appendChild(it);
+    });
+  }
+  function showShellMenu() { const m = $("#term-shell-menu"); if (m) m.classList.remove("hidden"); }
+  function hideShellMenu() { const m = $("#term-shell-menu"); if (m) m.classList.add("hidden"); }
+  function toggleShellMenu() {
+    const m = $("#term-shell-menu");
+    if (!m) return;
+    if (m.classList.contains("hidden")) showShellMenu(); else hideShellMenu();
+  }
+
+  // ---------- 工具栏：当前 shell 名 + 列表显隐态 ----------
+  function updateToolbar() {
+    const as = $("#term-active-shell");
+    if (as) {
+      const p = activePane();
+      // 没有活动终端时清空（CSS :empty 隐藏），避免误显示一个并不存在的 shell
+      if (!p) as.innerHTML = "";
+      else as.innerHTML = svgIcon(shellIcon(p.shell), 14) + "<span>" + shellNameOf(p.shell) + "</span>";
+    }
+    const lt = $("#term-list-toggle");
+    const list = $("#term-list");
+    if (lt && list) lt.classList.toggle("on", !list.classList.contains("hidden"));
+    // 拆分/关闭按钮可用性
+    const splitBtn = $("#term-split"), killBtn = $("#term-kill");
+    if (splitBtn) splitBtn.disabled = !activeGroup();
+    if (killBtn) killBtn.disabled = !activeGroup();
+  }
+
+  // ---------- 右侧列表渲染 ----------
+  function shouldShowList() {
+    // ≥2 组 或 用户手动开启 → 显示
+    return listForced || groups.length >= 2;
+  }
+  function applyListVisibility() {
+    const list = $("#term-list");
+    if (!list) return;
+    list.classList.toggle("hidden", !shouldShowList());
+    updateToolbar();
+    // 列表显隐改变了挂载区宽度 → 重排活动组
+    relayoutGroup(activeGroup());
+  }
+  function renderList() {
+    const list = $("#term-list");
+    if (!list) return;
+    list.innerHTML = "";
+    groups.forEach((g) => {
+      const ap = g.panes.find(p => p.pid === g.activePid) || g.panes[0];
+      const allDead = g.panes.length > 0 && g.panes.every(p => !p.alive && !p.opening);
+      const row = document.createElement("div");
+      row.className = "term-list-row" + (g.gid === activeGid ? " active" : "")
+                    + (allDead ? " dead" : "");
+      row.title = g.num + ": " + (ap ? shellNameOf(ap.shell) : "")
+                + (g.panes.length > 1 ? "（已拆分 ×" + g.panes.length + "）" : "");
+      const ico = document.createElement("span");
+      ico.className = "term-list-ico";
+      ico.innerHTML = svgIcon(shellIcon(ap ? ap.shell : "powershell"), 14);
       const label = document.createElement("span");
-      label.className = "term-tab-label";
-      label.textContent = t.title;
-      label.onclick = () => switchTo(t.id);
+      label.className = "term-list-label";
+      label.textContent = g.num + ": " + (ap ? shellNameOf(ap.shell) : "Shell");
+      row.appendChild(ico);
+      row.appendChild(label);
+      if (g.panes.length > 1) {
+        const badge = document.createElement("span");
+        badge.className = "term-list-split-badge";
+        badge.textContent = "⊟" + g.panes.length;
+        badge.title = "该终端已拆分为 " + g.panes.length + " 个窗格";
+        row.appendChild(badge);
+      }
       const x = document.createElement("button");
-      x.className = "term-tab-x";
+      x.className = "term-list-x";
       x.title = "关闭此终端";
-      x.textContent = "×";   // ×
-      x.onclick = (e) => { e.stopPropagation(); closeTerm(t.id); };
-      tab.appendChild(label);
-      tab.appendChild(x);
-      bar.appendChild(tab);
+      x.innerHTML = svgIcon("close", 13);
+      x.onclick = (e) => { e.stopPropagation(); closeGroup(g.gid); };
+      row.appendChild(x);
+      row.onclick = () => switchToGroup(g.gid);
+      list.appendChild(row);
     });
   }
 
-  // ---------- 创建一个终端实例（xterm + host + 后端会话） ----------
-  function makeHost() {
-    const wrap = $("#term-xterm");
-    if (!wrap) return null;
+  // ---------- 创建一个窗格（xterm + host + 后端会话） ----------
+  function makePaneHost(group) {
     const host = document.createElement("div");
     host.className = "term-pane";
-    wrap.appendChild(host);
+    group.host.appendChild(host);
     return host;
   }
 
-  function dimsOf(t) {
-    if (t && t.term && t.term.cols && t.term.rows) {
-      return { cols: t.term.cols, rows: t.term.rows };
+  function dimsOf(p) {
+    if (p && p.term && p.term.cols && p.term.rows) {
+      return { cols: p.term.cols, rows: p.term.rows };
     }
     return { cols: 80, rows: 24 };
   }
 
-  // 隐藏所有终端 pane，仅显示 id 对应的
-  function showOnly(id) {
-    terms.forEach((t) => {
-      if (t.host) t.host.style.display = (t.id === id) ? "block" : "none";
+  // 渲染活动组（横向并排窗格 + 窗格间分隔条），隐藏非活动组
+  function showOnlyGroup(gid) {
+    groups.forEach((g) => { g.host.classList.toggle("hidden", g.gid !== gid); });
+  }
+
+  // 重建某组挂载区内的「窗格 + 分隔条」DOM 顺序（窗格 host 已各自在 group.host 内）
+  function relayoutPanes(group) {
+    if (!group) return;
+    // 清除旧分隔条
+    Array.from(group.host.querySelectorAll(".term-pane-splitter")).forEach(s => s.remove());
+    // 按 panes 顺序确保窗格在 host 内排好，并在相邻窗格间插分隔条
+    group.panes.forEach((p, i) => {
+      // 应用持久的 flex basis（拖拽宽度）
+      if (group.basis && group.basis[p.pid] != null) {
+        p.host.style.flex = "0 0 " + group.basis[p.pid] + "px";
+      } else {
+        p.host.style.flex = "1 1 0";
+      }
+      group.host.appendChild(p.host);
+      if (i < group.panes.length - 1) {
+        const sp = document.createElement("div");
+        sp.className = "term-pane-splitter";
+        bindPaneSplitter(sp, group, p);
+        group.host.appendChild(sp);
+      }
+    });
+    // 重新追加焦点高亮类
+    updatePaneFocusClass(group);
+  }
+
+  function updatePaneFocusClass(group) {
+    if (!group) return;
+    group.panes.forEach((p) => {
+      if (p.host) p.host.classList.toggle("focused",
+        group.panes.length > 1 && p.pid === group.activePid);
     });
   }
 
-  // 新建终端：建 host + xterm + 后端会话；成功后设为活动并切换显示
-  async function newTerm(shellId) {
-    if (!hasXterm()) {
-      const host = $("#term-xterm");
-      if (host && !terms.length) host.textContent = "终端组件未加载（xterm.js 缺失）";
-      return null;
-    }
+  // 在指定组里新开一个窗格（独立后端会话）
+  async function newPane(group, shellId) {
+    if (!hasXterm()) return null;
     await loadShells();
     shellId = shellId || selectedShellId();
 
-    const host = makeHost();
-    if (!host) return null;
+    const host = makePaneHost(group);
     const term = new window.Terminal({
       cursorBlink: true,
       fontFamily: '"Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace',
@@ -243,32 +358,30 @@
     if (FitAddon) { try { fit = new FitAddon(); term.loadAddon(fit); } catch { fit = null; } }
     term.open(host);
 
-    const num = ++seq;
-    const t = {
-      id: null, shell: shellId, term, fit, host,
+    const pane = {
+      pid: null, shell: shellId, term, fit, host,
       offset: 0, poll: null, alive: false, reading: false, opening: false,
-      ro: null, lastCols: 0, lastRows: 0,
-      num, title: num + ": " + shellNameOf(shellId),
+      ro: null, lastCols: 0, lastRows: 0, gid: group.gid,
     };
-    // 用户输入 → 送入该终端会话
     term.onData((d) => {
-      if (t.id != null) fsPost("/api/term/input", { id: t.id, data: d }).catch(() => {});
+      if (pane.pid != null) fsPost("/api/term/input", { id: pane.pid, data: d }).catch(() => {});
     });
-    terms.push(t);
+    // 点击/聚焦该窗格 → 设为组内活动窗格
+    host.addEventListener("mousedown", () => focusPane(group, pane));
+    try { term.textarea && term.textarea.addEventListener("focus", () => focusPane(group, pane)); } catch {}
 
-    // 先显示+激活（即便后端还在开，UI 已就绪）
-    activeId = null; // 临时
-    showOnly(null);
-    t.host.style.display = "block";
+    group.panes.push(pane);
+    group.activePid = pane.pid; // 临时（pid 还没拿到，先标记目标）
+    relayoutPanes(group);
     try { if (fit) fit.fit(); } catch {}
 
-    const { cols, rows } = dimsOf(t);
-    t.opening = true;
+    const { cols, rows } = dimsOf(pane);
+    pane.opening = true;
     let ok = false;
     try {
       const res = await fsPost("/api/term/open", { shell: shellId, cols, rows });
       if (res && res.id != null && !res.error) {
-        t.id = res.id; t.offset = 0; t.alive = true; ok = true;
+        pane.pid = res.id; pane.offset = 0; pane.alive = true; ok = true;
       } else {
         const why = (res && res.error) ? res.error : "无法启动会话";
         term.write("\r\n\x1b[31m[启动失败] " + why + "\x1b[0m\r\n");
@@ -276,182 +389,342 @@
     } catch (e) {
       term.write("\r\n\x1b[31m[启动失败] " + (e && e.message ? e.message : e) + "\x1b[0m\r\n");
     } finally {
-      t.opening = false;
+      pane.opening = false;
     }
 
     if (!ok) {
-      // 开失败：移除该实例
-      removeTermLocal(t);
-      renderTabs();
+      removePaneLocal(group, pane);
       return null;
     }
-    activeId = t.id;
-    showOnly(activeId);
-    renderTabs();
-    relayout(t);
-    startPoll(t);
-    attachResizeObserver(t);
-    setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
-    return t;
+    group.activePid = pane.pid;
+    relayoutPanes(group);
+    relayoutGroup(group);
+    startPoll(pane);
+    attachResizeObserver(pane);
+    return pane;
   }
 
-  // 本地销毁一个终端实例（不通知后端）
-  function removeTermLocal(t) {
-    stopPoll(t);
-    if (t.ro) { try { t.ro.disconnect(); } catch {} t.ro = null; }
-    if (t.term) { try { t.term.dispose(); } catch {} t.term = null; }
-    if (t.host && t.host.parentElement) t.host.parentElement.removeChild(t.host);
-    const i = terms.indexOf(t);
-    if (i >= 0) terms.splice(i, 1);
-  }
-
-  // 切换到指定终端
-  function switchTo(id) {
-    const t = byId(id);
-    if (!t) return;
-    // 暂停其它终端轮询，只跑当前的（降低开销，且避免后台无谓写入）
-    terms.forEach((o) => { if (o.id !== id) stopPoll(o); });
-    activeId = id;
-    showOnly(id);
-    renderTabs();
-    relayout(t);
-    startPoll(t);
-    setTimeout(() => { try { t.term && t.term.focus(); } catch {} }, 0);
-  }
-
-  // 关闭某个终端（通知后端 + 本地移除 + 切到相邻）
-  async function closeTerm(id) {
-    const t = byId(id);
-    if (!t) return;
-    const idx = terms.indexOf(t);
-    if (t.id != null) {
-      try { await fsPost("/api/term/close", { id: t.id }); } catch {}
+  // 新建一个组（默认含 1 个窗格），并设为活动
+  async function newGroup(shellId) {
+    if (!hasXterm()) {
+      const host = $("#term-xterm");
+      if (host && !groups.length) host.textContent = "终端组件未加载（xterm.js 缺失）";
+      return null;
     }
-    removeTermLocal(t);
-    // 切到相邻终端（优先后一个，否则前一个）
-    if (activeId === id || !byId(activeId)) {
-      const next = terms[idx] || terms[idx - 1] || terms[0] || null;
-      activeId = next ? next.id : null;
+    await loadShells();
+    shellId = shellId || selectedShellId();
+    defaultShellId = shellId;
+
+    const gid = ++localSeq;
+    const num = ++gseq;
+    const ghost = document.createElement("div");
+    ghost.className = "term-group";
+    $("#term-xterm").appendChild(ghost);
+    const group = { gid, num, panes: [], activePid: null, host: ghost, basis: {} };
+    groups.push(group);
+
+    // 先激活并显示（即便后端还在开，UI 已就绪）
+    activeGid = gid;
+    showOnlyGroup(gid);
+
+    const pane = await newPane(group, shellId);
+    if (!pane) {
+      // 开失败：移除该组
+      removeGroupLocal(group);
+      if (groups.length) { activeGid = groups[groups.length - 1].gid; switchToGroup(activeGid); }
+      else { activeGid = null; renderList(); applyListVisibility(); updateToolbar(); }
+      return null;
     }
-    renderTabs();
-    if (activeId) {
-      switchTo(activeId);
-    } else if (!isCollapsed()) {
-      // 没有终端了：保持面板展开，下次 ensureSession 会新建
+    group.activePid = pane.pid;
+    renderList();
+    applyListVisibility();
+    updateToolbar();
+    relayoutGroup(group);
+    setTimeout(() => { try { pane.term.focus(); } catch {} }, 0);
+    return group;
+  }
+
+  // 拆分：给活动组加一个并排窗格
+  async function splitActive() {
+    expand();
+    // 等首个组就绪（避免在初始化窗口内点拆分丢失活动组）
+    await ensureSession();
+    const g = activeGroup();
+    if (!g) { await newGroup(selectedShellId()); return; }
+    // 用活动窗格的 shell（贴合 VS Code：拆出来同 shell）
+    const ap = g.panes.find(p => p.pid === g.activePid) || g.panes[0];
+    const shellId = ap ? ap.shell : selectedShellId();
+    const pane = await newPane(g, shellId);
+    if (pane) {
+      focusPane(g, pane);
+      renderList();
+      relayoutGroup(g);
+      setTimeout(() => { try { pane.term.focus(); } catch {} }, 0);
     }
   }
 
-  // 确保至少有一个活动终端（首次展开 / 命令送入前调用）
+  // 设组内活动窗格
+  function focusPane(group, pane) {
+    if (!group || !pane) return;
+    if (group.activePid === pane.pid) { updatePaneFocusClass(group); return; }
+    group.activePid = pane.pid;
+    updatePaneFocusClass(group);
+    updateToolbar();
+  }
+
+  // 本地销毁一个窗格（不通知后端）
+  function removePaneLocal(group, pane) {
+    stopPoll(pane);
+    if (pane.ro) { try { pane.ro.disconnect(); } catch {} pane.ro = null; }
+    if (pane.term) { try { pane.term.dispose(); } catch {} pane.term = null; }
+    if (pane.host && pane.host.parentElement) pane.host.parentElement.removeChild(pane.host);
+    if (group.basis) delete group.basis[pane.pid];
+    const i = group.panes.indexOf(pane);
+    if (i >= 0) group.panes.splice(i, 1);
+  }
+
+  // 关闭一个窗格（通知后端 + 本地移除）。若是组内最后一个 → 关整组。
+  async function closePane(group, pane) {
+    if (!group || !pane) return;
+    if (group.panes.length <= 1) { return closeGroup(group.gid); }
+    const idx = group.panes.indexOf(pane);
+    if (pane.pid != null) { try { await fsPost("/api/term/close", { id: pane.pid }); } catch {} }
+    removePaneLocal(group, pane);
+    if (group.activePid === pane.pid || !group.panes.find(p => p.pid === group.activePid)) {
+      const next = group.panes[idx] || group.panes[idx - 1] || group.panes[0];
+      group.activePid = next ? next.pid : null;
+    }
+    relayoutPanes(group);
+    relayoutGroup(group);
+    renderList();
+    updateToolbar();
+    const np = group.panes.find(p => p.pid === group.activePid);
+    if (np && np.term) setTimeout(() => { try { np.term.focus(); } catch {} }, 0);
+  }
+
+  // 本地销毁整组
+  function removeGroupLocal(group) {
+    group.panes.slice().forEach(p => removePaneLocal(group, p));
+    if (group.host && group.host.parentElement) group.host.parentElement.removeChild(group.host);
+    const i = groups.indexOf(group);
+    if (i >= 0) groups.splice(i, 1);
+  }
+
+  // 切换到指定组
+  function switchToGroup(gid) {
+    const g = groupById(gid);
+    if (!g) return;
+    // 暂停其它组所有窗格轮询，只跑当前组
+    groups.forEach((o) => { if (o.gid !== gid) o.panes.forEach(stopPoll); });
+    activeGid = gid;
+    showOnlyGroup(gid);
+    renderList();
+    updateToolbar();
+    relayoutGroup(g);
+    startGroupPoll(g);
+    const p = g.panes.find(x => x.pid === g.activePid) || g.panes[0];
+    if (p && p.term) setTimeout(() => { try { p.term.focus(); } catch {} }, 0);
+  }
+
+  // 关闭整组（通知后端关掉各窗格会话 + 本地移除 + 切到相邻）
+  async function closeGroup(gid) {
+    const g = groupById(gid);
+    if (!g) return;
+    const idx = groups.indexOf(g);
+    for (const p of g.panes.slice()) {
+      if (p.pid != null) { try { await fsPost("/api/term/close", { id: p.pid }); } catch {} }
+    }
+    removeGroupLocal(g);
+    if (activeGid === gid || !groupById(activeGid)) {
+      const next = groups[idx] || groups[idx - 1] || groups[0] || null;
+      activeGid = next ? next.gid : null;
+    }
+    renderList();
+    applyListVisibility();
+    updateToolbar();
+    if (activeGid) switchToGroup(activeGid);
+  }
+
+  // 杀掉当前活动组（垃圾桶按钮）
+  // 垃圾桶：关掉当前聚焦窗格（贴合 VS Code）。组内多窗格时只移除该窗格，
+  // 退化为单窗格；若已是组内唯一窗格 → 关掉整组。
+  function killActive() {
+    const g = activeGroup();
+    if (!g) return;
+    if (g.panes.length > 1) {
+      const p = g.panes.find(x => x.pid === g.activePid) || g.panes[0];
+      closePane(g, p);
+    } else {
+      closeGroup(g.gid);
+    }
+  }
+
+  // 确保至少有一个活动组（首次展开 / 命令送入前调用）
   let ensuring = null;
   function ensureSession() {
-    const a = active();
-    if (a && a.alive && a.term) return Promise.resolve(true);
+    const p = activePane();
+    if (p && p.alive && p.term) return Promise.resolve(true);
     if (ensuring) return ensuring;
     ensuring = (async () => {
       if (!hasXterm()) {
         const host = $("#term-xterm");
-        if (host && !terms.length) host.textContent = "终端组件未加载（xterm.js 缺失）";
+        if (host && !groups.length) host.textContent = "终端组件未加载（xterm.js 缺失）";
         return false;
       }
-      // 若已有终端但当前活动的已死，切到一个仍存活的
-      const aliveOne = terms.find(t => t.alive && t.term);
-      if (aliveOne) { switchTo(aliveOne.id); return true; }
-      const t = await newTerm(selectedShellId());
-      return !!t;
+      // 若已有组但活动窗格已死，切到一个仍存活的组
+      const aliveG = groups.find(g => g.panes.some(p => p.alive && p.term));
+      if (aliveG) { switchToGroup(aliveG.gid); return true; }
+      const g = await newGroup(selectedShellId());
+      return !!g;
     })();
-    const p = ensuring;
-    p.finally(() => { if (ensuring === p) ensuring = null; });
-    return p;
+    const pr = ensuring;
+    pr.finally(() => { if (ensuring === pr) ensuring = null; });
+    return pr;
   }
 
-  // ---------- 读轮询（每终端独立） ----------
-  function startPoll(t) {
-    if (!t || t.poll) return;
-    if (t.id == null) return;
-    t.poll = setInterval(() => pollRead(t), 60);
+  // ---------- 读轮询（每窗格独立） ----------
+  function startPoll(p) {
+    if (!p || p.poll) return;
+    if (p.pid == null) return;
+    p.poll = setInterval(() => pollRead(p), 60);
   }
-  function stopPoll(t) {
-    if (t && t.poll) { clearInterval(t.poll); t.poll = null; }
+  function stopPoll(p) {
+    if (p && p.poll) { clearInterval(p.poll); p.poll = null; }
   }
-  async function pollRead(t) {
-    if (!t || t.reading || t.id == null || isCollapsed()) return;
-    if (t.id !== activeId) return; // 仅轮询当前终端
-    t.reading = true;
+  function startGroupPoll(g) { if (g) g.panes.forEach(startPoll); }
+  async function pollRead(p) {
+    if (!p || p.reading || p.pid == null || isCollapsed()) return;
+    if (p.gid !== activeGid) return; // 仅轮询活动组的窗格
+    p.reading = true;
     try {
-      const url = "/api/term/read?id=" + encodeURIComponent(t.id) +
-                  "&offset=" + encodeURIComponent(t.offset);
+      const url = "/api/term/read?id=" + encodeURIComponent(p.pid) +
+                  "&offset=" + encodeURIComponent(p.offset);
       const res = await fetch(url, { cache: "no-store" }).then(r => r.json());
       if (res && !res.error) {
         if (res.data) {
           const bytes = b64ToBytes(res.data);
-          if (bytes.length && t.term) t.term.write(bytes);
+          if (bytes.length && p.term) p.term.write(bytes);
         }
-        if (typeof res.offset === "number") t.offset = res.offset;
-        if (res.alive === false && t.alive) {
-          t.alive = false;
-          stopPoll(t);
-          if (t.term) t.term.write("\r\n\x1b[33m[进程已退出]\x1b[0m\r\n");
-          renderTabs();
+        if (typeof res.offset === "number") p.offset = res.offset;
+        if (res.alive === false && p.alive) {
+          p.alive = false;
+          stopPoll(p);
+          if (p.term) p.term.write("\r\n\x1b[33m[进程已退出]\x1b[0m\r\n");
+          renderList();
         }
       }
     } catch {
       /* 单次失败忽略，下个 tick 再试 */
     } finally {
-      t.reading = false;
+      p.reading = false;
     }
   }
 
   // ---------- 尺寸：fit + 通知后端 ----------
-  function relayout(t) {
-    t = t || active();
-    if (!t || !t.term || !t.fit) return;
+  function relayoutPane(p) {
+    if (!p || !p.term || !p.fit) return;
     if (isCollapsed()) return;
-    if (t.id !== activeId) return; // 仅对可见终端 fit（隐藏的尺寸为 0）
-    try { t.fit.fit(); } catch {}
-    const { cols, rows } = dimsOf(t);
-    if (cols === t.lastCols && rows === t.lastRows) return;
-    t.lastCols = cols; t.lastRows = rows;
-    if (t.id != null) {
-      fsPost("/api/term/resize", { id: t.id, cols, rows }).catch(() => {});
+    if (p.gid !== activeGid) return; // 仅对可见组的窗格 fit
+    try { p.fit.fit(); } catch {}
+    const { cols, rows } = dimsOf(p);
+    if (cols === p.lastCols && rows === p.lastRows) return;
+    p.lastCols = cols; p.lastRows = rows;
+    if (p.pid != null) {
+      fsPost("/api/term/resize", { id: p.pid, cols, rows }).catch(() => {});
     }
   }
-
-  // 外部（如分隔条拖拽）调用：立即对当前可见终端重排 fit
-  window.termRefit = function () { try { relayout(active()); } catch {} };
-
-  function attachResizeObserver(t) {
-    if (!t || !t.host || t.ro || typeof ResizeObserver === "undefined") return;
-    let raf = 0;
-    t.ro = new ResizeObserver(() => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => { raf = 0; relayout(t); });
-    });
-    try { t.ro.observe(t.host); } catch {}
+  function relayoutGroup(g) {
+    g = g || activeGroup();
+    if (!g) return;
+    g.panes.forEach(relayoutPane);
   }
 
-  // ---------- 主题跟随：监听 data-theme 变化（所有终端跟随） ----------
+  // 外部（如分隔条拖拽）调用：立即对当前活动组重排 fit
+  window.termRefit = function () { try { relayoutGroup(activeGroup()); } catch {} };
+
+  function attachResizeObserver(p) {
+    if (!p || !p.host || p.ro || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
+    p.ro = new ResizeObserver(() => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { raf = 0; relayoutPane(p); });
+    });
+    try { p.ro.observe(p.host); } catch {}
+  }
+
+  // ---------- 窗格间竖直分隔条（自管拖拽，遮罩防 xterm 吞鼠标） ----------
+  let paneOverlay = null;
+  function showPaneOverlay() {
+    if (!paneOverlay) {
+      paneOverlay = document.createElement("div");
+      paneOverlay.id = "wb-pane-drag-overlay";
+      paneOverlay.style.cssText =
+        "position:fixed;inset:0;z-index:9999;cursor:col-resize;";
+      document.body.appendChild(paneOverlay);
+    }
+    paneOverlay.style.display = "block";
+  }
+  function hidePaneOverlay() { if (paneOverlay) paneOverlay.style.display = "none"; }
+
+  // sp 分隔条紧跟在 pane(左侧窗格) 之后：拖动调整左侧窗格宽度（右侧窗格 flex:1 占余）
+  function bindPaneSplitter(sp, group, pane) {
+    let dragging = false;
+    sp.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      sp.classList.add("dragging");
+      showPaneOverlay();
+    });
+    function move(e) {
+      if (!dragging) return;
+      const rect = pane.host.getBoundingClientRect();
+      let w = e.clientX - rect.left;
+      const total = group.host.getBoundingClientRect().width;
+      w = Math.max(40, Math.min(w, total - 60));
+      group.basis = group.basis || {};
+      group.basis[pane.pid] = Math.round(w);
+      pane.host.style.flex = "0 0 " + Math.round(w) + "px";
+      relayoutPane(pane);
+      // 右侧窗格也需要 refit
+      const idx = group.panes.indexOf(pane);
+      const right = group.panes[idx + 1];
+      if (right) relayoutPane(right);
+    }
+    function up() {
+      if (!dragging) return;
+      dragging = false;
+      sp.classList.remove("dragging");
+      hidePaneOverlay();
+      relayoutGroup(group);
+    }
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }
+
+  // ---------- 主题跟随：监听 data-theme 变化（所有窗格跟随） ----------
   function watchTheme() {
     try {
       const mo = new MutationObserver(() => {
         const th = termTheme();
-        terms.forEach((t) => { if (t.term) { try { t.term.options.theme = th; } catch {} } });
+        allPanes().forEach((p) => { if (p.term) { try { p.term.options.theme = th; } catch {} } });
       });
       mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     } catch {}
   }
 
-  // ---------- 把命令送进当前活动终端 ----------
+  // ---------- 把命令送进当前聚焦窗格 ----------
   async function sendToSession(line) {
     expand();
     const ok = await ensureSession();
-    const t = active();
-    if (!ok || !t || t.id == null) return false;
-    await fsPost("/api/term/input", { id: t.id, data: line + "\r" }).catch(() => {});
-    if (t.term) setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
+    const p = activePane();
+    if (!ok || !p || p.pid == null) return false;
+    await fsPost("/api/term/input", { id: p.pid, data: line + "\r" }).catch(() => {});
+    if (p.term) setTimeout(() => { try { p.term.focus(); } catch {} }, 0);
     return true;
   }
 
-  // ---------- 运行当前文件（送进当前活动终端） ----------
+  // ---------- 运行当前文件（送进当前聚焦窗格） ----------
   async function runFile(path) {
     path = path || (window.state && state.current);
     if (!path) { if (window.setMsg) setMsg("没有可运行的文件", "err"); return; }
@@ -461,12 +734,12 @@
     }
     expand();
     const ok = await ensureSession();
-    const t = active();
-    if (ok && t && t.id != null) {
-      const cmd = buildRunCommand(path, t.shell);
+    const p = activePane();
+    if (ok && p && p.pid != null) {
+      const cmd = buildRunCommand(path, p.shell);
       if (cmd) {
-        await fsPost("/api/term/input", { id: t.id, data: cmd + "\r" }).catch(() => {});
-        if (t.term) setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
+        await fsPost("/api/term/input", { id: p.pid, data: cmd + "\r" }).catch(() => {});
+        if (p.term) setTimeout(() => { try { p.term.focus(); } catch {} }, 0);
         return;
       }
     }
@@ -504,7 +777,7 @@
     return map[ext] || "";
   }
 
-  // ---------- 运行任务（送进当前活动终端） ----------
+  // ---------- 运行任务（送进当前聚焦窗格） ----------
   async function runTask(name, kind) {
     if (!name) return;
     const line = (kind === "make" ? "make " : "npm run ") + name;
@@ -602,51 +875,99 @@
   }
   window.updateRunButton = updateRunButton;
 
+  // ---------- 列表显隐切换 ----------
+  function toggleList() {
+    const list = $("#term-list");
+    if (!list) return;
+    const nowHidden = list.classList.contains("hidden");
+    if (nowHidden) {
+      // 打开：手动强制显示
+      listForced = true;
+      list.classList.remove("hidden");
+    } else {
+      // 关闭：取消强制；若 ≥2 组按规则仍会显示，这里强制隐藏直到下次变化
+      listForced = false;
+      // 用户明确想隐藏 → 即使多组也隐藏（直到再次手动开或新建组）
+      list.classList.add("hidden");
+    }
+    updateToolbar();
+    relayoutGroup(activeGroup());
+  }
+
   // ---------- 初始化 ----------
   function init() {
     setCwdLabel("");
 
     const clearBtn = $("#term-clear");
-    if (clearBtn) clearBtn.onclick = () => { const t = active(); if (t && t.term) t.term.clear(); };
+    if (clearBtn) clearBtn.onclick = (e) => {
+      e.stopPropagation();
+      const p = activePane(); if (p && p.term) p.term.clear();
+    };
 
     const collapseBtn = $("#term-collapse");
-    if (collapseBtn) collapseBtn.onclick = toggle;
+    if (collapseBtn) collapseBtn.onclick = (e) => { e.stopPropagation(); toggle(); };
 
     const head = $("#term-head");
     if (head) head.addEventListener("click", (e) => {
-      // 点标题空白处折叠/展开，避开按钮、下拉、标签条
+      // 点标题空白处折叠/展开，避开按钮、下拉、工具栏、列表
       if (e.target.closest("button") || e.target.closest("select") ||
-          e.target.closest("#term-tabs")) return;
+          e.target.closest(".term-toolbar") || e.target.closest(".term-shell-menu")) return;
       toggle();
     });
 
     const taskRun = $("#term-task-run");
     if (taskRun) taskRun.onclick = runSelectedTask;
 
-    // shell 选择器：仅切换"新建终端用的 shell"，不动已开终端
-    // （选择本身不新建；点 + 才用当前所选 shell 新建）
-
-    // "+" 新建终端（用当前所选 shell）
+    // 分裂按钮：主体 = 用默认 shell 新建组
     const newBtn = $("#term-new");
     if (newBtn) newBtn.onclick = (e) => {
       e.stopPropagation();
+      hideShellMenu();
       expand();
-      newTerm(selectedShellId());
+      newGroup(selectedShellId());
     };
+    // 下拉箭头：弹 shell 菜单
+    const caret = $("#term-new-caret");
+    if (caret) caret.onclick = (e) => { e.stopPropagation(); toggleShellMenu(); };
+
+    // 拆分按钮
+    const splitBtn = $("#term-split");
+    if (splitBtn) splitBtn.onclick = (e) => { e.stopPropagation(); splitActive(); };
+
+    // 列表显隐
+    const listToggle = $("#term-list-toggle");
+    if (listToggle) listToggle.onclick = (e) => { e.stopPropagation(); toggleList(); };
+
+    // 垃圾桶：杀掉当前活动组
+    const killBtn = $("#term-kill");
+    if (killBtn) killBtn.onclick = (e) => { e.stopPropagation(); killActive(); };
+
+    // 点击别处关闭 shell 菜单
+    document.addEventListener("mousedown", (e) => {
+      const menu = $("#term-shell-menu");
+      if (menu && !menu.classList.contains("hidden") &&
+          !e.target.closest("#term-new-split")) hideShellMenu();
+    });
 
     const st = $("#status-term");
     if (st) st.onclick = toggle;
 
-    // Ctrl+` 切换终端面板
+    // Ctrl+` 切换终端面板；Ctrl+Shift+5 拆分终端
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "`" || e.key === "~")) {
         e.preventDefault();
         toggle();
+        return;
+      }
+      // Ctrl+Shift+5 拆分（'5' 或 '%'）
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "5" || e.key === "%")) {
+        e.preventDefault();
+        splitActive();
       }
     });
 
-    // 窗口尺寸变化 → 重排当前终端
-    window.addEventListener("resize", () => relayout(active()));
+    // 窗口尺寸变化 → 重排活动组
+    window.addEventListener("resize", () => relayoutGroup(activeGroup()));
 
     // 命令面板动作
     if (window.registerAction) {
@@ -654,22 +975,25 @@
       registerAction({ name: "运行当前文件", hint: "", icon: "play",
                        run: () => runFile(window.state && state.current) });
       registerAction({ name: "新建终端", hint: "", icon: "plus",
-                       run: () => { expand(); newTerm(selectedShellId()); } });
+                       run: () => { expand(); newGroup(selectedShellId()); } });
+      registerAction({ name: "拆分终端", hint: "Ctrl+Shift+5", icon: "splitH",
+                       run: () => splitActive() });
     }
 
     watchTheme();
-    loadShells();
+    loadShells().then(updateToolbar);
     loadTasks();
     updateRunButton();
+    updateToolbar();
 
     // 退出时尽量通知后端清理所有会话
     window.addEventListener("beforeunload", () => {
       if (!navigator.sendBeacon) return;
-      terms.forEach((t) => {
-        if (t.id != null) {
+      allPanes().forEach((p) => {
+        if (p.pid != null) {
           try {
             navigator.sendBeacon("/api/term/close",
-              new Blob([JSON.stringify({ id: t.id })], { type: "application/json" }));
+              new Blob([JSON.stringify({ id: p.pid })], { type: "application/json" }));
           } catch {}
         }
       });
