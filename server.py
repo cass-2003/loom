@@ -16,12 +16,23 @@ import shutil
 import subprocess
 import sys
 import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
+# 打包(PyInstaller)后：静态资源被解压到 sys._MEIPASS；exe 自身目录用作默认工作根。
+# 直接运行脚本时：两者都是脚本所在目录。
+if getattr(sys, "frozen", False):
+    BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent
+    APP_DIR = BUNDLE_DIR
+BASE_DIR = BUNDLE_DIR
+# 必须 resolve()：打包后 _MEIPASS 在 Temp 下可能是 8.3 短名(ADMINI~1)，
+# 而 _serve_static 里 fp 是 resolve() 后的长名，不一致会导致包含性校验误判 403。
+STATIC_DIR = (BUNDLE_DIR / "static").resolve()
 
 # 这些扩展名按文本编辑处理
 TEXT_EXTS = {
@@ -1256,10 +1267,13 @@ def main():
     ap.add_argument("root", nargs="?", default=None, help="工作根目录")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--no-browser", action="store_true", help="启动时不自动打开浏览器")
     args = ap.parse_args()
 
     if args.root:
         ROOT = Path(args.root).resolve()
+    elif getattr(sys, "frozen", False):
+        ROOT = APP_DIR  # 打包后默认以 exe 所在文件夹为工作根
     else:
         ROOT = Path(BASE_DIR.anchor or "/").resolve()  # 脚本所在盘根
     if not ROOT.is_dir():
@@ -1267,10 +1281,17 @@ def main():
         sys.exit(1)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    url = f"http://{args.host}:{args.port}"
     print(f"Workbench 已启动")
     print(f"  根目录: {ROOT}")
-    print(f"  地址:   http://{args.host}:{args.port}")
+    print(f"  地址:   {url}")
     print("  Ctrl+C 退出")
+    # 默认自动打开浏览器（套接字已绑定监听，连接会正常排队）
+    if not args.no_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

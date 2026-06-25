@@ -1,3 +1,6 @@
 static/vendor/
 __pycache__/
 .workbench/
+build/
+dist/
+*.spec

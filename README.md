@@ -15,6 +15,18 @@ python server.py D:\notes --port 8200
 Windows 可直接双击 `start.bat`，或把任意文件夹**拖到 `start.bat` 上**以该文件夹为根启动。
 启动后浏览器打开 `http://127.0.0.1:8123/`。
 
+## 打包为 exe（免装 Python）
+
+把整个工作台编译成一个独立的 `Workbench.exe`，分发到任意 Windows 机器双击即用，目标机**无需安装 Python**：
+
+```powershell
+pip install pyinstaller          # 仅构建期需要
+powershell -ExecutionPolicy Bypass -File build_exe.ps1
+```
+
+产物 `dist\Workbench.exe`（约 10MB，内含 Python 运行时 + `static/` 全部资源含离线 vendor 库）。
+双击运行：以 **exe 所在文件夹**为工作根，自动打开浏览器；也可命令行指定 `Workbench.exe D:\notes --port 8200`（`--no-browser` 禁止自动开浏览器）。
+
 ## 功能
 
 VS Code 风格布局：**活动栏（图标）→ 侧边栏（随图标切换）→ 中间编辑区（标签栏 + 内容）→ 状态栏**，底部可折叠**集成终端**。
