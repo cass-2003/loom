@@ -377,7 +377,7 @@ async function toggleCommitFiles(row) {
 
 /* ===== 提交悬浮详情卡（鼠标停在某条提交上弹出） ===== */
 const commitCache = {};
-let popEl = null, popShowTimer = null, popHideTimer = null;
+let popEl = null, popShowTimer = null, popHideTimer = null, popHash = null;
 
 function ensurePopover() {
   if (popEl) return popEl;
@@ -430,6 +430,7 @@ function attachCommitHover(row) {
     clearTimeout(popHideTimer);
     clearTimeout(popShowTimer);
     const h = row.dataset.hash;
+    popHash = h;   // 标记"当前意图展示的提交"，await 后据此判断是否仍该展示
     popShowTimer = setTimeout(async () => {
       ensurePopover();
       let d = commitCache[h];
@@ -438,11 +439,13 @@ function attachCommitHover(row) {
         if (d.error) return;
         commitCache[h] = d;
       }
+      // await 期间鼠标可能已移开(popHash 变了/清空)或图重建(row 脱离文档)→ 别再弹卡
+      if (popHash !== h || !row.isConnected) return;
       popEl.innerHTML = buildPopoverHTML(d);
       positionPopover(row);
     }, 300);
   });
-  row.addEventListener("mouseleave", hidePopover);
+  row.addEventListener("mouseleave", () => { popHash = null; hidePopover(); });
 }
 
 let gitOutTimer = null;

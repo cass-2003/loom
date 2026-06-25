@@ -99,6 +99,7 @@ function vditorCodeTheme() {
 
 // 自定义图片上传：走我们的 JSON 接口，返回 null 阻止 Vditor 默认 multipart
 async function vditorUploadHandler(files) {
+  const targetPath = state.activeTab;   // 固定上传时的目标 md 文件，防 await 期间切标签插到错文件
   for (const file of files) {
     if (!file || !file.type || !file.type.startsWith("image/")) continue;
     try {
@@ -107,6 +108,10 @@ async function vditorUploadHandler(files) {
         dataB64: dataUrl, mime: file.type, name: file.name || "",
       });
       if (res && res.path) {
+        if (state.activeTab !== targetPath || !vd.inst || vd.curPath !== targetPath) {
+          setMsg("图片已上传，但已切换文件未插入：/" + res.path, "warn");  // 切走了就别插到别的文件
+          continue;
+        }
         vd.inst.insertValue(`![](/${res.path})\n`);
         setMsg("已插入图片 " + res.path, "ok");
       } else {
@@ -1582,44 +1587,42 @@ $("#editor").addEventListener("paste", async (e) => {
   e.preventDefault();
   const file = imgItem.getAsFile();
   if (!file) return;
+  const targetPath = state.activeTab;   // 固定上传时的目标文件，防 await 期间切标签插错/留下占位符
   // 占位符，避免上传期间用户继续输入打乱光标
   const placeholder = `![上传中…](uploading)`;
   insertAtCursor(placeholder);
+  // 把占位符替换成 repl（repl 为空即移除）。仍是目标标签→改 #editor；已切走→改目标标签的 draft。
+  const settle = (repl) => {
+    if (state.activeTab === targetPath) {
+      const ta = $("#editor");
+      const at = ta.value.indexOf(placeholder);
+      if (at >= 0) {
+        ta.value = ta.value.slice(0, at) + repl + ta.value.slice(at + placeholder.length);
+        ta.selectionStart = ta.selectionEnd = at + repl.length;
+      } else if (repl) { insertAtCursor(repl); }
+      fireEditorInput();
+    } else {
+      const t = tabByPath(targetPath);
+      if (t && typeof t.draft === "string") {
+        const at = t.draft.indexOf(placeholder);
+        if (at >= 0) t.draft = t.draft.slice(0, at) + repl + t.draft.slice(at + placeholder.length);
+      }
+    }
+  };
   try {
     const dataUrl = await blobToDataURL(file);
     const res = await fsPost("/api/upload-image", {
       dataB64: dataUrl, mime: file.type, name: file.name || "",
     });
-    const ta = $("#editor");
     if (res && res.path) {
-      const md = `![](${res.path})`;
-      const at = ta.value.indexOf(placeholder);
-      if (at >= 0) {
-        ta.value = ta.value.slice(0, at) + md + ta.value.slice(at + placeholder.length);
-        ta.selectionStart = ta.selectionEnd = at + md.length;
-      } else {
-        insertAtCursor(md);
-      }
-      fireEditorInput();
+      settle(`![](${res.path})`);
       setMsg("已插入图片 " + res.path, "ok");
     } else {
-      // 失败：移除占位符
-      const at = ta.value.indexOf(placeholder);
-      if (at >= 0) {
-        ta.value = ta.value.slice(0, at) + ta.value.slice(at + placeholder.length);
-        ta.selectionStart = ta.selectionEnd = at;
-        fireEditorInput();
-      }
+      settle("");
       setMsg("图片上传失败: " + ((res && res.error) || "未知错误"), "err");
     }
   } catch (err) {
-    const ta = $("#editor");
-    const at = ta.value.indexOf(placeholder);
-    if (at >= 0) {
-      ta.value = ta.value.slice(0, at) + ta.value.slice(at + placeholder.length);
-      ta.selectionStart = ta.selectionEnd = at;
-      fireEditorInput();
-    }
+    settle("");
     setMsg("图片上传失败: " + (err && err.message ? err.message : err), "err");
   }
 });

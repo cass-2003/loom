@@ -7,7 +7,6 @@
 
 依赖 pywebview（仅桌面版需要；纯命令行 server.py 仍是零依赖浏览器版）。
 """
-import socket
 import sys
 import threading
 from pathlib import Path
@@ -104,14 +103,16 @@ class WindowApi:
         return None
 
 
-def find_free_port(host="127.0.0.1"):
-    """让操作系统分配一个空闲端口，避免与现有服务撞端口。"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def _fatal(msg):
+    """致命错误提示。--windowed 无控制台，用 MessageBox 让用户看到，而非静默崩溃。"""
     try:
-        s.bind((host, 0))
-        return s.getsockname()[1]
-    finally:
-        s.close()
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, str(msg), "Workbench", 0x10)
+        else:
+            print(msg, file=sys.stderr)
+    except Exception:
+        pass
 
 
 def resolve_root():
@@ -129,10 +130,15 @@ def resolve_root():
 def main():
     server.ROOT = resolve_root()
     host = "127.0.0.1"
-    port = find_free_port(host)
 
-    # ThreadingHTTPServer 构造时即 bind+listen，故下面创建窗口前端口已可连接
-    httpd = server.ThreadingHTTPServer((host, port), server.Handler)
+    # 直接绑定端口 0 让 OS 分配再读回实际端口——消除"先探测再绑定"之间的 TOCTOU/撞端口，
+    # 且把绑定 OSError 捕获后弹窗提示（--windowed 无控制台，否则静默崩溃）。
+    try:
+        httpd = server.ThreadingHTTPServer((host, 0), server.Handler)
+    except OSError as e:
+        _fatal(f"无法启动本地服务（端口绑定失败）：{e}")
+        return
+    port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     api = WindowApi()
@@ -150,6 +156,18 @@ def main():
     try:
         webview.start()          # 阻塞，直到用户关闭窗口
     finally:
+        # 关窗时清理所有终端会话，杀掉子 shell / winpty agent，避免孤儿进程泄漏
+        try:
+            with server.TERMS_LOCK:
+                sessions = list(server.TERMS.values())
+                server.TERMS.clear()
+            for sess in sessions:
+                try:
+                    sess.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
         httpd.shutdown()
 
 

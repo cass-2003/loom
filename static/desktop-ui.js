@@ -106,8 +106,14 @@
     function onDown(z, ev) {
       if (ev.button !== 0) return;
       ev.preventDefault();
+      // 取窗口几何是异步(pywebview 桥)。若 await 期间用户已松开鼠标，绝不能再起拖——
+      // 否则 drag 被置上但按键已抬起，之后无按键的移动也会缩放窗口(幽灵缩放)。
+      let aborted = false;
+      const cancelIfUp = () => { aborted = true; };
+      window.addEventListener("mouseup", cancelIfUp, { once: true, capture: true });
       Promise.resolve(api.get_window_rect()).then((r) => {
-        if (!r) return;
+        window.removeEventListener("mouseup", cancelIfUp, true);
+        if (aborted || !r) return;
         drag = { e: z.e, x: r.x, y: r.y, w: r.w, h: r.h,
                  mx: ev.screenX, my: ev.screenY, dpr: window.devicePixelRatio || 1 };
         showOverlay(z.cur);

@@ -638,6 +638,13 @@
       removePaneLocal(group, pane);
       return null;
     }
+    // open 的 await 期间该窗格/组可能已被关闭：那时 pane.pid 还是 null，关闭逻辑没关后端会话。
+    // 现在才拿到 pid → 主动补关后端会话，且不再起轮询，避免孤儿 shell + setInterval 泄漏。
+    if (!groupById(group.gid) || group.panes.indexOf(pane) < 0) {
+      fsPost("/api/term/close", { id: pane.pid }).catch(() => {});
+      try { term.dispose(); } catch {}
+      return null;
+    }
     group.activePid = pane.pid;
     relayoutPanes(group);
     relayoutGroup(group);

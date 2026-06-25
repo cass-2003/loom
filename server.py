@@ -158,25 +158,54 @@ def within_root_real(p) -> bool:
         return False
 
 
-def run_shell(cmd: str, cwd: Path, timeout: int = EXEC_TIMEOUT):
-    """执行 shell 命令，返回 (code, stdout, stderr)。超时/异常有兜底文案。"""
+def _kill_proc_tree(p):
+    """杀掉进程及其整棵子树。Windows 用 taskkill /T(按 PID 树)；POSIX 用进程组 killpg。"""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                           creationflags=_NO_WINDOW, capture_output=True, timeout=5)
+            return
+        except Exception:
+            pass
+    else:
+        try:
+            import signal
+            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+            return
+        except Exception:
+            pass
     try:
-        p = subprocess.run(
-            cmd, cwd=str(cwd), shell=True, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=timeout,
-            creationflags=_NO_WINDOW,
+        p.kill()
+    except Exception:
+        pass
+
+
+def run_shell(cmd: str, cwd: Path, timeout: int = EXEC_TIMEOUT):
+    """执行 shell 命令，返回 (code, stdout, stderr)。
+    超时时杀「整棵进程树」(含孙进程)——否则 shell=True 只杀顶层 shell，孙进程被孤儿化，
+    且持有 stdout 的孙进程会让 communicate() 在超时后继续阻塞。"""
+    kw = {}
+    if sys.platform != "win32":
+        kw["start_new_session"] = True   # 自成进程组，便于 killpg 杀整组
+    try:
+        p = subprocess.Popen(
+            cmd, cwd=str(cwd), shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace",
+            creationflags=_NO_WINDOW, **kw,
         )
-        return p.returncode, p.stdout, p.stderr
-    except subprocess.TimeoutExpired as e:
-        out = e.stdout or ""
-        err = (e.stderr or "")
-        if isinstance(out, bytes):
-            out = out.decode("utf-8", "replace")
-        if isinstance(err, bytes):
-            err = err.decode("utf-8", "replace")
-        return -1, out, (err + f"\n[执行超时：超过 {timeout} 秒已终止]").strip()
     except OSError as e:
         return -1, "", f"执行失败: {e}"
+    try:
+        out, err = p.communicate(timeout=timeout)
+        return p.returncode, out, err
+    except subprocess.TimeoutExpired:
+        _kill_proc_tree(p)
+        try:
+            out, err = p.communicate(timeout=5)   # 树已杀，管道应很快关闭
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
+        return -1, out or "", ((err or "") + f"\n[执行超时：超过 {timeout} 秒已终止]").strip()
 
 
 def run_argv(argv, cwd: Path, timeout: int = EXEC_TIMEOUT):
@@ -1756,8 +1785,18 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._err(f"启动终端失败: {e}", 500)
         sid = secrets.token_hex(8)
+        over = False
         with TERMS_LOCK:
-            TERMS[sid] = sess
+            if len(TERMS) >= MAX_TERMS:   # 二次校验：与上面的检查之间隔了 TermSession 创建(并发可越额)，此处与插入同锁
+                over = True
+            else:
+                TERMS[sid] = sess
+        if over:
+            try:
+                sess.close()
+            except Exception:
+                pass
+            return self._err(f"会话数已达上限（{MAX_TERMS}），请先关闭其它终端", 429)
         return self._json({"id": sid, "mode": sess._mode})
 
     def _api_term_input(self, body):
