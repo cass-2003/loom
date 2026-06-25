@@ -13,8 +13,10 @@
 <div id="app">
   <!-- 顶栏 -->
   <header id="topbar">
-    <div class="brand"><span class="brand-dot"></span>Workbench</div>
+    <div class="brand pywebview-drag-region"><span class="brand-dot"></span>Workbench</div>
+    <button id="btn-open-folder" class="btn ghost icon-only desktop-only" title="打开文件夹"><span class="i" data-icon="folderOpen"></span></button>
     <div class="crumb" id="crumb"></div>
+    <div class="drag-space pywebview-drag-region"></div>
     <div class="top-actions">
       <!-- Markdown 增强：大纲 / 导出（仅 .md 显示） -->
       <div id="md-toolbar" class="md-toolbar hidden">
@@ -36,6 +38,11 @@
       <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色"></button>
       <button id="btn-view-edit" class="btn ghost" title="切换视图">分屏</button>
       <button id="btn-save" class="btn" title="保存 (Ctrl+S)"><span class="i" data-icon="save"></span>保存</button>
+    </div>
+    <div id="winctrls" class="winctrls desktop-only">
+      <button id="win-min" class="winbtn" title="最小化"><span class="i" data-icon="minus"></span></button>
+      <button id="win-max" class="winbtn" title="最大化 / 还原"><span class="i" data-icon="winMax"></span></button>
+      <button id="win-close" class="winbtn winbtn-close" title="关闭"><span class="i" data-icon="close"></span></button>
     </div>
   </header>
 
@@ -380,5 +387,6 @@
 <script src="/static/workbench.js"></script>
 <script src="/static/terminal.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/desktop-ui.js"></script>
 </body>
 </html>

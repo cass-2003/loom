@@ -41,6 +41,8 @@ const ICON_PATHS = {
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  winMax: '<rect x="4.5" y="4.5" width="15" height="15" rx="1.5"/>',
+  winRestore: '<rect x="8" y="3.5" width="12.5" height="12.5" rx="1.5"/><path d="M16.5 16.5v2A1.5 1.5 0 0 1 15 20H5a1.5 1.5 0 0 1-1.5-1.5v-10A1.5 1.5 0 0 1 5 7h2"/>',
 };
 
 function svgIcon(name, size = 16) {

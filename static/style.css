@@ -70,9 +70,35 @@ body {
   background: linear-gradient(135deg, var(--accent), var(--accent2));
   box-shadow: 0 0 9px var(--accent); }
 .btn.icon-only { padding: 6px; }
-.crumb { flex: 1; color: var(--muted); font-size: 12.5px; overflow: hidden;
+.crumb { flex: 0 1 auto; color: var(--muted); font-size: 12.5px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .top-actions { display: flex; gap: 8px; }
+
+/* ===== 桌面版（pywebview）自绘标题栏 / 窗口外框 ===== */
+.desktop-only { display: none; }
+body.desktop button.desktop-only { display: inline-flex; }
+body.desktop .winctrls.desktop-only { display: flex; }
+
+/* 顶栏拖拽区：空白伸缩区 + 品牌区可拖动窗口 */
+.drag-space { flex: 1 1 auto; align-self: stretch; min-width: 24px; }
+body.desktop .pywebview-drag-region { cursor: default; -webkit-user-select: none; user-select: none; }
+body.desktop #topbar { padding-right: 0; gap: 12px; }
+
+/* 自绘外框：跟随主题的 1px 边（最大化时去掉） */
+body.desktop #app { border: 1px solid var(--border); box-sizing: border-box; }
+body.desktop.maximized #app { border: none; }
+
+/* 窗口控制按钮（最小化/最大化/关闭） */
+.winctrls { align-items: center; gap: 2px; margin-left: 2px; }
+.winbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 42px; height: 34px; padding: 0; border: none; border-radius: 7px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.winbtn:hover { background: var(--hover, rgba(127,127,127,.16)); color: var(--text); }
+.winbtn .icn { width: 15px; height: 15px; }
+.winbtn-close:hover { background: #e81123; color: #fff; }
 
 /* 按钮 */
 .btn {

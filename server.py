@@ -75,6 +75,8 @@ def run_git(args, cwd):
 
 # ---------- 终端 / 运行 辅助 ----------
 EXEC_TIMEOUT = 120  # 命令执行超时（秒）
+# Windows 下隐藏子进程控制台窗口（桌面/windowed 模式运行命令时不弹黑框）
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 # 按扩展名选解释器（运行当前文件）。值是参数列表前缀，文件路径追加在后。
 RUN_INTERPRETERS = {
@@ -110,6 +112,7 @@ def run_shell(cmd: str, cwd: Path, timeout: int = EXEC_TIMEOUT):
         p = subprocess.run(
             cmd, cwd=str(cwd), shell=True, capture_output=True,
             text=True, encoding="utf-8", errors="replace", timeout=timeout,
+            creationflags=_NO_WINDOW,
         )
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired as e:
@@ -130,6 +133,7 @@ def run_argv(argv, cwd: Path, timeout: int = EXEC_TIMEOUT):
         p = subprocess.run(
             argv, cwd=str(cwd), shell=False, capture_output=True,
             text=True, encoding="utf-8", errors="replace", timeout=timeout,
+            creationflags=_NO_WINDOW,
         )
         return p.returncode, p.stdout, p.stderr
     except FileNotFoundError:

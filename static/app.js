@@ -1631,6 +1631,25 @@ async function initTree() {
   await loadTree("", $("#tree"));
 }
 
+// 切换工作根目录后整体重载（桌面版「打开文件夹」用）
+async function reloadRoot(path) {
+  // 关闭所有标签 + 清空编辑区，回到欢迎页
+  state.tabs = [];
+  state.activeTab = null;
+  state.current = null;
+  state.dirty = false;
+  state.expanded = new Set();
+  if (typeof renderTabs === "function") renderTabs();
+  if (typeof closeCurrent === "function") closeCurrent();
+  try { localStorage.removeItem("wb-workspace"); } catch {}
+  $("#crumb").textContent = "根目录: " + path;
+  await loadTree("", $("#tree"));
+  hydrateIcons($("#tree"));
+  if (window.refreshGit) window.refreshGit();
+  setMsg("已切换工作目录: " + path, "ok");
+}
+window.reloadRoot = reloadRoot;
+
 window.addEventListener("beforeunload", (e) => {
   if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
 });
