@@ -228,7 +228,13 @@
     A({ name: "导出为 HTML", hint: "Markdown", icon: "download",
         run: () => { typeof exportHtml === "function" && exportHtml(); } });
     A({ name: "打印 / 另存 PDF", hint: "Markdown", icon: "printer",
-        run: () => window.print() });
+        run: () => {
+          // 打印样式表只为 Markdown 预览写死；非 Markdown / 编辑态打印会泄漏或空白 → 先 gate
+          const t = window.wb && window.wb.tabByPath && window.state ? window.wb.tabByPath(window.state.activeTab) : null;
+          const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
+          if (!isMd) { if (window.setMsg) window.setMsg("打印 / 另存 PDF 仅在 Markdown 下可用", "warn"); return; }
+          window.print();
+        } });
     // 刷新文件树
     A({ name: "刷新文件树", hint: "", icon: "refresh",
         run: () => { if (window.state) state.expanded.clear(); typeof initTree === "function" && initTree(); } });

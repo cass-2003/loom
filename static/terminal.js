@@ -164,8 +164,14 @@
     if (panel) { panel.style.height = ""; panel.style.width = ""; }   // 清掉另一方向的内联尺寸
     c.classList.toggle("term-dock-right", v);
     if (panel) {
-      if (v) { const w = parseInt(localStorage.getItem("wb-term-w") || "", 10); if (w) panel.style.width = w + "px"; }
-      else   { const h = parseInt(localStorage.getItem("wb-term-h") || "", 10); if (h) panel.style.height = h + "px"; }
+      // clamp 持久化尺寸到当前视口：跨分辨率恢复时别把终端铺到超出屏幕、挤没编辑区
+      if (v) {
+        let w = parseInt(localStorage.getItem("wb-term-w") || "", 10);
+        if (w) { w = Math.max(120, Math.min(w, Math.round(window.innerWidth * 0.85))); panel.style.width = w + "px"; }
+      } else {
+        let h = parseInt(localStorage.getItem("wb-term-h") || "", 10);
+        if (h) { h = Math.max(80, Math.min(h, Math.round(window.innerHeight * 0.85))); panel.style.height = h + "px"; }
+      }
     }
     if (typeof window.termRefit === "function") { try { window.termRefit(); } catch {} }
   }
@@ -1007,9 +1013,17 @@
   function buildRunCommand(path, sh) {
     const ext = extOf(path);
     sh = sh || selectedShellId();
-    const q = (sh === "gitbash" || sh === "wsl")
-      ? "'" + path.replace(/'/g, "'\\''") + "'"
-      : '"' + path.replace(/"/g, '\\"') + '"';
+    let q;
+    if (sh === "gitbash" || sh === "wsl") {
+      q = "'" + path.replace(/'/g, "'\\''") + "'";        // POSIX 单引号字面量
+    } else if (sh === "powershell") {
+      // PowerShell 单引号字面量：双引号内 $()/反引号/$var 仍会展开($、(、) 在 Windows 文件名合法)→命令注入；
+      // 单引号字面串不做任何展开，内部单引号翻倍转义。
+      q = "'" + path.replace(/'/g, "''") + "'";
+    } else {
+      // cmd：Windows 文件名不可含 "，双引号即可中和 & | < > ^ 等；cmd 无 $() 子表达式
+      q = '"' + path.replace(/"/g, "") + '"';
+    }
     const map = {
       ".py": "python " + q,
       ".js": "node " + q,

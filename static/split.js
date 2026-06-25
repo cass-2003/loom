@@ -46,8 +46,10 @@
     cb.classList.add("has-side");
     cb.classList.toggle("split-v", orient === "v");
     grp.classList.remove("hidden"); rz.classList.remove("hidden");
+    const avail = (orient === "v" ? cb.clientHeight : cb.clientWidth) || 0;
     const saved = parseInt(localStorage.getItem(SIZE_KEY) || "", 10);
-    const px = saved >= 120 ? saved : Math.round((orient === "v" ? cb.clientHeight : cb.clientWidth) * 0.42) || 480;
+    let px = saved >= 120 ? saved : Math.round(avail * 0.42) || 480;
+    if (avail > 240) px = Math.max(120, Math.min(px, avail - 120));   // 上界：给主编辑区至少留 120px，防越界/损坏值吃满
     grp.style.flex = "0 0 " + px + "px";
     grp.style.width = ""; grp.style.height = "";
     refit();

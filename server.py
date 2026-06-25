@@ -86,9 +86,22 @@ EXEC_TIMEOUT = 120  # 命令执行超时（秒）
 # Windows 下隐藏子进程控制台窗口（桌面/windowed 模式运行命令时不弹黑框）
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
+def _python_interp():
+    """跑 .py 用的解释器。打包(frozen)时 sys.executable 是 Workbench.exe，
+    拿它跑脚本只会再开一个 Workbench；此时改去 PATH 找真 python。"""
+    if not getattr(sys, "frozen", False) and sys.executable:
+        return sys.executable
+    import shutil
+    for name in ("python", "python3", "py"):
+        p = shutil.which(name)
+        if p:
+            return p
+    return "python"
+
+
 # 按扩展名选解释器（运行当前文件）。值是参数列表前缀，文件路径追加在后。
 RUN_INTERPRETERS = {
-    ".py": [sys.executable or "python"],
+    ".py": [_python_interp()],
     ".js": ["node"],
     ".mjs": ["node"],
     ".cjs": ["node"],
@@ -112,6 +125,37 @@ def resolve_cwd(rel: str) -> Path:
         d = d.parent
     # safe_resolve 已确保在 ROOT 内
     return d
+
+
+def atomic_write_bytes(fp: Path, data: bytes):
+    """原子写：写同目录临时文件并 fsync，再 os.replace 覆盖目标。
+    规避 'wb' 在 open() 时就把原文件截断为 0——写入中途(磁盘满/断电/被杀)旧数据已毁。"""
+    import tempfile
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(fp.parent), prefix=".wb-tmp-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, str(fp))   # 同卷原子替换
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def within_root_real(p) -> bool:
+    """p 的真实路径(解析符号链接/Windows junction 后)是否仍在 ROOT 内。
+    os.walk 会跟进 junction(被当普通目录)，据此剪掉指向 ROOT 外的目录/文件。"""
+    try:
+        rp = os.path.realpath(str(p))
+        root = os.path.realpath(str(ROOT))
+        return rp == root or rp.startswith(root + os.sep)
+    except OSError:
+        return False
 
 
 def run_shell(cmd: str, cwd: Path, timeout: int = EXEC_TIMEOUT):
@@ -442,11 +486,14 @@ class TermSession:
     真 PTY（winpty/conpty）下 shell 自带回显，后端绝不回灌；仅 pipe 回退才需补偿。
     """
 
+    _BUF_CAP = 4 * 1024 * 1024  # 回滚缓冲上限 4MB；超出从头截断（_base 记累计丢弃量，保持绝对 offset）
+
     def __init__(self, shell_id: str, cols: int = 80, rows: int = 24):
         self.shell_id = shell_id
         self.cols = max(1, int(cols or 80))
         self.rows = max(1, int(rows or 24))
         self._buf = bytearray()
+        self._base = 0          # 已从缓冲头截断的累计字节数（绝对 offset = _base + len(_buf)）
         self._lock = threading.Lock()
         self._alive = True
         self._mode = None  # "winpty" | "conpty" | "pipe"
@@ -549,6 +596,7 @@ class TermSession:
         self._closed = False
         with self._lock:
             self._buf = bytearray()
+            self._base = 0
 
     # ---------- winpty (pywinpty 真 PTY) ----------
     def _start_winpty(self):
@@ -694,7 +742,7 @@ class TermSession:
                 break
             if data:
                 with self._lock:
-                    self._buf.extend(data.encode("utf-8", "replace"))
+                    self._append(data.encode("utf-8", "replace"))
             else:
                 time.sleep(0.02)
 
@@ -721,7 +769,7 @@ class TermSession:
             if not rok or nread.value == 0:
                 break
             with self._lock:
-                self._buf.extend(bytes(buf[:nread.value]))
+                self._append(bytes(buf[:nread.value]))
 
     def _reader_pipe(self):
         stream = self._proc.stdout
@@ -738,10 +786,10 @@ class TermSession:
                 text = self._decoder.decode(chunk)
                 if text:
                     with self._lock:
-                        self._buf.extend(text.encode("utf-8"))
+                        self._append(text.encode("utf-8"))
             else:
                 with self._lock:
-                    self._buf.extend(chunk)
+                    self._append(chunk)
 
     # ---------- 输入 / 缩放 ----------
     def write(self, data: bytes):
@@ -774,7 +822,7 @@ class TermSession:
             if self._backend_echo:
                 with self._lock:
                     # 回显：\n 显示为 \r\n 让 xterm 正确换行回到行首
-                    self._buf.extend(out.replace(b"\n", b"\r\n"))
+                    self._append(out.replace(b"\n", b"\r\n"))
             if self._term_enc != "utf-8":
                 try:
                     out = out.decode("utf-8", "replace").encode(
@@ -803,14 +851,23 @@ class TermSession:
         # pipe 模式无真 PTY，缩放无操作
 
     # ---------- 读出 / 关闭 ----------
+    def _append(self, data: bytes):
+        """追加输出进回滚缓冲（调用方须持 self._lock）。超上限从头截断并累加 _base。"""
+        self._buf.extend(data)
+        excess = len(self._buf) - self._BUF_CAP
+        if excess > 0:
+            del self._buf[:excess]
+            self._base += excess
+
     def read_since(self, offset: int):
         with self._lock:
-            total = len(self._buf)
-            if offset < 0:
-                offset = 0
+            base = self._base
+            total = base + len(self._buf)     # 绝对累计字节数
+            if offset < base:
+                offset = base                 # 客户端落后于截断点：从当前缓冲头给起（中间旧输出已丢）
             if offset > total:
                 offset = total
-            chunk = bytes(self._buf[offset:])
+            chunk = bytes(self._buf[offset - base:])
         return chunk, total, self._is_alive()
 
     def _is_alive(self):
@@ -954,12 +1011,32 @@ class Handler(BaseHTTPRequestHandler):
         pass  # 安静
 
     # ---------- helpers ----------
+    # 统一安全响应头。CSP 的关键是 script-src 不含 'unsafe-inline' —— 这会拦掉
+    # 内联事件处理器(<img onerror=…>)与内联 <script>，即便消毒被绕过也挡住 XSS→/api/exec RCE；
+    # 保留 'unsafe-eval' 以兼容个别 vendored 库(mermaid/vditor)的 eval/new Function。
+    _CSP = ("default-src 'self'; "
+            "script-src 'self' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' blob: data:; "
+            "worker-src 'self' blob:; child-src 'self' blob:; "
+            "frame-src 'self' blob: data:; media-src 'self' blob: data:; "
+            "object-src 'none'; base-uri 'none'; form-action 'none'")
+
+    def _sec_headers(self):
+        self.send_header("Content-Security-Policy", self._CSP)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+
     def _json(self, obj, status=200):
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store, max-age=0")
+        self._sec_headers()
         self.end_headers()
         self.wfile.write(data)
 
@@ -1019,6 +1096,7 @@ class Handler(BaseHTTPRequestHandler):
         # 禁缓存：本地单用户工具，且 pywebview/WebView2 会缓存 app.js/style.css，
         # 重新打包后窗口仍显示旧前端。no-store 强制每次取最新。
         self.send_header("Cache-Control", "no-store, max-age=0")
+        self._sec_headers()
         self.end_headers()
         self.wfile.write(data)
 
@@ -1187,7 +1265,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = fp.read_bytes()
         except OSError as e:
-            return self._err(f"read failed: {e}", 500)
+            return self._err("读取失败", 500)
         if b"\x00" in raw:
             return self._json({"kind": "binary", "size": size, "name": fp.name})
         try:
@@ -1214,7 +1292,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = fp.read_bytes()
         except OSError as e:
-            return self._err(f"read failed: {e}", 500)
+            return self._err("读取失败", 500)
         return self._send_bytes(data, ctype)
 
     # 忽略遍历的目录名（避免巨量/无关文件拖慢快速打开）
@@ -1231,10 +1309,11 @@ class Handler(BaseHTTPRequestHandler):
         skip = self._FLAT_SKIP_DIRS
         limit = self._FLAT_LIMIT
         for dirpath, dirnames, filenames in os.walk(ROOT):
-            # 原地裁剪要进入的子目录（忽略隐藏的 $ 卷目录与黑名单目录）
+            # 原地裁剪要进入的子目录（忽略隐藏的 $ 卷目录、黑名单目录、以及指向 ROOT 外的 junction）
             dirnames[:] = [
                 d for d in dirnames
                 if d not in skip and not d.startswith("$")
+                and within_root_real(Path(dirpath) / d)
             ]
             dirnames.sort(key=str.lower)
             for name in sorted(filenames, key=str.lower):
@@ -1242,6 +1321,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     rel = str(fp.relative_to(ROOT)).replace("\\", "/")
                 except ValueError:
+                    continue
+                if not within_root_real(fp):   # 跳过指向 ROOT 外的符号链接/junction 文件
                     continue
                 out.append(rel)
                 if len(out) >= limit:
@@ -1286,10 +1367,13 @@ class Handler(BaseHTTPRequestHandler):
 
         for dirpath, dirnames, filenames in os.walk(ROOT):
             dirnames[:] = [d for d in dirnames
-                           if d not in skip and not d.startswith("$")]
+                           if d not in skip and not d.startswith("$")
+                           and within_root_real(Path(dirpath) / d)]
             dirnames.sort(key=str.lower)
             for name in sorted(filenames, key=str.lower):
                 fp = Path(dirpath) / name
+                if not within_root_real(fp):   # 不读取 ROOT 外的 junction/符号链接目标
+                    continue
                 try:
                     st = fp.stat()
                 except OSError:
@@ -1352,11 +1436,10 @@ class Handler(BaseHTTPRequestHandler):
         if fp.is_dir():
             return self._err("path is a directory")
         try:
-            fp.parent.mkdir(parents=True, exist_ok=True)
-            # write_bytes 不做换行转换，保留原始 \n（避免 Windows 上被强制 CRLF）
-            fp.write_bytes(data)
-        except OSError as e:
-            return self._err(f"write failed: {e}", 500)
+            # 原子写，保留原始 \n（不做 CRLF 转换）；写入中断不会截断旧文件
+            atomic_write_bytes(fp, data)
+        except OSError:
+            return self._err("写入失败", 500)
         return self._json({"ok": True, "size": len(data)})
 
     # ---------- 文件操作（新建/重命名/删除）----------
@@ -1389,8 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
                 target.mkdir(parents=False)
             else:
                 target.write_bytes(b"")
-        except OSError as e:
-            return self._err(f"创建失败: {e}", 500)
+        except OSError:
+            return self._err("创建失败", 500)
         return self._json({"ok": True, "path": self._rel_of(target), "type": kind})
 
     def _api_fs_rename(self, body):
@@ -1408,11 +1491,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._err("源不存在", 404)
         dst = src.parent / new_name
         if dst.exists():
-            return self._err("目标已存在")
+            # 仅大小写改名(Windows 大小写不敏感)时 dst.exists() 会把自己当成已存在 → 放行同一实体
+            try:
+                same = os.path.samefile(str(dst), str(src))
+            except OSError:
+                same = False
+            if not same:
+                return self._err("目标已存在")
         try:
             src.rename(dst)
-        except OSError as e:
-            return self._err(f"重命名失败: {e}", 500)
+        except OSError:
+            return self._err("重命名失败", 500)
         return self._json({"ok": True, "path": self._rel_of(dst),
                            "type": "dir" if dst.is_dir() else "file"})
 
@@ -1432,7 +1521,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 target.unlink()
         except OSError as e:
-            return self._err(f"删除失败: {e}", 500)
+            return self._err("删除失败", 500)
         return self._json({"ok": True})
 
     # ---------- 便签 / Todo ----------
@@ -1477,10 +1566,9 @@ class Handler(BaseHTTPRequestHandler):
         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         fp = self._notes_path()
         try:
-            fp.parent.mkdir(parents=True, exist_ok=True)
-            fp.write_bytes(data)
-        except OSError as e:
-            return self._err(f"保存失败: {e}", 500)
+            atomic_write_bytes(fp, data)   # 原子写：notes.json 是 todo/便签唯一存储，中断不可截断
+        except OSError:
+            return self._err("保存失败", 500)
         return self._json({"ok": True})
 
     # ---------- 粘贴图片存盘 ----------
@@ -1542,9 +1630,9 @@ class Handler(BaseHTTPRequestHandler):
             if fp.exists():
                 fname = f"{stem}-{ts}-{int(time.time() * 1000000) % 1000000:06d}{ext}"
                 fp = assets_dir / fname
-            fp.write_bytes(data)
-        except OSError as e:
-            return self._err(f"保存失败: {e}", 500)
+            atomic_write_bytes(fp, data)
+        except OSError:
+            return self._err("保存失败", 500)
         rel = self._rel_of(fp)
         return self._json({"ok": True, "path": rel, "size": len(data)})
 
@@ -1648,6 +1736,16 @@ class Handler(BaseHTTPRequestHandler):
             cols, rows = 80, 24
         cols = max(1, min(cols, 1000))
         rows = max(1, min(rows, 1000))
+        # 回收已自行退出(shell exit)的死会话，免得它们白占 MAX_TERMS 名额
+        with TERMS_LOCK:
+            dead = [(s, ss) for s, ss in TERMS.items() if not ss._is_alive()]
+            for s, _ in dead:
+                TERMS.pop(s, None)
+        for _, ss in dead:
+            try:
+                ss.close()   # close 可能阻塞(ClosePseudoConsole)，放锁外执行
+            except Exception:
+                pass
         with TERMS_LOCK:
             if len(TERMS) >= MAX_TERMS:
                 return self._err(f"会话数已达上限（{MAX_TERMS}），请先关闭其它终端", 429)
@@ -1828,7 +1926,7 @@ class Handler(BaseHTTPRequestHandler):
         args = ["log", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"]
         if ref == "__all__":
             args.append("--all")
-        elif ref and re.fullmatch(r"[\w./-]+", ref):
+        elif ref and self._valid_ref(ref):   # 用统一校验器：拒前导 '-'(选项注入)/'..'/.lock
             args.append(ref)
         code, out, err = run_git(args, repo)
         commits = []
@@ -1983,13 +2081,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         repo, repo_rel, fp = info
         if body.get("untracked"):
-            # 未跟踪文件：直接删除（仍受 ROOT 约束）
+            # 未跟踪文件/目录：直接删除（仍受 ROOT 约束）
             try:
+                if fp.is_dir():
+                    import shutil
+                    shutil.rmtree(fp)
+                    return self._json({"ok": True, "output": "已删除未跟踪目录"})
                 if fp.is_file():
                     fp.unlink()
-                return self._json({"ok": True, "output": "已删除未跟踪文件"})
-            except OSError as e:
-                return self._err(f"删除失败: {e}", 500)
+                    return self._json({"ok": True, "output": "已删除未跟踪文件"})
+                return self._err("目标不存在", 404)
+            except OSError:
+                return self._err("删除失败", 500)
         code, out, err = run_git(["checkout", "--", repo_rel], repo)
         return self._json({"ok": code == 0, "output": (out + err).strip()})
 

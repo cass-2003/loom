@@ -121,8 +121,15 @@ async function vditorUploadHandler(files) {
 
 // 懒创建 Vditor 实例（首次打开 md 时）
 function ensureVditor(initialValue, onReady) {
-  if (vd.inst) { onReady && onReady(); return; }
+  if (vd.inst) {
+    // 记录"最新"挂载意图。就绪则立即执行；未就绪则交给 after() 执行最新那个，
+    // 避免快速连切 md 标签时 after() 跑首个标签的陈旧 onReady → vd.curPath 与 activeTab 错位。
+    vd.pendingMount = onReady || null;
+    if (vd.ready) { const m = vd.pendingMount; vd.pendingMount = null; if (m) m(); }
+    return;
+  }
   vd.ready = false;
+  vd.pendingMount = onReady || null;
   vd.inst = new Vditor("vditor", {
     cdn: "/static/vendor/vditor",
     mode: "ir",                       // 默认即时渲染
@@ -160,7 +167,8 @@ function ensureVditor(initialValue, onReady) {
     after() {
       vd.ready = true;
       if (vd.pending != null) { vd.inst.setValue(vd.pending); vd.pending = null; }
-      onReady && onReady();
+      const m = vd.pendingMount; vd.pendingMount = null;   // 跑"最新"挂载，而非首建时的陈旧闭包
+      if (m) m();
     },
   });
 }
@@ -880,9 +888,7 @@ function activateTab(path) {
     const vbtn = $("#btn-view-edit");
     if (vbtn) { vbtn.textContent = "所见即所得"; vbtn.disabled = true; }
     const mount = () => { vd.curPath = path; vditorSetValue(content); };
-    ensureVditor(content, mount);
-    // 实例已存在则直接切内容（ensureVditor 的 onReady 仅首建时在 after 里触发）
-    if (vd.inst && vd.ready) mount();
+    ensureVditor(content, mount);   // 就绪→立即挂载；未就绪→记为 pendingMount，after() 跑最新那个
   } else {
     $("#editor").value = tab.draft != null ? tab.draft : "";
     gutterLineCount = -1; curGLine = -1;  // 强制重建行号
@@ -902,6 +908,13 @@ function activateTab(path) {
       if (isMd && viewMode === "preview") { viewMode = "split"; applyViewMode("split", true); }
       requestAnimationFrame(() => gotoEditorLine(ln));
     }
+  }
+  // 切换标签后重置查找状态：旧文件的匹配坐标不能用到新文件（防 replaceCurrent 错位替换）
+  find.matches = [];
+  find.idx = -1;
+  if (find.open) {
+    if (state.kind === "text") { computeMatches(); updateFindCount(); }
+    else closeFind();
   }
   highlightTreeRow(path);
   renderTabs();
@@ -1180,7 +1193,7 @@ function exportHtml() {
   const title = (state.current || "document").split("/").pop().replace(/\.(md|markdown)$/i, "");
   const theme = document.documentElement.getAttribute("data-theme") || "dark";
   const css = collectStyleText();
-  const bodyHtml = preview.innerHTML;
+  const bodyHtml = sanitizeHtml(preview.innerHTML);   // 导出文件会在任意上下文打开，显式再消毒一次
   const doc =
 `<!DOCTYPE html>
 <html lang="zh" data-theme="${theme}">
@@ -1213,10 +1226,34 @@ ${bodyHtml}
   setMsg("已导出 " + title + ".html", "ok");
 }
 
+// ---------- HTML 消毒（零依赖，防存储型 XSS→本机 RCE）----------
+// 用惰性 <template> 解析(不触发资源加载/脚本执行)，移除危险元素并剥离所有 on* 事件属性
+// 与 javascript:/vbscript:/data:text/html 类 URL，使 Markdown/文本内容里的 <img onerror=…>
+// 之类无法经 innerHTML 触发脚本（再经同源 /api/exec 升级为本机命令执行）。
+const SANITIZE_DROP = new Set(["SCRIPT","IFRAME","OBJECT","EMBED","LINK","META","BASE","FORM","INPUT","BUTTON","TEXTAREA","SELECT","OPTION","FRAME","FRAMESET"]);
+const SANITIZE_URL_ATTRS = ["href","src","action","formaction","poster","background"];
+function sanitizeHtml(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = String(html == null ? "" : html);
+  tpl.content.querySelectorAll("*").forEach((el) => {
+    if (SANITIZE_DROP.has(el.tagName)) { el.remove(); return; }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on") || name === "srcdoc") { el.removeAttribute(attr.name); continue; }
+      if (name === "style" && /expression\s*\(|javascript:/i.test(attr.value)) { el.removeAttribute(attr.name); continue; }
+      if (SANITIZE_URL_ATTRS.includes(name) || name.endsWith(":href")) {
+        const v = (attr.value || "").replace(/[\s\u0000-\u001f]+/g, "").toLowerCase();
+        if (/^(javascript|vbscript):/.test(v) || v.startsWith("data:text/html")) el.removeAttribute(attr.name);
+      }
+    }
+  });
+  return tpl.innerHTML;
+}
+
 // ---------- 预览 ----------
 function renderPreview() {
   if (state.kind !== "text") return;
-  const html = marked.parse($("#editor").value);
+  const html = sanitizeHtml(marked.parse($("#editor").value));
   const preview = $("#preview");
   preview.innerHTML = html;
   // Markdown 增强：仅对 .md/.markdown 启用工具栏、标题锚点、大纲、mermaid
@@ -1938,6 +1975,10 @@ async function initTree() {
 
 // 切换工作根目录后整体重载（桌面版「打开文件夹」用）
 async function reloadRoot(path) {
+  // 有未保存改动(主组任意标签或分屏副组)先确认，避免「打开文件夹」静默丢弃编辑
+  const anyDirty = state.dirty || state.tabs.some(t => t.dirty)
+    || (window.split && typeof window.split.hasUnsaved === "function" && window.split.hasUnsaved());
+  if (anyDirty && !confirm("有未保存的修改，切换工作目录将丢弃它们。确定继续？")) return;
   // 关闭所有标签 + 清空编辑区，回到欢迎页
   state.tabs = [];
   state.activeTab = null;
@@ -2032,17 +2073,20 @@ async function restoreWorkspace() {
   try { data = JSON.parse(localStorage.getItem(WS_KEY) || "null"); } catch { data = null; }
   if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
   wsRestoring = true;
-  // 校验路径仍存在：用 files-flat 列表过滤
-  let valid = null;
   try {
-    const flat = await fetch("/api/files-flat").then(r => r.json());
-    if (flat && Array.isArray(flat.files)) valid = new Set(flat.files);
-  } catch {}
-  for (const p of data.tabs) {
-    if (valid && !valid.has(p)) continue;
-    await openFile(p, true);
+    // 校验路径仍存在：仅当 files-flat 未被截断时才当存在性判据（截断会误删超 2000 项之外的标签）
+    let valid = null;
+    try {
+      const flat = await fetch("/api/files-flat").then(r => r.json());
+      if (flat && Array.isArray(flat.files) && !flat.truncated) valid = new Set(flat.files);
+    } catch {}
+    for (const p of data.tabs) {
+      if (valid && !valid.has(p)) continue;
+      try { await openFile(p, true); } catch (_) {}   // 单个坏标签不阻断其余恢复
+    }
+  } finally {
+    wsRestoring = false;   // 任何异常都不能让 wsRestoring 永久卡 true（否则整会话工作区记忆失效）
   }
-  wsRestoring = false;
   const act = data.active;
   if (act && tabByPath(act)) activateTab(act);
   saveWorkspace();

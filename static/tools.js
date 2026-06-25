@@ -437,6 +437,17 @@ const TOOLS = [
           return s.map(v => names ? names[v] : v).join(", ");
         } catch { return "?"; }
       };
+      // 周字段：允许 7(=周日)，解析后再把 7 折成 0；不要对整段做 7→0 字符串替换(会毁掉含 7 的范围/步进)
+      const parseDow = (f) => {
+        const s = parseField(f, 0, 7);
+        if (s.has(7)) { s.delete(7); s.add(0); }
+        return s;
+      };
+      const humanDow = (f) => {
+        if (f === "*") return null;
+        try { return [...parseDow(f)].sort((a, b) => a - b).map(v => WD[v]).join(", "); }
+        catch { return "?"; }
+      };
       const run = () => {
         const parts = inp.value.trim().split(/\s+/);
         if (parts.length !== 5) { desc.textContent = "❌ 需要正好 5 段"; desc.style.color = "var(--danger)"; nextEl.textContent = ""; return; }
@@ -446,7 +457,7 @@ const TOOLS = [
           fields = {
             mi: parseField(mi, 0, 59), hr: parseField(hr, 0, 23),
             dom: parseField(dom, 1, 31), mon: parseField(mon, 1, 12),
-            dow: parseField(dow.replace(/7/g, "0"), 0, 6),
+            dow: parseDow(dow),
           };
         } catch (e) { desc.textContent = "❌ " + e.message; desc.style.color = "var(--danger)"; nextEl.textContent = ""; return; }
         desc.style.color = "";
@@ -457,7 +468,7 @@ const TOOLS = [
         else {
           bits.push("在 " + (hh ? hh + " 时" : "每小时") + " 的 " + (hm ? hm + " 分" : "每分钟"));
         }
-        const hdom = human(dom, 1, 31), hmon = human(mon, 1, 12, MON), hdow = human(dow.replace(/7/g, "0"), 0, 6, WD);
+        const hdom = human(dom, 1, 31), hmon = human(mon, 1, 12, MON), hdow = humanDow(dow);
         if (hdom) bits.push("每月 " + hdom + " 号");
         if (hmon) bits.push(hmon);
         if (hdow) bits.push(hdow);
