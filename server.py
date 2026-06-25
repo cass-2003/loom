@@ -205,6 +205,24 @@ def _shell_cmdline(shell_id: str):
     return f'"{path}"'
 
 
+def _shell_argv_pty(shell_id: str):
+    """shell id → 真 PTY（pywinpty）的 argv 列表。
+    pywinpty 收 list 形式（自行处理含空格路径的引号；传带引号的整串会被当成文件名 → 404）。
+    真 PTY 自带行规程：cmd 不需 /Q；bash 用交互登录 shell（-i -l，有真 tty 故作业控制正常）。"""
+    path = _shell_path(shell_id)
+    if not path:
+        return None
+    if shell_id == "powershell":
+        return [path, "-NoLogo"]
+    if shell_id == "cmd":
+        return [path]
+    if shell_id == "gitbash":
+        return [path, "-i", "-l"]
+    if shell_id == "wsl":
+        return [path]
+    return [path]
+
+
 # pipe 模式下"由谁回显"策略：
 #   - cmd  ：以 /Q 关掉自身回显 → 后端回显（敲字即时可见）。
 #   - bash ：无 PTY 自身不回显 → 后端回显。
@@ -403,11 +421,25 @@ if _IS_WIN:
         return OSError(f"{msg} (GetLastError={ctypes.get_last_error()})")
 
 
-class TermSession:
-    """一个 ConPTY 终端会话：持久 shell + 输出缓冲。
+# pywinpty（可选）：成熟的真 PTY 封装（内部走 ConPTY，失败再退 winpty-agent 后端）。
+# exe 打包内置；脚本模式可 `pip install pywinpty`。有它则终端走 OS 级真 PTY ——
+# 真回显 / 编码协商 / 行规程 / 作业控制 / Ctrl+C 全部由 PTY 处理，无需 pipe 模式的补偿。
+_HAS_WINPTY = False
+_winpty = None
+if _IS_WIN:
+    try:
+        import winpty as _winpty
+        _HAS_WINPTY = True
+    except Exception:
+        _winpty = None
+        _HAS_WINPTY = False
 
-    首选 ConPTY（CreatePseudoConsole）。若该 API 不可用则回退到
-    持久 subprocess + 管道（合并 stdout/stderr，无真 PTY 但可交互）。
+
+class TermSession:
+    """一个终端会话：持久 shell + 输出缓冲。
+
+    优先级：pywinpty 真 PTY → 本文件自带 ctypes ConPTY → 持久 subprocess + 管道。
+    真 PTY（winpty/conpty）下 shell 自带回显，后端绝不回灌；仅 pipe 回退才需补偿。
     """
 
     def __init__(self, shell_id: str, cols: int = 80, rows: int = 24):
@@ -417,8 +449,9 @@ class TermSession:
         self._buf = bytearray()
         self._lock = threading.Lock()
         self._alive = True
-        self._mode = None  # "conpty" | "pipe"
+        self._mode = None  # "winpty" | "conpty" | "pipe"
         self._closed = False
+        self._pty = None   # pywinpty PtyProcess（winpty 模式用）
         # pipe 模式：是否由后端负责回显（见 _SHELL_BACKEND_ECHO）。
         # conpty 模式有真 PTY，shell 自身回显，后端绝不回灌。
         self._backend_echo = _SHELL_BACKEND_ECHO.get(shell_id, True)
@@ -440,7 +473,18 @@ class TermSession:
 
         self._fallback_reason = ""
         started = False
-        if _IS_WIN and _HAS_CONPTY:
+        # ① 首选 pywinpty 真 PTY（最稳：真回显/编码/作业控制，删光 pipe 补偿）
+        if _IS_WIN and _HAS_WINPTY:
+            try:
+                self._start_winpty()
+                self._mode = "winpty"
+                self._start_reader()
+                started = True
+            except Exception as e:
+                self._pty = None
+                self._fallback_reason = f"winpty: {e}"
+        # ② 次选本文件自带的 ctypes ConPTY
+        if not started and _IS_WIN and _HAS_CONPTY:
             try:
                 self._start_conpty(cmdline)
                 self._mode = "conpty"
@@ -505,6 +549,20 @@ class TermSession:
         self._closed = False
         with self._lock:
             self._buf = bytearray()
+
+    # ---------- winpty (pywinpty 真 PTY) ----------
+    def _start_winpty(self):
+        argv = _shell_argv_pty(self.shell_id)
+        if not argv:
+            raise ValueError(f"未知 shell: {self.shell_id}")
+        # cwd 必须是有效目录，否则 pywinpty spawn 直接 FileNotFoundError；
+        # ROOT 异常时退回 None（默认工作目录）而非让 winpty 失败。
+        root = str(ROOT)
+        cwd = root if os.path.isdir(root) else None
+        # dimensions=(rows, cols)。真 PTY 自带回显/编码/Clear-Host/作业控制，
+        # 故不注入初始化命令、不规整 \r、不后端回显。
+        self._pty = _winpty.PtyProcess.spawn(
+            argv, cwd=cwd, dimensions=(self.rows, self.cols))
 
     # ---------- ConPTY ----------
     def _start_conpty(self, cmdline):
@@ -616,11 +674,29 @@ class TermSession:
 
     # ---------- 读循环 ----------
     def _reader(self):
-        if self._mode == "conpty":
+        if self._mode == "winpty":
+            self._reader_winpty()
+        elif self._mode == "conpty":
             self._reader_conpty()
         else:
             self._reader_pipe()
         self._alive = False
+
+    def _reader_winpty(self):
+        # pywinpty read() 返回 str（PTY 已协商好编码）；_buf 内统一存 UTF-8 字节。
+        # 进程结束时 read() 抛 EOFError → 退出；空闲返回空串则小睡避免空转。
+        while not self._closed:
+            try:
+                data = self._pty.read(8192)
+            except EOFError:
+                break
+            except Exception:
+                break
+            if data:
+                with self._lock:
+                    self._buf.extend(data.encode("utf-8", "replace"))
+            else:
+                time.sleep(0.02)
 
     def _reader_conpty(self):
         # 用 PeekNamedPipe 先窥探可用字节，只在有数据时才 ReadFile —— 避免无数据时
@@ -671,6 +747,14 @@ class TermSession:
     def write(self, data: bytes):
         if self._closed:
             return
+        if self._mode == "winpty":
+            # 真 PTY：直接写，回显/行规程由 PTY 处理，无需 \r 规整或后端回显。
+            if data:
+                try:
+                    self._pty.write(data.decode("utf-8", "replace"))
+                except Exception:
+                    pass
+            return
         if self._mode == "conpty":
             nwrote = wintypes.DWORD(0)
             cbuf = (ctypes.c_byte * len(data)).from_buffer_copy(data) if data else None
@@ -706,6 +790,12 @@ class TermSession:
     def resize(self, cols: int, rows: int):
         self.cols = max(1, int(cols))
         self.rows = max(1, int(rows))
+        if self._mode == "winpty" and not self._closed:
+            try:
+                self._pty.setwinsize(self.rows, self.cols)
+            except Exception:
+                pass
+            return
         if self._mode == "conpty" and not self._closed:
             hr = _ResizePseudoConsole(self._hpc, _COORD(self.cols, self.rows))
             if hr != 0:
@@ -726,6 +816,15 @@ class TermSession:
     def _is_alive(self):
         if not self._alive:
             return False
+        if self._mode == "winpty":
+            try:
+                if not self._pty.isalive():
+                    self._alive = False
+                    return False
+            except Exception:
+                self._alive = False
+                return False
+            return True
         if self._mode == "conpty":
             code = wintypes.DWORD(0)
             if _k32.GetExitCodeProcess(self._hProcess, ctypes.byref(code)):
@@ -771,6 +870,12 @@ class TermSession:
             return
         self._closed = True
         self._alive = False
+        if self._mode == "winpty":
+            try:
+                self._pty.terminate(force=True)
+            except Exception:
+                pass
+            return
         if self._mode == "conpty":
             try:
                 if getattr(self, "_hProcess", None):

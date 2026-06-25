@@ -1,7 +1,10 @@
 # 构建 Workbench 桌面版 exe（独立原生窗口程序，目标机无需安装 Python）
 #
-# 前置：pip install pyinstaller pywebview
+# 前置：pip install pyinstaller pywebview pywinpty
 #       目标机需有 WebView2 Runtime（Windows 11 默认自带）
+#       pywinpty 提供 OS 级真 PTY（真回显/编码/Ctrl+C/作业控制）；--collect-all winpty
+#       把它的原生件（conpty.dll / OpenConsole.exe / winpty-agent.exe / winpty.dll）打进 exe。
+#       脚本模式（python server.py）没装 pywinpty 也能跑，终端自动退回 pipe 模式。
 # 用法：在仓库根目录执行
 #   powershell -ExecutionPolicy Bypass -File build_exe.ps1
 #
@@ -18,7 +21,7 @@ Start-Sleep -Milliseconds 500
 # --windowed：GUI 程序，不带控制台黑窗
 # --add-data "static;static"：把整个 static/（含 vendor 离线库）打进 exe（运行时解压到 _MEIPASS）
 # 入口 desktop.py 会 import server，PyInstaller 自动一并打包
-pyinstaller --noconfirm --onefile --name Workbench --add-data "static;static" --icon icon.ico --windowed desktop.py
+pyinstaller --noconfirm --onefile --name Workbench --add-data "static;static" --collect-all winpty --icon icon.ico --windowed desktop.py
 
 if (Test-Path dist\Workbench.exe) {
     $mb = [math]::Round((Get-Item dist\Workbench.exe).Length / 1MB, 1)
