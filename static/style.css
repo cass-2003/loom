@@ -258,10 +258,12 @@ body.desktop.maximized #app { border: none; }
 #tabbar {
   display: flex; align-items: stretch; flex-shrink: 0; height: 36px;
   background: var(--bg2); border-bottom: 1px solid var(--border-soft);
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;          /* Firefox：隐藏滚动条 */
+  -ms-overflow-style: none;       /* 旧 Edge */
 }
-#tabbar::-webkit-scrollbar { height: 5px; }
-#tabbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* 隐藏顶部那条横向滚动条（VS Code 风格），改用鼠标滚轮横向滚动（见 app.js） */
+#tabbar::-webkit-scrollbar { height: 0; width: 0; display: none; }
 .tab {
   display: flex; align-items: center; gap: 7px; flex-shrink: 0;
   max-width: 200px; padding: 0 8px 0 12px; cursor: pointer;

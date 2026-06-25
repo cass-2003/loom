@@ -916,6 +916,15 @@ function closeTab(path) {
 function renderTabs() {
   if (window.saveWorkspace) saveWorkspace();
   const bar = $("#tabbar");
+  if (!bar._wheelBound) {
+    // 垂直滚轮 → 横向滚动标签栏（VS Code 风格；滚动条已在 CSS 隐藏），只绑一次
+    bar._wheelBound = true;
+    bar.addEventListener("wheel", (e) => {
+      if (!e.deltaY) return;
+      bar.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+  }
   bar.innerHTML = "";
   if (state.tabs.length === 0) {
     bar.classList.add("hidden");
