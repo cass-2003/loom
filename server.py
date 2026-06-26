@@ -53,10 +53,76 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"}
 MAX_TEXT_BYTES = 5 * 1024 * 1024  # 5MB 以上不当文本读
 
 ROOT = Path("/")  # 运行时覆盖
+# 空工作区标记：启动时若没有合法的 lastRoot，ROOT 保持为哨兵目录，
+# 前端通过 /api/config 的 hasWorkspace=false 渲染欢迎页而非文件树。
+NO_WORKSPACE = None
+# 配置文件读写锁（多线程 HTTP server 下，set-root 与读 config 可能并发）
+_CFG_LOCK = threading.Lock()
+
+
+def _config_dir() -> Path:
+    """全局配置目录：打包版用 %APPDATA%/Workbench，脚本版用 ~/.workbench。
+    跨会话持久化「最近工作区列表 / 上次活动根」，与 exe 升级解耦、多用户隔离。"""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return Path(base) / "Workbench"
+    return Path.home() / ".workbench"
+
+
+def _config_path() -> Path:
+    return _config_dir() / "config.json"
+
+
+def load_config() -> dict:
+    """读取全局配置。损坏/缺失返回空骨架，绝不抛异常（启动路径依赖它）。"""
+    empty = {"lastRoot": None, "recent": []}
+    fp = _config_path()
+    if not fp.is_file():
+        return empty
+    try:
+        data = json.loads(fp.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return empty
+        if not isinstance(data.get("recent"), list):
+            data["recent"] = []
+        if not isinstance(data.get("lastRoot"), str):
+            data["lastRoot"] = None
+        return data
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return empty
+
+
+def save_config(cfg: dict):
+    """原子写全局配置。调用方持 _CFG_LOCK。"""
+    fp = _config_path()
+    try:
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_bytes(fp, json.dumps(cfg, ensure_ascii=False, indent=2).encode("utf-8"))
+    except OSError:
+        pass  # 配置写失败不应让 set-root 整体失败（内存 ROOT 已切好）
+
+
+def _touch_recent(cfg: dict, root: Path):
+    """把 root 登记为最近活动工作区：置 lastRoot + 插入/上提 recent 项。最多保留 10 项。"""
+    root_str = str(root)
+    cfg["lastRoot"] = root_str
+    name = root.name or root_str
+    # 去重：已存在则上提到列表首位
+    cfg["recent"] = [r for r in cfg.get("recent", []) if r.get("path") != root_str]
+    cfg["recent"].insert(0, {"path": root_str, "name": name, "lastUsed": _now_iso()})
+    cfg["recent"] = cfg["recent"][:10]
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
 
 def safe_resolve(rel: str) -> Path:
-    """把相对路径解析到 ROOT 内, 阻止越界 (.. 穿越)。"""
+    """把相对路径解析到 ROOT 内, 阻止越界 (.. 穿越)。
+    空工作区(ROOT is None)时直接拒——前端应通过 /api/config 感知 hasWorkspace=false
+    并渲染欢迎页，不应调任何文件 API；这里挡住防越权/防 None 拼接报错。"""
+    if ROOT is None:
+        raise PermissionError("no workspace")
     rel = unquote(rel or "").lstrip("/\\")
     target = (ROOT / rel).resolve()
     if target != ROOT and ROOT not in target.parents:
@@ -1171,7 +1237,10 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/static/"):
             return self._serve_static(path[len("/static/"):])
         if path == "/api/root":
-            return self._json({"root": str(ROOT)})
+            return self._json({"root": str(ROOT) if ROOT is not None else None,
+                               "hasWorkspace": ROOT is not None})
+        if path == "/api/config":
+            return self._api_config()
         if path == "/api/tree":
             return self._api_tree(qs.get("path", [""])[0])
         if path == "/api/file":
@@ -1270,6 +1339,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/term/input": "_api_term_input",
             "/api/term/resize": "_api_term_resize",
             "/api/term/close": "_api_term_close",
+            "/api/set-root": "_api_set_root",
+            "/api/recent/remove": "_api_recent_remove",
         }
         if parsed.path in post_routes:
             handler = getattr(self, post_routes[parsed.path], None)
@@ -1651,6 +1722,68 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self._err("保存失败", 500)
         return self._json({"ok": True})
+
+    # ---------- 工作区 / 最近列表 ----------
+    def _api_config(self):
+        """GET /api/config → 全局配置 + 当前工作区状态。
+
+        前端启动据此决定：渲染欢迎页(hasWorkspace=false) 还是直接进工作区。
+        recent 列表里失效路径在前端置灰，这里不主动剔除（避免读盘开销 + 保留用户记忆）。
+        """
+        cfg = load_config()
+        return self._json({
+            "lastRoot": cfg.get("lastRoot"),
+            "recent": cfg.get("recent", []),
+            "currentRoot": str(ROOT) if ROOT is not None else None,
+            "hasWorkspace": ROOT is not None,
+        })
+
+    def _api_set_root(self, body):
+        """POST /api/set-root {path} → 切换工作根目录并持久化。
+
+        统一入口：浏览器版与桌面版都走这里改 ROOT（桌面版 open_folder 也改调此 API，
+        不再直接改 server.ROOT）。校验目录存在 + 真实路径（解析符号链接/junction），
+        防止把工作根设到一个指向敏感位置的 junction。
+        """
+        global ROOT
+        raw = body.get("path")
+        if not isinstance(raw, str) or not raw.strip():
+            return self._err("缺少 path")
+        try:
+            p = Path(raw).resolve()
+        except (OSError, ValueError):
+            return self._err("路径非法")
+        # realpath 再解析一次 junction/符号链接，避免工作根指向 ROOT 外的敏感目录
+        try:
+            rp = Path(os.path.realpath(str(p)))
+        except OSError:
+            return self._err("路径无法解析")
+        if not rp.is_dir():
+            return self._err("不是有效目录")
+        ROOT = rp
+        with _CFG_LOCK:
+            cfg = load_config()
+            _touch_recent(cfg, rp)
+            save_config(cfg)
+        return self._json({
+            "ok": True,
+            "root": str(ROOT),
+            "recent": cfg.get("recent", []),
+        })
+
+    def _api_recent_remove(self, body):
+        """POST /api/recent/remove {path} → 从最近列表移除一项（不改变当前 ROOT）。"""
+        raw = body.get("path")
+        if not isinstance(raw, str):
+            return self._err("缺少 path")
+        with _CFG_LOCK:
+            cfg = load_config()
+            cfg["recent"] = [r for r in cfg.get("recent", []) if r.get("path") != raw]
+            # 若移除的恰好是 lastRoot，清空 lastRoot 以免下次启动又指向它
+            if cfg.get("lastRoot") == raw:
+                cfg["lastRoot"] = None
+            save_config(cfg)
+        return self._json({"ok": True, "recent": cfg.get("recent", [])})
 
     # ---------- 粘贴图片存盘 ----------
     _IMG_EXT_BY_MIME = {
@@ -2390,13 +2523,19 @@ def main():
     ap.add_argument("--no-browser", action="store_true", help="启动时不自动打开浏览器")
     args = ap.parse_args()
 
+    # 工作根决策（IDE 式）：命令行显式路径 > 上次活动工作区(config.lastRoot) > 空工作区。
+    # 空工作区时 ROOT=None，前端渲染欢迎页让用户选「打开文件夹 / 最近列表」，
+    # 不再粗暴默认到盘符根或 exe 所在目录（那既不是用户工作目录又会撑爆文件树）。
     if args.root:
         ROOT = Path(args.root).resolve()
-    elif getattr(sys, "frozen", False):
-        ROOT = APP_DIR  # 打包后默认以 exe 所在文件夹为工作根
     else:
-        ROOT = Path(BASE_DIR.anchor or "/").resolve()  # 脚本所在盘根
-    if not ROOT.is_dir():
+        cfg = load_config()
+        last = cfg.get("lastRoot")
+        if last and Path(last).is_dir():
+            ROOT = Path(last).resolve()
+        else:
+            ROOT = None
+    if ROOT is not None and not ROOT.is_dir():
         print(f"根目录不存在: {ROOT}", file=sys.stderr)
         sys.exit(1)
 

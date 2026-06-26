@@ -207,10 +207,13 @@
         <div class="welcome-logo" data-icon="tools"></div>
         <h1>Workbench</h1>
         <p class="lead">轻量本地工作台</p>
-        <div class="welcome-hints">
-          <div class="hint"><span class="hint-i" data-icon="folder"></span>选文件编辑，Markdown 实时预览</div>
-          <div class="hint"><span class="hint-i" data-icon="git"></span>查看 Git 改动、提交推送</div>
-          <div class="hint"><span class="hint-i" data-icon="tools"></span>JSON / Base64 / 时间戳 等小工具</div>
+        <div class="welcome-actions">
+          <button id="welcome-open" class="welcome-btn primary"><span class="i" data-icon="folderOpen"></span>打开文件夹</button>
+          <button id="welcome-new" class="welcome-btn"><span class="i" data-icon="plus"></span>新建文件夹</button>
+        </div>
+        <div id="welcome-recent" class="welcome-recent hidden">
+          <div class="welcome-recent-head">最近打开</div>
+          <ul id="welcome-recent-list" class="welcome-recent-list"></ul>
         </div>
         <p class="muted kbd-tip"><kbd>Ctrl</kbd>+<kbd>S</kbd> 保存　·　<kbd>Ctrl</kbd>+<kbd>Enter</kbd> 提交</p>
       </div>

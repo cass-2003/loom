@@ -100,16 +100,22 @@ class WindowApi:
             return False
 
     def open_folder(self):
-        """弹系统文件夹选择框，选中后切换工作根目录，返回新路径。"""
+        """弹系统文件夹选择框，返回选中目录路径（不改 ROOT）。
+
+        实际切换由前端调 /api/set-root 完成——统一入口保证 config.json 的
+        最近列表/lastRoot 同步更新，桌面版与浏览器版走同一条路径。
+        """
         if not self._win:
             return None
         res = self._win.create_file_dialog(webview.FOLDER_DIALOG)
         if not res:
             return None
         path = res[0] if isinstance(res, (list, tuple)) else res
-        p = Path(path).resolve()
+        try:
+            p = Path(path).resolve()
+        except (OSError, ValueError):
+            return None
         if p.is_dir():
-            server.ROOT = p
             return str(p)
         return None
 
@@ -127,15 +133,20 @@ def _fatal(msg):
 
 
 def resolve_root():
-    """工作根目录：命令行首个非选项参数 > (打包后) exe 所在目录 > 盘符根。"""
+    """工作根目录（IDE 式）：命令行首个非选项参数 > 上次活动工作区(config.lastRoot) > 空工作区。
+
+    空工作区返回 None，前端渲染欢迎页让用户选「打开文件夹 / 最近列表」，
+    不再粗暴默认到 exe 所在目录（那不是用户工作目录）。
+    """
     for a in sys.argv[1:]:
         if not a.startswith("-"):
             p = Path(a).resolve()
             if p.is_dir():
                 return p
-    if getattr(sys, "frozen", False):
-        return server.APP_DIR
-    return Path(server.BASE_DIR.anchor or "/").resolve()
+    last = server.load_config().get("lastRoot")
+    if last and Path(last).is_dir():
+        return Path(last).resolve()
+    return None
 
 
 def main():

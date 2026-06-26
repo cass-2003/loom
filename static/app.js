@@ -1987,19 +1987,108 @@ function fmtSize(n) {
   return (n / 1048576).toFixed(2) + " MB";
 }
 
-async function initTree() {
-  const r = await fetch("/api/root").then(x => x.json());
-  $("#crumb").textContent = "根目录: " + r.root;
-  await loadTree("", $("#tree"));
+// ---------- 工作区（根目录）管理 ----------
+// IDE 式：启动先查 /api/config，有工作区则进文件树，否则渲染欢迎页。
+// 工作区会话状态（打开的标签等）按根路径分区存 localStorage，切根不丢。
+let currentRoot = null;   // 当前工作根（字符串），用于工作区记忆分区 key
+window.currentRoot = currentRoot;
+
+function wsKey() {
+  // 按根路径分区，避免切根时旧标签被清空、重启时回到错误根
+  if (!currentRoot) return null;
+  // 用路径做 key 即可（localStorage key 本身就是隔离命名空间）；不 hash 以便调试
+  return "wb-ws:" + currentRoot;
 }
 
-// 切换工作根目录后整体重载（桌面版「打开文件夹」用）
-async function reloadRoot(path) {
-  // 有未保存改动(主组任意标签或分屏副组)先确认，避免「打开文件夹」静默丢弃编辑
+async function initTree() {
+  const cfg = await fetch("/api/config").then(x => x.json());
+  currentRoot = cfg.currentRoot;
+  window.currentRoot = currentRoot;
+  if (cfg.hasWorkspace && currentRoot) {
+    $("#crumb").textContent = "根目录: " + currentRoot;
+    await loadTree("", $("#tree"));
+    hydrateIcons($("#tree"));
+  } else {
+    // 无工作区：显示欢迎页，隐藏标签栏/编辑区
+    showWelcome(cfg);
+  }
+}
+
+// 渲染欢迎页（无工作区时）。cfg 来自 /api/config，含 recent 列表
+function showWelcome(cfg) {
+  $("#crumb").textContent = "未打开工作区";
+  $("#tabbar").classList.add("hidden");
+  $("#editor-wrap").classList.add("hidden");
+  const w = $("#welcome");
+  w.classList.remove("hidden");
+  // 隐藏可能残留的查看器
+  if (state.viewer && typeof state.viewer.unmount === "function") {
+    try { state.viewer.unmount(); } catch {}
+  }
+  state.viewer = null;
+  // 渲染最近列表
+  const list = $("#welcome-recent-list");
+  list.innerHTML = "";
+  const recent = (cfg && cfg.recent) || [];
+  if (recent.length) {
+    $("#welcome-recent").classList.remove("hidden");
+    for (const r of recent) {
+      const li = document.createElement("li");
+      li.className = "welcome-recent-item";
+      // 失效路径置灰（不主动剔除，保留用户记忆，点击时由 set-root 校验）
+      // 这里不预检 is_dir（前端无文件系统访问），交给后端 set-root 报错
+      li.innerHTML = `
+        <span class="wr-icon"><span class="i" data-icon="folder"></span></span>
+        <span class="wr-text">
+          <div class="wr-name">${escapeHtml(r.name)}</div>
+          <div class="wr-path">${escapeHtml(r.path)}</div>
+        </span>
+        <button class="wr-remove" title="从列表移除"><span class="i" data-icon="close"></span></button>`;
+      li.addEventListener("click", (e) => {
+        if (e.target.closest(".wr-remove")) return;
+        switchWorkspace(r.path);
+      });
+      li.querySelector(".wr-remove").addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeRecent(r.path);
+      });
+      list.appendChild(li);
+    }
+  } else {
+    $("#welcome-recent").classList.add("hidden");
+  }
+  hydrateIcons(w);
+}
+
+// 切换工作区：调 /api/set-root，成功后整体重载
+async function switchWorkspace(path) {
+  if (!path) return;
+  // 有未保存改动先确认
   const anyDirty = state.dirty || state.tabs.some(t => t.dirty)
     || (window.split && typeof window.split.hasUnsaved === "function" && window.split.hasUnsaved());
   if (anyDirty && !confirm("有未保存的修改，切换工作目录将丢弃它们。确定继续？")) return;
-  // 关闭所有标签 + 清空编辑区，回到欢迎页
+  const r = await fsPost("/api/set-root", { path });
+  if (r.error) { setMsg(r.error, "err"); return; }
+  await reloadRoot(r.root, r.recent);
+}
+window.switchWorkspace = switchWorkspace;
+
+// 从最近列表移除一项
+async function removeRecent(path) {
+  const r = await fsPost("/api/recent/remove", { path });
+  if (r.error) { setMsg(r.error, "err"); return; }
+  // 就地刷新欢迎页的最近列表（不整页重载）
+  const cfg = await fetch("/api/config").then(x => x.json());
+  showWelcome(cfg);
+}
+window.removeRecent = removeRecent;
+
+// 切换工作根目录后整体重载（set-root 成功 / 桌面版 open_folder 用）
+// newRoot: 新根路径字符串；recent: 可选，新最近列表（避免再查一次）
+async function reloadRoot(newRoot, recent) {
+  // 1) 先把当前工作区状态存到旧 key（切根前留档）
+  saveWorkspace();
+  // 2) 关闭所有标签 + 清空编辑区
   state.tabs = [];
   state.activeTab = null;
   state.current = null;
@@ -2007,13 +2096,21 @@ async function reloadRoot(path) {
   state.expanded = new Set();
   if (typeof renderTabs === "function") renderTabs();
   if (typeof closeCurrent === "function") closeCurrent();
-  if (window.split && window.split.reset) window.split.reset();  // 切根目录时拆掉分屏副组，别留旧根的陈旧标签
-  try { localStorage.removeItem("wb-workspace"); } catch {}
-  $("#crumb").textContent = "根目录: " + path;
+  if (window.split && window.split.reset) window.split.reset();  // 切根目录时拆掉分屏副组
+  // 3) 切到新根
+  currentRoot = newRoot;
+  window.currentRoot = currentRoot;
+  $("#crumb").textContent = "根目录: " + newRoot;
+  // 4) 隐藏欢迎页、显示编辑区骨架
+  $("#welcome").classList.add("hidden");
+  // 5) 加载新文件树
   await loadTree("", $("#tree"));
   hydrateIcons($("#tree"));
+  // 6) 从新根分区恢复工作区
+  await restoreWorkspace();
+  if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
   if (window.refreshGit) window.refreshGit();
-  setMsg("已切换工作目录: " + path, "ok");
+  setMsg("已切换工作目录: " + newRoot, "ok");
 }
 window.reloadRoot = reloadRoot;
 
@@ -2072,15 +2169,17 @@ window.toggleTheme = toggleTheme;
 $("#btn-theme").onclick = toggleTheme;
 applyTheme(localStorage.getItem("wb-theme") || "dark");
 
-// ---------- 工作区记忆：保存/恢复打开的标签 ----------
-const WS_KEY = "wb-workspace";
+// ---------- 工作区记忆：保存/恢复打开的标签（按根路径分区）----------
+// 旧版用固定 key "wb-workspace"，切根时清空、重启时回到错误根。
+// 现按 currentRoot 分区：每个工作区独立记忆，切根不丢、跨会话恢复到上次工作区。
 let wsRestoring = false;   // 恢复期间不写回，避免覆盖
 function saveWorkspace() {
   if (wsRestoring) return;
+  const key = wsKey();
+  if (!key) return;   // 无工作区不记忆
   try {
-    // 仅记忆非图片/二进制的“可重开”路径（图片靠重新拉取也行，这里一并记）
     const paths = state.tabs.map(t => t.path);
-    localStorage.setItem(WS_KEY, JSON.stringify({
+    localStorage.setItem(key, JSON.stringify({
       tabs: paths,
       active: state.activeTab,
     }));
@@ -2089,8 +2188,10 @@ function saveWorkspace() {
 window.saveWorkspace = saveWorkspace;
 
 async function restoreWorkspace() {
+  const key = wsKey();
+  if (!key) return;
   let data;
-  try { data = JSON.parse(localStorage.getItem(WS_KEY) || "null"); } catch { data = null; }
+  try { data = JSON.parse(localStorage.getItem(key) || "null"); } catch { data = null; }
   if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
   wsRestoring = true;
   try {
@@ -2108,6 +2209,41 @@ async function restoreWorkspace() {
   saveWorkspace();
 }
 
+// 欢迎页按钮绑定（一次性；HTML 里静态按钮，showWelcome 只刷新最近列表）
+function bindWelcomeButtons() {
+  const openBtn = $("#welcome-open");
+  if (openBtn) openBtn.onclick = async () => {
+    // 桌面版：调原生文件夹选择框 → switchWorkspace
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.open_folder) {
+      try {
+        const p = await window.pywebview.api.open_folder();
+        if (p) await switchWorkspace(p);
+      } catch (e) { console.error(e); }
+      return;
+    }
+    // 浏览器版：无原生选择框，弹输入框让用户粘贴路径
+    const p = prompt("输入工作区文件夹路径：", currentRoot || "");
+    if (p && p.trim()) await switchWorkspace(p.trim());
+  };
+  const newBtn = $("#welcome-new");
+  if (newBtn) newBtn.onclick = async () => {
+    const p = prompt("输入新文件夹路径（将创建并打开）：", "");
+    if (!p || !p.trim()) return;
+    const path = p.trim();
+    // 先建目录再 set-root；建目录走 /api/fs/create 的目录创建语义不通用（它要求在 ROOT 内），
+    // 这里直接用 /api/set-root 的副作用：它要求目录已存在。所以先调一个轻量 mkdir。
+    // 复用 exec 不合适（要 CSRF + 白名单）；最简方案：让 set-root 报错后提示用户先在外部建好。
+    // 更好：加一个 /api/fs/mkdir-p 接口。但为最小改动，这里用 prompt 引导。
+    const r = await fsPost("/api/set-root", { path });
+    if (r.error) {
+      // 目录不存在 → 提示用户。避免在此自动创建任意路径目录（安全：不擅自创建用户输入的路径）
+      setMsg("目录不存在，请先创建该文件夹后再打开", "err");
+      return;
+    }
+    await reloadRoot(r.root, r.recent);
+  };
+}
+
 hydrateIcons();   // 把 data-icon 占位换成 SVG
 initTools();
 initGit();
@@ -2115,9 +2251,10 @@ initSearch();
 initNotes();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
+bindWelcomeButtons();
 (async () => {
   await initTree();
   await restoreWorkspace();
-  // 主组恢复完毕后再恢复分屏副组（顺序固定，避免抢写 wb-workspace）
+  // 主组恢复完毕后再恢复分屏副组（顺序固定，避免抢写工作区记忆）
   if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
 })();

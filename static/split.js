@@ -11,7 +11,12 @@
 (function () {
   "use strict";
   const $ = (s) => document.querySelector(s);
-  const SIZE_KEY = "wb-split-size", ORIENT_KEY = "wb-split-orient", WS_KEY = "wb-split";
+  const SIZE_KEY = "wb-split-size", ORIENT_KEY = "wb-split-orient";
+  // 按根路径分区（同 app.js 的 wsKey），切根时旧副组标签不串到新根
+  const WS_KEY = () => {
+    const r = window.currentRoot;
+    return r ? ("wb-split:" + r) : null;
+  };
 
   const side = { tabs: [], active: null, dirty: false };
   let focus = "main";                                  // "main" | "side"
@@ -27,8 +32,10 @@
   // ---------- 持久化 ----------
   function persist() {
     if (restoring) return;
+    const key = WS_KEY();
+    if (!key) return;
     try {
-      localStorage.setItem(WS_KEY, JSON.stringify({
+      localStorage.setItem(key, JSON.stringify({
         tabs: side.tabs.map(t => t.path), active: side.active, orient,
       }));
     } catch (_) {}
@@ -398,7 +405,9 @@
   // ---------- 会话恢复 ----------
   async function restore() {
     let data;
-    try { data = JSON.parse(localStorage.getItem(WS_KEY) || "null"); } catch (_) { data = null; }
+    const key = WS_KEY();
+    if (!key) return;
+    try { data = JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { data = null; }
     if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
     restoring = true;
     orient = data.orient === "v" ? "v" : "h";
@@ -492,15 +501,18 @@
     }
     renderSideTabs();
   }
-  // 切换工作根目录 → 整组清空（旧根路径全部作废）
+  // 切换工作根目录 → 整组清空（内存）。localStorage 的旧根分区保留不动，
+  // 这样下次切回旧根还能 restore 出原来的副组标签（同主组 saveWorkspace 的语义）。
   function reset() {
+    // 先把当前副组状态存到旧根 key（切根前留档），再清内存
+    persist();
     side.tabs = []; side.active = null; side.dirty = false;
     const ed = $("#side-editor"); if (ed) ed.value = "";
     setFocus("main");
-    renderSideTabs();   // 空组 → applyLayout 收起 #side-group/#side-resizer
     sideGutterN = -1;
     sideGutter();
-    try { localStorage.removeItem(WS_KEY); } catch (_) {}   // 最后删，避免被 persist 写回旧根标签
+    // 不调 renderSideTabs（它会 persist 空数组覆盖刚留的档）；直接收起布局
+    applyLayout();
   }
 
   // ---------- 对外接口 ----------
