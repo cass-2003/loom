@@ -2864,7 +2864,11 @@ class Handler(BaseHTTPRequestHandler):
         for line in out.splitlines():
             if line.startswith("## "):
                 head = line[3:]
-                branch = head.split("...")[0].strip()
+                unborn = re.match(r"No commits yet on (.+)", head)
+                if unborn:
+                    branch = unborn.group(1).strip()
+                else:
+                    branch = head.split("...")[0].strip()
                 if "[ahead " in head:
                     ahead = int(head.split("[ahead ")[1].split("]")[0].split(",")[0])
                 if "behind " in head:
@@ -2887,9 +2891,11 @@ class Handler(BaseHTTPRequestHandler):
             repo_rel = workspace_relpath(repo)
         except ValueError:
             repo_rel = ""
+        head_code, _, _ = run_git(["rev-parse", "--verify", "HEAD"], repo)
         # 唯一文件数（一个文件可能同时在两组）作为徽标计数
         changed = len({e["repoPath"] for e in staged + unstaged})
         return self._json({"repo": repo_rel, "branch": branch,
+                           "hasHead": head_code == 0,
                            "ahead": ahead, "behind": behind,
                            "staged": staged, "unstaged": unstaged, "changed": changed})
 
@@ -2914,14 +2920,15 @@ class Handler(BaseHTTPRequestHandler):
         if repo is None:
             return
         cur = ""
-        code, out, _ = run_git(["rev-parse", "--abbrev-ref", "HEAD"], repo)
+        code, out, _ = run_git(["symbolic-ref", "--quiet", "--short", "HEAD"], repo)
         if code == 0:
             cur = out.strip()
+        head_code, _, _ = run_git(["rev-parse", "--verify", "HEAD"], repo)
         branches = []
         code, out, _ = run_git(["branch", "--format=%(refname:short)"], repo)
         if code == 0:
             branches = [b.strip() for b in out.splitlines() if b.strip()]
-        return self._json({"current": cur, "branches": branches})
+        return self._json({"current": cur, "branches": branches, "hasHead": head_code == 0})
 
     def _api_git_log(self, rel, ref=""):
         repo = self._resolve_repo(rel)

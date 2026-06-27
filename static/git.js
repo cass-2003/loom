@@ -15,6 +15,7 @@ const gitState = {
   ref: "",
   branchItems: [],
   branchFilterOpen: false,
+  hasHead: false,
   stagedFiles: [],
   unstagedFiles: [],
 };
@@ -33,17 +34,20 @@ function setGitControls(repo, d = {}) {
   const staged = d.staged || [];
   const unstaged = d.unstaged || [];
   const changed = repo ? (d.changed || staged.length + unstaged.length) : 0;
+  const hasHead = !!(repo && d.hasHead);
   gitState.repo = !!repo;
+  gitState.hasHead = hasHead;
   gitState.changed = changed;
   gitState.stagedFiles = staged.slice();
   gitState.unstagedFiles = unstaged.slice();
   const noRepo = "当前目录不在 Git 仓库内";
   const noChanges = "没有可操作的更改";
+  const noHistory = "仓库还没有提交历史";
   setButtonDisabled(document.querySelector("#git-commit"), !repo || changed === 0, repo ? noChanges : noRepo);
   setButtonDisabled(document.querySelector("#git-push"), !repo, noRepo);
   setButtonDisabled(document.querySelector("#git-stash-save"), !repo || changed === 0, repo ? noChanges : noRepo);
-  setButtonDisabled(document.querySelector("#git-branch-filter"), !repo, noRepo);
-  setButtonDisabled(document.querySelector("#git-branch-ops"), !repo, noRepo);
+  setButtonDisabled(document.querySelector("#git-branch-filter"), !repo || !hasHead, repo ? noHistory : noRepo);
+  setButtonDisabled(document.querySelector("#git-branch-ops"), !repo || !hasHead, repo ? noHistory : noRepo);
   document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
     const act = btn.dataset.act;
     const empty = act === "stage-all" ? unstaged.length === 0 : staged.length === 0;
@@ -342,6 +346,13 @@ async function populateBranches(current, token) {
   const sig = (d.current || "") + "|" + branches.join(",");
   if (sig === branchesLoaded) return;   // 列表没变，保留当前选择
   branchesLoaded = sig;
+  if (!d.hasHead) {
+    gitState.ref = "__all__";
+    gitState.branchItems = [];
+    sel.innerHTML = `<option value="__all__">暂无历史</option>`;
+    renderBranchFilterButton();
+    return;
+  }
   if (!gitState.ref) gitState.ref = "__all__";
   gitState.branchItems = [
     { value: "__all__", label: "全部历史记录", kind: "all", current: false },
@@ -379,6 +390,10 @@ function closeBranchFilterMenu() {
 }
 
 function renderBranchFilterMenu(anchor) {
+  if (!gitState.hasHead || !(gitState.branchItems || []).length) {
+    setGitOut("仓库还没有提交历史，首次提交后才能筛选分支历史", false);
+    return;
+  }
   closeBranchFilterMenu();
   gitState.branchFilterOpen = true;
   renderBranchFilterButton();
@@ -440,7 +455,13 @@ async function renderSidebarGraph(token) {
   const d = await gjson(`/api/git/log?path=${encodeURIComponent(gitCurPath())}&ref=${encodeURIComponent(ref)}`);
   if (token && token !== gitRefreshSeq) return;
   const commits = d.commits || [];
-  if (!commits.length) { logEl.innerHTML = `<div class="scm-empty">暂无提交</div>`; return; }
+  if (!commits.length) {
+    const msg = gitState.repo && !gitState.hasHead
+      ? "暂无提交。先暂存文件并完成首次提交后，这里会显示分支图。"
+      : "暂无提交";
+    logEl.innerHTML = `<div class="scm-empty">${escapeHtml(msg)}</div>`;
+    return;
+  }
   const lay = computeLanes(commits);
   const laneX = l => PAD_X + l * LANE_W;
   const { svg, w } = buildGraphSvg(commits, lay);
@@ -686,6 +707,7 @@ function initGit() {
   if (filterBtn) filterBtn.onclick = (e) => {
     e.stopPropagation();
     if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
+    if (!gitState.hasHead) { setGitOut("仓库还没有提交历史，首次提交后才能筛选分支历史", false); return; }
     if (gitState.branchFilterOpen) closeBranchFilterMenu();
     else renderBranchFilterMenu(filterBtn);
   };
@@ -711,6 +733,7 @@ function initGit() {
   if (branchOps) branchOps.onclick = (e) => {
     e.stopPropagation();
     if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
+    if (!gitState.hasHead) { setGitOut("仓库还没有提交历史，首次提交后才能管理分支", false); return; }
     showBranchOps(branchOps);
   };
 }
