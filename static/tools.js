@@ -46,9 +46,53 @@ function runToolsAction(action, context) {
   return null;
 }
 
+function toolOutputState(output) {
+  const value = output && typeof output.value === "string" ? output.value : "";
+  return value ? { enabled: true, reason: "" } : { enabled: false, reason: "请先生成结果" };
+}
+
+function copyToolOutput(output) {
+  const st = toolOutputState(output);
+  if (!st.enabled) {
+    if (window.setMsg) window.setMsg(st.reason, "warn");
+    return false;
+  }
+  output.select();
+  const text = output.value;
+  const fallbackCopy = () => {
+    const ok = document.execCommand("copy");
+    if (window.setMsg) window.setMsg(ok ? "已复制到剪贴板" : "复制失败", ok ? "ok" : "err");
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (window.setMsg) window.setMsg("已复制到剪贴板", "ok");
+    }).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+  return true;
+}
+
+function bindToolCopyButton(button, output) {
+  const refresh = () => {
+    const st = toolOutputState(output);
+    button.disabled = !st.enabled;
+    button.title = st.enabled ? "复制结果到剪贴板" : st.reason;
+  };
+  button.onclick = () => {
+    copyToolOutput(output);
+    refresh();
+  };
+  output.addEventListener("input", refresh);
+  refresh();
+  return refresh;
+}
+
 window.wbToolsActions = {
   actionState: toolsActionState,
   run: runToolsAction,
+  outputState: toolOutputState,
+  copyOutput: copyToolOutput,
 };
 
 const TOOLS = [
@@ -466,12 +510,10 @@ const TOOLS = [
         }
         out.value = arr.join("\n");
       };
-      box.querySelector("#t-uuid-go").onclick = run;
-      box.querySelector("#t-uuid-copy").onclick = () => {
-        out.select();
-        navigator.clipboard?.writeText(out.value).catch(() => document.execCommand("copy"));
-      };
+      const refreshCopy = bindToolCopyButton(box.querySelector("#t-uuid-copy"), out);
+      box.querySelector("#t-uuid-go").onclick = () => { run(); refreshCopy(); };
       run();
+      refreshCopy();
     },
   },
   {
@@ -605,6 +647,7 @@ const TOOLS = [
         C = Math.min(20, Math.max(1, parseInt(box.querySelector("#t-mt-cols").value) || 1));
         grid.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
         grid.innerHTML = "";
+        out.value = "";
         for (let r = 0; r <= R; r++)
           for (let c = 0; c < C; c++) {
             const i = document.createElement("input");
@@ -628,12 +671,11 @@ const TOOLS = [
           lines.push("| " + Array.from({ length: C }, (_, c) => cell(r, c)).join(" | ") + " |");
         out.value = lines.join("\n");
       };
-      box.querySelector("#t-mt-build").onclick = build;
-      box.querySelector("#t-mt-gen").onclick = gen;
-      box.querySelector("#t-mt-copy").onclick = () => {
-        out.select(); navigator.clipboard?.writeText(out.value).catch(() => document.execCommand("copy"));
-      };
+      const refreshCopy = bindToolCopyButton(box.querySelector("#t-mt-copy"), out);
+      box.querySelector("#t-mt-build").onclick = () => { build(); refreshCopy(); };
+      box.querySelector("#t-mt-gen").onclick = () => { gen(); refreshCopy(); };
       build();
+      refreshCopy();
     },
   },
 ];
