@@ -13,6 +13,7 @@
   let sessions = [];
   let sessionsLoaded = false;
   let sessionsLoading = null;
+  const taskFilters = { status: "all", source: "all" };
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -83,6 +84,85 @@
       `Sidebar collapsed: ${snap.ui && snap.ui.sidebarCollapsed ? "yes" : "no"}`,
     ];
   }
+  function taskSource(t) {
+    const text = [t && t.title, ...((t && t.log) || [])].join("\n").toLowerCase();
+    if (/workspace layout|工作区布局/.test(text)) return "layout";
+    if (/created from viewer|查看器/.test(text)) return "viewer";
+    if (/created from git|git changes|git 变更/.test(text)) return "git";
+    if (/terminal|npm run|make /.test(text)) return "terminal";
+    if (/markdown|\.md\b|\.markdown\b/.test(text)) return "markdown";
+    if (/playbook|skill|release installer|ui button audit/.test(text)) return "playbook";
+    if (/current file|当前文件|文件审计/.test(text)) return "file";
+    return "manual";
+  }
+  const SOURCE_LABELS = {
+    all: "全部",
+    layout: "布局",
+    viewer: "查看器",
+    git: "Git",
+    terminal: "终端",
+    markdown: "Markdown",
+    playbook: "Playbook",
+    file: "文件",
+    manual: "手动",
+  };
+  function latestByUpdated(items) {
+    return (items || []).slice().sort((a, b) =>
+      String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))[0] || null;
+  }
+  function visibleTasks() {
+    return tasks.filter(t => {
+      if (taskFilters.status !== "all" && t.status !== taskFilters.status) return false;
+      if (taskFilters.source !== "all" && taskSource(t) !== taskFilters.source) return false;
+      return true;
+    });
+  }
+  function setSelectOptions(sel, options, value) {
+    if (!sel) return;
+    sel.innerHTML = options.map(opt =>
+      `<option value="${esc(opt.value)}"${opt.value === value ? " selected" : ""}>${esc(opt.label)}</option>`).join("");
+  }
+  function renderTaskRecovery() {
+    const grid = $("#task-recovery-grid");
+    const next = $("#task-next");
+    const statusSel = $("#task-status-filter");
+    const sourceSel = $("#task-source-filter");
+    const clear = $("#task-clear-filter");
+    if (!grid || !next || !statusSel || !sourceSel) return;
+    const snap = workspaceLayoutSnapshot();
+    const mainTabs = snap && snap.main && snap.main.tabs ? snap.main.tabs.length : 0;
+    const sideTabs = snap && snap.side && snap.side.tabs ? snap.side.tabs.length : 0;
+    const counts = tasks.reduce((acc, t) => {
+      acc[t.status || "todo"] = (acc[t.status || "todo"] || 0) + 1;
+      return acc;
+    }, {});
+    const latestTask = latestByUpdated(tasks);
+    const latestSession = latestByUpdated(sessions);
+    grid.innerHTML = [
+      ["工作区", snap && snap.roots && snap.roots.length > 1 ? `${snap.roots.length} 个目录` : (window.currentRoot || "未打开")],
+      ["当前文件", snap && snap.activeFile ? snap.activeFile : "none"],
+      ["布局", `主 ${mainTabs} / 侧 ${sideTabs}`],
+      ["任务", `待办 ${counts.todo || 0} · 进行 ${counts.running || 0} · 已验 ${counts.verified || 0} · 阻塞 ${counts.blocked || 0}`],
+      ["最近任务", latestTask ? latestTask.title : "暂无"],
+      ["最近会话", latestSession ? (latestSession.title || latestSession.taskTitle || latestSession.id) : "暂无"],
+    ].map(([k, v]) => `<div class="task-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
+    const sources = Array.from(new Set(tasks.map(taskSource))).sort();
+    setSelectOptions(statusSel, [
+      { value: "all", label: "全部" },
+      ...Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k] })),
+    ], taskFilters.status);
+    setSelectOptions(sourceSel, [
+      { value: "all", label: "全部" },
+      ...sources.map(k => ({ value: k, label: SOURCE_LABELS[k] || k })),
+    ], taskFilters.source);
+    const filtered = visibleTasks().length;
+    const hasFilter = taskFilters.status !== "all" || taskFilters.source !== "all";
+    if (clear) clear.classList.toggle("hidden", !hasFilter);
+    next.textContent = latestTask
+      ? `下一步：${latestTask.next || "打开最近任务，补充日志、证据或创建会话。"}`
+      : "下一步：从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。";
+    next.title = hasFilter ? `当前过滤显示 ${filtered}/${tasks.length} 个任务` : `共 ${tasks.length} 个任务`;
+  }
 
   async function saveTasks(msg) {
     const res = await postJson("/api/workflow-tasks", { tasks });
@@ -104,6 +184,7 @@
         if (data.error) throw new Error(data.error);
         tasks = Array.isArray(data.tasks) ? data.tasks : [];
         tasksLoaded = true;
+        renderTaskRecovery();
         renderTasks();
         return true;
       } catch (e) {
@@ -125,6 +206,7 @@
         if (data.error) throw new Error(data.error);
         sessions = Array.isArray(data.sessions) ? data.sessions : [];
         sessionsLoaded = true;
+        renderTaskRecovery();
         renderSessions();
         return true;
       } catch (e) {
@@ -144,6 +226,7 @@
       return false;
     }
     sessions = Array.isArray(res.sessions) ? res.sessions : sessions;
+    renderTaskRecovery();
     renderSessions();
     if (msg && window.setMsg) setMsg(msg, "ok");
     return true;
@@ -418,8 +501,14 @@
     const list = $("#task-list");
     const empty = $("#task-empty");
     if (!list || !empty) return;
-    empty.classList.toggle("hidden", tasks.length > 0);
-    list.innerHTML = tasks.map(t => {
+    renderTaskRecovery();
+    const shown = visibleTasks();
+    empty.classList.toggle("hidden", shown.length > 0);
+    const emptyText = empty.querySelector("span");
+    if (emptyText) emptyText.textContent = tasks.length && !shown.length
+      ? "当前过滤没有匹配任务。可以清除过滤，或从当前上下文创建新任务。"
+      : "记录目标、计划、执行日志和证据路径，后续可导出给 Agent / Playbook。";
+    list.innerHTML = shown.map(t => {
       const plan = (t.plan || []).slice(0, 5).map(x => `<li>${esc(x)}</li>`).join("");
       const evidence = (t.evidence || []).slice(-4).map(x => `<li>${esc(x)}</li>`).join("");
       const logLines = Array.isArray(t.log) ? t.log : [];
@@ -430,6 +519,7 @@
       return `<article class="task-card" data-id="${esc(t.id)}">
         <div class="task-card-head">
           <span class="task-state ${esc(t.status)}">${esc(STATUS[t.status] || t.status)}</span>
+          <span class="task-source">${esc(SOURCE_LABELS[taskSource(t)] || taskSource(t))}</span>
           <button class="task-mini" data-act="brief" title="复制 Agent brief">${svgIcon("copy", 13)}</button>
         </div>
         <h3>${esc(t.title)}</h3>
@@ -473,6 +563,7 @@
     const empty = $("#session-empty");
     if (!list || !empty) return;
     empty.classList.toggle("hidden", sessions.length > 0);
+    renderTaskRecovery();
     list.innerHTML = sessions.map(s => {
       const outputs = (s.outputs || []).slice(-2).map(x => `<li>${esc(x)}</li>`).join("");
       const evidence = (s.evidence || []).slice(-3).map(x => `<li>${esc(x)}</li>`).join("");
@@ -522,12 +613,23 @@
     if (sessionRefresh) sessionRefresh.onclick = loadSessions;
     const create = $("#task-new");
     if (create) create.onclick = promptTask;
+    const statusSel = $("#task-status-filter");
+    if (statusSel) statusSel.onchange = () => { taskFilters.status = statusSel.value || "all"; renderTasks(); };
+    const sourceSel = $("#task-source-filter");
+    if (sourceSel) sourceSel.onchange = () => { taskFilters.source = sourceSel.value || "all"; renderTasks(); };
+    const clear = $("#task-clear-filter");
+    if (clear) clear.onclick = () => {
+      taskFilters.status = "all";
+      taskFilters.source = "all";
+      renderTasks();
+    };
     loadTasks();
     loadSessions();
   }
 
   window.initTasksPanel = initTasksPanel;
   window.reloadWorkflowTasks = loadTasks;
+  window.reloadAgentSessions = loadSessions;
   window.createWorkflowTask = promptTask;
   window.addWorkflowTask = addWorkflowTask;
   window.appendActiveTaskToMemory = () => {
@@ -549,5 +651,6 @@
   };
   window.focusWorkflowTasks = () => {
     if (!tasks.length) loadTasks();
+    renderTaskRecovery();
   };
 })();

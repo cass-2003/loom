@@ -229,6 +229,18 @@
           </div>
         </div>
         <div id="tasks-body">
+          <section class="task-recovery" id="task-recovery">
+            <div class="task-recovery-head">
+              <span>恢复上下文</span>
+              <button id="task-clear-filter" class="task-mini hidden" data-icon="close" title="清除任务过滤"></button>
+            </div>
+            <div class="task-recovery-grid" id="task-recovery-grid"></div>
+            <div class="task-filter-row">
+              <label>状态 <select id="task-status-filter"></select></label>
+              <label>来源 <select id="task-source-filter"></select></label>
+            </div>
+            <div class="task-next" id="task-next"></div>
+          </section>
           <div class="task-empty" id="task-empty">
             <div class="task-empty-icon" data-icon="listChecks"></div>
             <b>把工作变成可验证任务</b>
