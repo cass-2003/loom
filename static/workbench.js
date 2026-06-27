@@ -808,7 +808,6 @@
         },
         run: () => {
           if (window.wbViewer && window.wbViewer.run) window.wbViewer.run("createTask");
-          else if (window.createViewerTaskFromCurrent) window.createViewerTaskFromCurrent();
         } });
     A({ id: "task.fromGitChanges", name: "任务: 从 Git 变更创建审计任务", hint: "SCM", icon: "git",
         requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",

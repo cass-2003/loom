@@ -917,11 +917,24 @@ function currentViewerContext() {
 window.wbViewer = {
   context: currentViewerContext,
   actionState: viewerActionState,
-  run: (action) => {
+  run: async (action) => {
+    const st = viewerActionState(action);
+    if (!st.enabled) {
+      setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
     if (action === "createTask") return createViewerTaskFromCurrent();
     return false;
   },
 };
+
+function applyViewerActionState() {
+  const btn = document.querySelector("#viewer-host .viewer-action[data-action='createTask']");
+  if (!btn) return;
+  const st = viewerActionState("createTask");
+  btn.disabled = !st.enabled;
+  btn.title = st.enabled ? "从当前查看器文件创建验证任务" : (st.reason || "当前不可用");
+}
 
 // 挂载某查看器到 #viewer-host：先卸载上一个，再造一个干净容器交给 viewer.mount
 function mountViewer(viewer, info) {
@@ -938,9 +951,10 @@ function mountViewer(viewer, info) {
   const taskBtn = document.createElement("button");
   taskBtn.type = "button";
   taskBtn.className = "viewer-action";
+  taskBtn.dataset.action = "createTask";
   taskBtn.title = "从当前查看器文件创建验证任务";
   taskBtn.innerHTML = '<span class="i" data-icon="listChecks"></span>创建验证任务';
-  taskBtn.onclick = () => createViewerTaskFromCurrent();
+  taskBtn.onclick = () => window.wbViewer && wbViewer.run("createTask");
   actionBar.append(label, taskBtn);
   hostWrap.appendChild(actionBar);
   hostWrap.appendChild(host);
@@ -955,9 +969,8 @@ function mountViewer(viewer, info) {
     viewerContext.error = String(e && e.message || e);
     host.innerHTML = '<div class="viewer-error">查看器加载失败：'
       + escHtml(viewerContext.error) + "</div>";
-    taskBtn.disabled = true;
-    taskBtn.title = "查看器加载失败，不能创建验证任务";
   }
+  applyViewerActionState();
 }
 
 async function createViewerTask(viewer, info) {
