@@ -290,6 +290,9 @@
       $("#status-file").textContent = wb().current;
     }
     if (window.updateStatusFileAction) window.updateStatusFileAction();
+    window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
+      detail: { group: g, path: g === "side" ? side.active : wb().current },
+    }));
   }
 
   // ---------- 拖拽分屏：主组标签拖到编辑区 → 落点提示 ----------
@@ -512,6 +515,13 @@
       dirty: hasUnsaved(),
     };
   }
+  function activeText() {
+    if (!hasSide() || !side.active) return null;
+    const t = sideTabByPath(side.active);
+    if (!t) return null;
+    const content = side.active === t.path ? $("#side-editor").value : (t.draft || "");
+    return { path: t.path, name: t.name, kind: "text", content };
+  }
   // 文件/目录被重命名 → 同步副组里受影响的标签路径
   function remapPath(oldPath, newPath, isDir) {
     let changed = false;
@@ -559,6 +569,7 @@
     splitDragHint, clearSplitHint, splitDrop, moveToSide, moveToMain, restore,
     isSideFocused: () => focus === "side" && hasSide(),
     hasSide, save, focus: () => focus,
+    activeText,
     has: (p) => !!sideTabByPath(p),       // 该文件是否在副组
     activate: (p) => activateSide(p),      // 切到副组里的该文件
     remapPath, dropPath, reset, hasUnsaved, snapshot,   // 生命周期联动

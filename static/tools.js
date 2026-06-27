@@ -1,5 +1,56 @@
 /* Workbench 工具箱 —— 纯前端，离线可用 */
 
+function getToolsCurrentText() {
+  const split = window.split;
+  if (split && split.isSideFocused && split.isSideFocused() && typeof split.activeText === "function") {
+    const side = split.activeText();
+    if (side && side.content != null) return side;
+  }
+  const st = window.state || {};
+  const path = st.activeTab || st.current || "";
+  if (!path) return null;
+  if (st.kind === "md" && window.vd) {
+    const text = typeof window.vditorGetValue === "function"
+      ? window.vditorGetValue()
+      : (window.vd.pending != null ? window.vd.pending : "");
+    return { path, name: path.split("/").pop(), kind: "md", content: text || "" };
+  }
+  if (st.kind === "text") {
+    const ed = document.querySelector("#editor");
+    return { path, name: path.split("/").pop(), kind: "text", content: ed ? ed.value : "" };
+  }
+  return null;
+}
+
+function toolsActionState(action) {
+  if (action !== "loadCurrentFile") return { enabled: false, reason: "未知工具动作" };
+  const st = window.state || {};
+  if (!window.currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (!st.activeTab && !st.current) return { enabled: false, reason: "请先打开文本文件" };
+  const current = getToolsCurrentText();
+  if (!current) return { enabled: false, reason: "当前视图不是可读取文本" };
+  return { enabled: true, reason: "", current };
+}
+
+function runToolsAction(action, context) {
+  const st = toolsActionState(action);
+  if (!st.enabled) {
+    if (window.setMsg) window.setMsg(st.reason || "当前工具动作不可用", "warn");
+    return null;
+  }
+  if (action === "loadCurrentFile") {
+    if (context && context.input) context.input.value = st.current.content || "";
+    if (context && typeof context.afterLoad === "function") context.afterLoad(st.current);
+    return st.current;
+  }
+  return null;
+}
+
+window.wbToolsActions = {
+  actionState: toolsActionState,
+  run: runToolsAction,
+};
+
 const TOOLS = [
   {
     id: "json", name: "JSON",
@@ -141,6 +192,9 @@ const TOOLS = [
         <div class="tool-out" id="t-cnt-out"></div>`;
       const inp = box.querySelector("#t-cnt-in");
       const out = box.querySelector("#t-cnt-out");
+      const loadBtn = box.querySelector("#t-cnt-cur");
+      if (box._toolsAbort) box._toolsAbort.abort();
+      box._toolsAbort = new AbortController();
       const calc = () => {
         const t = inp.value;
         const chars = [...t].length;
@@ -155,10 +209,20 @@ const TOOLS = [
           <p>行数: <b>${lines}</b></p>`;
       };
       inp.addEventListener("input", calc);
-      box.querySelector("#t-cnt-cur").onclick = () => {
-        const ed = document.querySelector("#editor");
-        inp.value = ed ? ed.value : ""; calc();
+      const refreshLoadState = () => {
+        const st = toolsActionState("loadCurrentFile");
+        loadBtn.disabled = !st.enabled;
+        loadBtn.title = st.enabled
+          ? "载入当前文本文件内容"
+          : (st.reason || "当前不可用");
       };
+      loadBtn.onclick = () => {
+        runToolsAction("loadCurrentFile", { input: inp, afterLoad: calc });
+        refreshLoadState();
+      };
+      window.addEventListener("wb:workspace-state", refreshLoadState, { signal: box._toolsAbort.signal });
+      window.addEventListener("wb:active-editor-change", refreshLoadState, { signal: box._toolsAbort.signal });
+      refreshLoadState();
       calc();
     },
   },

@@ -622,6 +622,9 @@ function closeCurrent() {
   updateTopActionState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
+  window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
+    detail: { group: "main", path: null, kind: null },
+  }));
 }
 
 // 在树中按 path 找到对应的 .node-row（仅限已渲染节点）
@@ -1402,6 +1405,9 @@ function setCurrent(path, kind) {
   updateTopActionState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
+  window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
+    detail: { group: "main", path, kind },
+  }));
 }
 
 function updateStatusFileAction() {
