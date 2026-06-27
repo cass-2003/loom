@@ -17,6 +17,10 @@
     const id = window.currentWorkspaceId;
     return id ? ("wb-split:" + id) : null;
   };
+  const SIZE_WS_KEY = () => {
+    const id = window.currentWorkspaceId;
+    return id ? (SIZE_KEY + ":" + id) : SIZE_KEY;
+  };
 
   const side = { tabs: [], active: null, dirty: false };
   let focus = "main";                                  // "main" | "side"
@@ -59,7 +63,7 @@
     cb.classList.toggle("split-v", orient === "v");
     grp.classList.remove("hidden"); rz.classList.remove("hidden");
     const avail = (orient === "v" ? cb.clientHeight : cb.clientWidth) || 0;
-    const saved = parseInt(localStorage.getItem(SIZE_KEY) || "", 10);
+    const saved = parseInt(localStorage.getItem(SIZE_WS_KEY()) || localStorage.getItem(SIZE_KEY) || "", 10);
     let px = saved >= 120 ? saved : Math.round(avail * 0.42) || 480;
     // 始终钳制：上界给主编辑区留空间，防越界/损坏的 saved 值吃满布局把主编辑区挤出视口
     if (avail > 240) px = Math.max(120, Math.min(px, avail - 120));
@@ -201,7 +205,7 @@
     const prevOrient = orient;
     if (zone === "bottom") orient = "v";
     else if (zone === "right") orient = "h";
-    if (orient !== prevOrient) localStorage.removeItem(SIZE_KEY);  // 方向变了，旧比例(宽/高)不再适用
+    if (orient !== prevOrient) localStorage.removeItem(SIZE_WS_KEY());  // 方向变了，旧比例(宽/高)不再适用
     localStorage.setItem(ORIENT_KEY, orient);
     renderSideTabs();
     activateSide(path);
@@ -235,7 +239,7 @@
   function setOrient(o) {
     orient = (o === "v") ? "v" : "h";
     localStorage.setItem(ORIENT_KEY, orient);
-    localStorage.removeItem(SIZE_KEY);   // 换方向后比例重算
+    localStorage.removeItem(SIZE_WS_KEY());   // 换方向后比例重算
     renderSideTabs();
   }
 
@@ -408,7 +412,7 @@
         ov.removeEventListener("mousemove", mv); window.removeEventListener("mousemove", mv);
         window.removeEventListener("mouseup", up); ov.remove();
         const px = parseInt(grp.style.flex.split(" ").pop(), 10);
-        if (px) localStorage.setItem(SIZE_KEY, px);
+        if (px) localStorage.setItem(SIZE_WS_KEY(), px);
         refit();
       }
       ov.addEventListener("mousemove", mv); window.addEventListener("mousemove", mv);
