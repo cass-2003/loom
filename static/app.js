@@ -416,8 +416,20 @@ async function revealCurrentFileInExplorer() {
   return true;
 }
 
+async function runCurrentFileAction(action) {
+  const st = currentFileActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "revealInExplorer") return revealCurrentFileInExplorer();
+  setMsg("未知当前文件动作", "warn");
+  return false;
+}
+
 window.wbCurrentFile = {
   actionState: currentFileActionState,
+  run: runCurrentFileAction,
   revealInExplorer: revealCurrentFileInExplorer,
 };
 
@@ -1386,6 +1398,7 @@ function updateStatusFileAction() {
   el.classList.toggle("disabled", !st.enabled);
   el.title = st.enabled ? "点击在资源管理器中定位当前文件" : (st.reason || "当前没有可定位文件");
 }
+window.updateStatusFileAction = updateStatusFileAction;
 
 function updateTopActionState() {
   const saveBtn = $("#btn-save");
@@ -2501,7 +2514,7 @@ setSidebarCollapsed(sidebarCollapsed);
 $("#btn-refresh").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("refreshTree");
 $("#btn-new-file").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFileRoot");
 $("#btn-new-dir").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFolderRoot");
-$("#status-file").onclick = () => revealCurrentFileInExplorer();
+$("#status-file").onclick = () => window.wbCurrentFile && wbCurrentFile.run("revealInExplorer");
 
 // ---------- 杂项 ----------
 let msgTimer = null;

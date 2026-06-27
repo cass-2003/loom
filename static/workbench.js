@@ -610,8 +610,8 @@
           return st.enabled ? true : st.reason;
         },
         run: () => {
-          if (window.wbCurrentFile && window.wbCurrentFile.revealInExplorer) {
-            window.wbCurrentFile.revealInExplorer();
+          if (window.wbCurrentFile && window.wbCurrentFile.run) {
+            window.wbCurrentFile.run("revealInExplorer");
           }
         } });
     [

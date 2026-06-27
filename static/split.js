@@ -289,6 +289,7 @@
     } else if (wb().current && $("#status-file")) {
       $("#status-file").textContent = wb().current;
     }
+    if (window.updateStatusFileAction) window.updateStatusFileAction();
   }
 
   // ---------- 拖拽分屏：主组标签拖到编辑区 → 落点提示 ----------
