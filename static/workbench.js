@@ -645,8 +645,15 @@
         run: () => createTaskFromSeed(currentFileTaskSeed("markdown")) });
     A({ id: "task.fromViewer", name: "任务: 从当前查看器创建验证任务", hint: "Viewer", icon: "listChecks",
         requires: ["workspace", "viewer"], risk: "write",
+        enabled: () => {
+          const api = window.wbViewer;
+          if (!api || !api.actionState) return "查看器尚未就绪";
+          const st = api.actionState("createTask");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          if (window.createViewerTaskFromCurrent) window.createViewerTaskFromCurrent();
+          if (window.wbViewer && window.wbViewer.run) window.wbViewer.run("createTask");
+          else if (window.createViewerTaskFromCurrent) window.createViewerTaskFromCurrent();
         } });
     A({ id: "task.fromGitChanges", name: "任务: 从 Git 变更创建审计任务", hint: "SCM", icon: "git",
         requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",

@@ -40,6 +40,12 @@ const explorerState = {
   selected: null,   // { path, name, type }
 };
 
+const viewerContext = {
+  viewer: null,
+  info: null,
+  error: "",
+};
+
 // 行号槽状态（在 activateTab 之前用到，提前声明）
 let gutterLineCount = -1;   // 当前已渲染的行数（避免无谓重绘）
 let curGLine = -1;          // 当前高亮行
@@ -826,10 +832,43 @@ function unmountViewer() {
     try { state.viewer.unmount(); } catch (e) { /* 卸载失败不影响后续 */ }
   }
   state.viewer = null;
+  viewerContext.viewer = null;
+  viewerContext.info = null;
+  viewerContext.error = "";
   const hostWrap = $("#viewer-host");
   if (hostWrap) hostWrap.innerHTML = "";   // 清掉旧的内部容器
   state.viewerHost = null;
 }
+
+function viewerActionState(action) {
+  if (action === "createTask") {
+    if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+    const tab = tabByPath(state.activeTab);
+    if (!(viewerContext.viewer && viewerContext.info && tab && tab.kind === "viewer")) {
+      return { enabled: false, reason: "需要打开查看器文件" };
+    }
+    if (viewerContext.error) return { enabled: false, reason: "查看器加载失败，不能创建验证任务" };
+    if (!window.addWorkflowTask) return { enabled: false, reason: "任务面板尚未就绪" };
+  }
+  return { enabled: true, reason: "" };
+}
+
+function currentViewerContext() {
+  return {
+    viewer: viewerContext.viewer,
+    info: viewerContext.info ? Object.assign({}, viewerContext.info) : null,
+    error: viewerContext.error || "",
+  };
+}
+
+window.wbViewer = {
+  context: currentViewerContext,
+  actionState: viewerActionState,
+  run: (action) => {
+    if (action === "createTask") return createViewerTaskFromCurrent();
+    return false;
+  },
+};
 
 // 挂载某查看器到 #viewer-host：先卸载上一个，再造一个干净容器交给 viewer.mount
 function mountViewer(viewer, info) {
@@ -848,17 +887,23 @@ function mountViewer(viewer, info) {
   taskBtn.className = "viewer-action";
   taskBtn.title = "从当前查看器文件创建验证任务";
   taskBtn.innerHTML = '<span class="i" data-icon="listChecks"></span>创建验证任务';
-  taskBtn.onclick = () => createViewerTask(viewer, info || {});
+  taskBtn.onclick = () => createViewerTaskFromCurrent();
   actionBar.append(label, taskBtn);
   hostWrap.appendChild(actionBar);
   hostWrap.appendChild(host);
   state.viewer = viewer;
   state.viewerHost = host;
+  viewerContext.viewer = viewer;
+  viewerContext.info = info || {};
+  viewerContext.error = "";
   try {
     viewer.mount(host, info);
   } catch (e) {
+    viewerContext.error = String(e && e.message || e);
     host.innerHTML = '<div class="viewer-error">查看器加载失败：'
-      + escHtml(String(e && e.message || e)) + "</div>";
+      + escHtml(viewerContext.error) + "</div>";
+    taskBtn.disabled = true;
+    taskBtn.title = "查看器加载失败，不能创建验证任务";
   }
 }
 
@@ -890,7 +935,12 @@ async function createViewerTask(viewer, info) {
     next: "Run a viewer smoke and attach screenshot or console output.",
   });
 }
-window.createViewerTaskFromCurrent = () => {
+function createViewerTaskFromCurrent() {
+  const st = viewerActionState("createTask");
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
   const tab = tabByPath(state.activeTab);
   if (!tab || tab.kind !== "viewer") {
     setMsg("当前不是查看器文件", "warn");
@@ -898,7 +948,8 @@ window.createViewerTaskFromCurrent = () => {
   }
   const viewer = tab.viewer || (typeof window.findViewer === "function" ? window.findViewer(tab.ext) : null);
   return createViewerTask(viewer, tab.info || { path: tab.path, name: tab.name, ext: tab.ext });
-};
+}
+window.createViewerTaskFromCurrent = createViewerTaskFromCurrent;
 
 // ---------- 打开文件 ----------
 window.openFile = openFile;
