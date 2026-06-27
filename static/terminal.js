@@ -1109,6 +1109,7 @@
 
   // ---------- 任务列表 ----------
   let tasksLoaded = false;
+  let terminalTaskCatalog = { npm: [], make: [] };
   async function loadTasks(force) {
     if (tasksLoaded && !force) return;
     const sel = $("#term-task-sel");
@@ -1118,6 +1119,8 @@
       sel.innerHTML = `<option value="" disabled selected>请先打开工作区</option>`;
       sel.disabled = true;
       if (runBtn) { runBtn.disabled = true; runBtn.title = "请先打开工作区"; }
+      const createBtn = $("#term-task-create");
+      if (createBtn) { createBtn.disabled = true; createBtn.title = "请先打开工作区"; }
       tasksLoaded = true;
       return;
     }
@@ -1125,6 +1128,7 @@
       const data = await fetch("/api/tasks", { cache: "no-store" }).then(r => r.json());
       const npm = Array.isArray(data.npm) ? data.npm : [];
       const make = Array.isArray(data.make) ? data.make : [];
+      terminalTaskCatalog = { npm: npm.slice(), make: make.slice() };
       sel.innerHTML = "";
       if (!npm.length && !make.length) {
         const o = document.createElement("option");
@@ -1159,20 +1163,90 @@
           sel.appendChild(g);
         }
       }
+      const createBtn = $("#term-task-create");
+      if (createBtn) { createBtn.disabled = false; createBtn.title = "从终端上下文创建任务"; }
       tasksLoaded = true;
     } catch {
+      terminalTaskCatalog = { npm: [], make: [] };
       sel.innerHTML = `<option value="" disabled selected>任务加载失败</option>`;
       sel.disabled = true;
       if (runBtn) { runBtn.disabled = true; runBtn.title = "任务加载失败"; }
+      const createBtn = $("#term-task-create");
+      if (createBtn) { createBtn.disabled = false; createBtn.title = "从终端上下文创建任务"; }
     }
   }
   window.reloadTasks = () => loadTasks(true);
 
   function runSelectedTask() {
     const sel = $("#term-task-sel");
-    if (!sel || !sel.value) return;
+    const task = selectedTerminalTask();
+    if (task) runTask(task.name, task.kind);
+  }
+
+  function selectedTerminalTask() {
+    const sel = $("#term-task-sel");
+    if (!sel || !sel.value) return null;
     const [kind, name] = sel.value.split(/:(.+)/);
-    if (name) runTask(name, kind);
+    if (!name) return null;
+    return {
+      kind,
+      name,
+      command: (kind === "make" ? "make " : "npm run ") + name,
+    };
+  }
+
+  function terminalContextSeed() {
+    const p = activePane();
+    const g = activeGroup();
+    const task = selectedTerminalTask();
+    const cwd = ($("#term-cwd") && $("#term-cwd").textContent || "/").trim() || "/";
+    const shell = p ? shellNameOf(p.shell) : shellNameOf(selectedShellId());
+    const workspace = window.currentWorkspaceId || window.currentRoot || "current workspace";
+    const knownTasks = []
+      .concat((terminalTaskCatalog.npm || []).map(n => "npm run " + n))
+      .concat((terminalTaskCatalog.make || []).map(n => "make " + n));
+    const title = task ? `终端验证: ${task.command}` : `终端上下文验证: ${cwd}`;
+    const plan = task ? [
+      `确认任务命令: ${task.command}`,
+      "按需在终端中手动运行该命令",
+      "记录 stdout/stderr、退出码或截图作为 evidence",
+      "把验证结果同步到 Project Memory",
+    ] : [
+      "确认当前终端工作目录和 shell",
+      "选择要验证的 npm/make 任务或手动命令",
+      "运行命令后记录输出、退出码或截图",
+      "把验证结果同步到 Project Memory",
+    ];
+    const log = [
+      "Created from terminal context",
+      `Workspace: ${workspace}`,
+      `Terminal cwd: ${cwd}`,
+      `Shell: ${shell}`,
+      `Active terminal group: ${g ? groupDisplayName(g) : "none"}`,
+    ];
+    if (task) log.push(`Selected task: ${task.command}`);
+    if (!task && knownTasks.length) log.push("Available tasks: " + knownTasks.slice(0, 8).join(", "));
+    if (!task && knownTasks.length > 8) log.push(`...and ${knownTasks.length - 8} more tasks`);
+    return {
+      title,
+      goal: task
+        ? `验证终端任务 ${task.command}，记录可回放的执行证据。`
+        : "基于当前终端上下文创建验证任务，记录命令、输出和后续证据。",
+      plan,
+      evidence: [],
+      log,
+      next: task ? "Run the selected task manually when ready and attach output/evidence." : "Choose or type the command to validate, then attach output/evidence.",
+    };
+  }
+
+  async function createTerminalWorkflowTask() {
+    if (!requireWorkspace("创建终端任务")) return;
+    if (!window.addWorkflowTask) {
+      if (window.setMsg) setMsg("任务面板尚未就绪", "warn");
+      return;
+    }
+    await loadTasks(false);
+    await window.addWorkflowTask(terminalContextSeed());
   }
 
   // ---------- 运行此文件按钮 ----------
@@ -1248,6 +1322,8 @@
 
     const taskRun = $("#term-task-run");
     if (taskRun) taskRun.onclick = runSelectedTask;
+    const taskCreate = $("#term-task-create");
+    if (taskCreate) taskCreate.onclick = createTerminalWorkflowTask;
 
     // 分裂按钮：主体 = 用默认 shell 新建组
     const newBtn = $("#term-new");
@@ -1313,6 +1389,9 @@
       registerAction({ id: "terminal.split", name: "拆分终端", hint: "Ctrl+Shift+5", icon: "splitH",
                        requires: ["workspace"], risk: "exec",
                        run: () => splitActive() });
+      registerAction({ id: "task.fromTerminal", name: "任务: 从终端上下文创建", hint: "Terminal", icon: "terminal",
+                       requires: ["workspace"], risk: "write",
+                       run: () => createTerminalWorkflowTask() });
     }
 
     window.addEventListener("wb:workspace-state", (e) => {

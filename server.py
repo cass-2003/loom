@@ -2565,7 +2565,7 @@ class Handler(BaseHTTPRequestHandler):
         pkg = ROOT / "package.json"
         if pkg.is_file():
             try:
-                data = json.loads(pkg.read_text(encoding="utf-8"))
+                data = json.loads(pkg.read_text(encoding="utf-8-sig"))
                 scripts = data.get("scripts") if isinstance(data, dict) else None
                 if isinstance(scripts, dict):
                     npm = [str(k) for k in scripts.keys()]
