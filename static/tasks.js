@@ -264,6 +264,39 @@
       : "下一步：从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。";
     next.title = hasFilter ? `当前过滤显示 ${filtered}/${tasks.length} 个任务` : `共 ${tasks.length} 个任务`;
   }
+  function taskRecoverySummary() {
+    const latestTask = latestByUpdated(tasks);
+    const latestSession = latestByUpdated(sessions);
+    const counts = tasks.reduce((acc, t) => {
+      acc[t.status || "todo"] = (acc[t.status || "todo"] || 0) + 1;
+      return acc;
+    }, {});
+    return {
+      tasks: tasks.length,
+      sessions: sessions.length,
+      tasksLoaded,
+      sessionsLoaded,
+      visible: visibleTasks().length,
+      filters: Object.assign({}, taskFilters),
+      counts,
+      latestTask: latestTask ? {
+        id: latestTask.id,
+        title: latestTask.title || "未命名任务",
+        status: latestTask.status || "todo",
+        source: taskSource(latestTask),
+        next: latestTask.next || "",
+      } : null,
+      latestSession: latestSession ? {
+        id: latestSession.id,
+        title: latestSession.title || latestSession.taskTitle || "未命名会话",
+        status: latestSession.status || "draft",
+        taskId: latestSession.taskId || "",
+      } : null,
+    };
+  }
+  function notifyRecoveryChanged() {
+    if (window.renderProjectRecovery) window.renderProjectRecovery();
+  }
 
   async function saveTasks(msg) {
     const res = await postJson("/api/workflow-tasks", { tasks });
@@ -273,6 +306,7 @@
     }
     tasks = Array.isArray(res.tasks) ? res.tasks : tasks;
     renderTasks();
+    notifyRecoveryChanged();
     if (msg && window.setMsg) setMsg(msg, "ok");
     return true;
   }
@@ -287,6 +321,7 @@
         tasksLoaded = true;
         renderTaskRecovery();
         renderTasks();
+        notifyRecoveryChanged();
         return true;
       } catch (e) {
         const host = $("#task-list");
@@ -309,6 +344,7 @@
         sessionsLoaded = true;
         renderTaskRecovery();
         renderSessions();
+        notifyRecoveryChanged();
         return true;
       } catch (e) {
         if (window.setMsg) setMsg("会话加载失败: " + (e && e.message ? e.message : e), "err");
@@ -329,6 +365,7 @@
     sessions = Array.isArray(res.sessions) ? res.sessions : sessions;
     renderTaskRecovery();
     renderSessions();
+    notifyRecoveryChanged();
     if (msg && window.setMsg) setMsg(msg, "ok");
     return true;
   }
@@ -781,8 +818,10 @@
       sessions: sessions.length,
       tasksLoaded,
       sessionsLoaded,
+      recovery: taskRecoverySummary(),
     }),
   };
+  window.getWorkflowRecoverySummary = taskRecoverySummary;
   window.copyWorkflowRecoveryBrief = () => {
     runTaskAction("copyRecoveryBrief");
   };

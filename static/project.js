@@ -203,6 +203,57 @@
     }
     return api.run("copyRecoveryBrief");
   }
+  function taskRecoverySummary() {
+    if (window.getWorkflowRecoverySummary) {
+      try { return window.getWorkflowRecoverySummary(); } catch {}
+    }
+    const api = window.wbTaskActions;
+    if (api && api.summary) {
+      try {
+        const s = api.summary();
+        return s && s.recovery ? s.recovery : s;
+      } catch {}
+    }
+    return null;
+  }
+  function renderTaskContinuity() {
+    const host = $("#project-task-continuity");
+    if (!host) return;
+    const summary = taskRecoverySummary();
+    const ready = !!summary && (summary.tasksLoaded || summary.sessionsLoaded);
+    const latestTask = summary && summary.latestTask;
+    const latestSession = summary && summary.latestSession;
+    const counts = summary && summary.counts || {};
+    const filter = summary && summary.filters
+      ? `过滤 ${summary.filters.status || "all"} / ${summary.filters.source || "all"}`
+      : "过滤未加载";
+    const taskLine = latestTask
+      ? `${latestTask.title} · ${latestTask.next || "打开任务继续补证据"}`
+      : "暂无任务，可从最近验证、当前文件、Git 或 Playbook 创建";
+    const sessionLine = latestSession
+      ? `${latestSession.title} · ${latestSession.status || "draft"}`
+      : "暂无会话，可从任务卡创建 Agent brief";
+    const copyState = window.wbTaskActions && window.wbTaskActions.actionState
+      ? window.wbTaskActions.actionState("copyRecoveryBrief")
+      : { enabled: false, reason: "任务恢复 brief 尚未就绪" };
+    host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
+      + `<span>${ready ? `${summary.tasks || 0} tasks · ${summary.sessions || 0} sessions` : "任务面板加载中"}</span></div>`
+      + `<div class="project-continuity-grid">`
+      + `<span><b>状态</b>待办 ${counts.todo || 0} · 进行 ${counts.running || 0} · 已验 ${counts.verified || 0}</span>`
+      + `<span><b>视图</b>${esc(filter)} · ${ready ? `${summary.visible || 0} 可见` : "待同步"}</span>`
+      + `</div>`
+      + `<button data-act="open-tasks">${esc(latestTask ? latestTask.title : "打开 Tasks 面板")}</button>`
+      + `<span>${esc(taskLine)}</span>`
+      + `<em>${esc(sessionLine)}</em>`
+      + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`;
+    const open = host.querySelector("[data-act='open-tasks']");
+    if (open) open.onclick = () => {
+      if (typeof switchView === "function") switchView("tasks");
+      if (window.focusWorkflowTasks) window.focusWorkflowTasks();
+    };
+    const copy = host.querySelector("[data-act='copy-recovery']");
+    if (copy) copy.onclick = copyTasksRecoveryBrief;
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
@@ -260,6 +311,7 @@
       const copyTaskBrief = validation.querySelector("[data-act='copy-task-recovery']");
       if (copyTaskBrief) copyTaskBrief.onclick = copyTasksRecoveryBrief;
     }
+    renderTaskContinuity();
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;
     if (openLatest) {
@@ -446,6 +498,7 @@
   window.openProjectStateFile = openProjectStateFile;
   window.reloadProjectMemory = loadProjectState;
   window.copyProjectRoadmapBrief = copyRoadmapBrief;
+  window.renderProjectRecovery = renderRecovery;
   window.focusProjectMemory = () => {
     if (!docs.length) loadProjectState();
     else renderRecovery();
