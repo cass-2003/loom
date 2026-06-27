@@ -387,6 +387,7 @@ function currentFileActionState(action) {
   if (action === "revealInExplorer" && String(state.current).startsWith("project://")) {
     return { enabled: false, reason: "项目记忆虚拟文件不在资源管理器中" };
   }
+  if (action === "copyPath") return { enabled: true, reason: "" };
   return { enabled: true, reason: "" };
 }
 
@@ -423,14 +424,35 @@ async function runCurrentFileAction(action) {
     return false;
   }
   if (action === "revealInExplorer") return revealCurrentFileInExplorer();
+  if (action === "copyPath") return copyCurrentFilePath();
   setMsg("未知当前文件动作", "warn");
   return false;
+}
+
+async function copyCurrentFilePath() {
+  const st = currentFileActionState("copyPath");
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  const text = String(state.current || "");
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      setMsg("已复制当前文件路径", "ok");
+      return true;
+    }
+  } catch {}
+  prompt("复制当前文件路径：", text);
+  setMsg("已打开复制提示", "ok");
+  return true;
 }
 
 window.wbCurrentFile = {
   actionState: currentFileActionState,
   run: runCurrentFileAction,
   revealInExplorer: revealCurrentFileInExplorer,
+  copyPath: copyCurrentFilePath,
 };
 
 // ---------- 文件操作（新建/重命名/删除）----------
@@ -1417,7 +1439,10 @@ function updateStatusFileAction() {
   const st = currentFileActionState("revealInExplorer");
   el.classList.toggle("status-clickable", st.enabled);
   el.classList.toggle("disabled", !st.enabled);
-  el.title = st.enabled ? "点击在资源管理器中定位当前文件" : (st.reason || "当前没有可定位文件");
+  const copyState = currentFileActionState("copyPath");
+  el.title = st.enabled
+    ? "点击在资源管理器中定位当前文件；右键复制路径"
+    : (copyState.enabled ? "右键复制当前文件路径" : (st.reason || "当前没有可定位文件"));
 }
 window.updateStatusFileAction = updateStatusFileAction;
 
@@ -2591,6 +2616,10 @@ $("#btn-refresh").onclick = () => window.wbWorkspaceActions && wbWorkspaceAction
 $("#btn-new-file").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFileRoot");
 $("#btn-new-dir").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFolderRoot");
 $("#status-file").onclick = () => window.wbCurrentFile && wbCurrentFile.run("revealInExplorer");
+$("#status-file").addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  if (window.wbCurrentFile) wbCurrentFile.run("copyPath");
+});
 
 // ---------- 杂项 ----------
 let msgTimer = null;

@@ -614,6 +614,19 @@
             window.wbCurrentFile.run("revealInExplorer");
           }
         } });
+    A({ id: "file.copyPath", name: "文件: 复制当前文件路径", hint: "Status Bar", icon: "copy",
+        requires: ["workspace", "currentFile"],
+        enabled: () => {
+          const api = window.wbCurrentFile;
+          if (!api || !api.actionState) return "当前文件状态尚未就绪";
+          const st = api.actionState("copyPath");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbCurrentFile && window.wbCurrentFile.run) {
+            window.wbCurrentFile.run("copyPath");
+          }
+        } });
     [
       ["explorer.newFileInSelection", "资源管理器: 在所选文件夹中新建文件", "filePlus", "newFile", "write"],
       ["explorer.newFolderInSelection", "资源管理器: 在所选文件夹中新建文件夹", "folderPlus", "newFolder", "write"],
