@@ -1320,6 +1320,20 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 }
 .project-latest button:hover { color: var(--text); text-decoration: underline; }
 .project-latest span { display: block; color: var(--text-dim); max-height: 3.1em; overflow: hidden; }
+.project-validation {
+  margin-top: 8px; padding: 8px; border: 1px solid color-mix(in srgb, var(--ok) 22%, var(--border-soft));
+  border-radius: 9px; background: color-mix(in srgb, var(--ok) 7%, transparent);
+  color: var(--text-dim); font-size: 11.5px; line-height: 1.45;
+}
+.project-validation b { display: block; color: var(--ok); font-size: 10.5px; margin-bottom: 4px; }
+.project-validation button {
+  display: block; max-width: 100%; padding: 0; margin: 0 0 3px;
+  color: var(--accent2); background: transparent; border: none; cursor: pointer;
+  font: inherit; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-validation button:hover { color: var(--text); text-decoration: underline; }
+.project-validation span { display: block; max-height: 3.1em; overflow: hidden; }
+.project-validation em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; }
 .project-roadmap-brief {
   margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-soft);
 }

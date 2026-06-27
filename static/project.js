@@ -136,9 +136,31 @@
       .map(name => extractRecentRecord(docByName(name)))
       .filter(Boolean);
   }
+  function extractRecentValidation() {
+    const item = docByName("progress");
+    if (!item || !item.content) return null;
+    const lines = String(item.content).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!/^##\s+Loop Record\b/i.test(line) && !/^##\s+Validation\b/i.test(line)) continue;
+      const block = lines.slice(i, i + 18);
+      const goal = block.find(x => /^\s*-\s*Goal\s*:/i.test(x));
+      const evidence = block.find(x => /^\s*-\s*Validation Evidence\s*:/i.test(x));
+      const next = block.find(x => /^\s*-\s*Next Goal\s*:/i.test(x));
+      return {
+        target: "progress",
+        title: line.replace(/^#+\s*/, ""),
+        goal: goal ? goal.replace(/^\s*-\s*Goal\s*:\s*/i, "").trim() : "",
+        evidence: evidence ? evidence.replace(/^\s*-\s*Validation Evidence\s*:\s*/i, "").trim() : "",
+        next: next ? next.replace(/^\s*-\s*Next Goal\s*:\s*/i, "").trim() : "",
+      };
+    }
+    return null;
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
+    const validation = $("#project-validation");
     const openLatest = $("#project-open-latest");
     if (!grid || !latest) return;
     const snap = workspaceSummary();
@@ -163,6 +185,14 @@
     latest.innerHTML = top
       ? `<b>最近记录</b><button data-target="${esc(top.target)}">${esc(top.title)}</button><span>${esc(top.preview || "无预览")}</span>`
       : "<b>最近记录</b><span>暂无可恢复记录。可以追加验证或决策记录。</span>";
+    const recentValidation = extractRecentValidation();
+    if (validation) {
+      validation.innerHTML = recentValidation
+        ? `<b>最近验证</b><button data-target="progress">${esc(recentValidation.title)}</button>`
+          + `<span>${esc(recentValidation.evidence || recentValidation.goal || "暂无验证摘要")}</span>`
+          + (recentValidation.next ? `<em>${esc(recentValidation.next)}</em>` : "")
+        : "<b>最近验证</b><span>暂无验证记录。运行检查后可追加验证记录。</span>";
+    }
     if (road.ready) {
       latest.innerHTML += `<div class="project-roadmap-brief"><b>下一阶段路线</b>`
         + `<button data-target="roadmap">${esc(road.goals[0] || "查看路线")}</button>`
@@ -172,6 +202,11 @@
     latest.querySelectorAll("button[data-target]").forEach(b => {
       b.onclick = () => setProjectDoc(b.dataset.target);
     });
+    if (validation) {
+      validation.querySelectorAll("button[data-target]").forEach(b => {
+        b.onclick = () => setProjectDoc(b.dataset.target);
+      });
+    }
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;
     if (openLatest) {
