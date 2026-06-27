@@ -52,6 +52,66 @@
   }
   function allPanes() { const a = []; groups.forEach(g => g.panes.forEach(p => a.push(p))); return a; }
 
+  function terminalActionState(action) {
+    const needsWorkspace = ["new", "split", "runCurrentFile", "createTask", "runTask"];
+    if ((needsWorkspace.includes(action) || (action === "toggle" && isCollapsed())) && !hasWorkspace()) {
+      return { enabled: false, reason: "请先打开工作区" };
+    }
+    if ((action === "new" || action === "split") && !hasXterm()) {
+      return { enabled: false, reason: "终端组件尚未加载" };
+    }
+    if (action === "runCurrentFile") {
+      const path = window.state && state.current;
+      if (!path) return { enabled: false, reason: "当前没有打开文件" };
+      if (window.state && state.kind !== "text") return { enabled: false, reason: "当前文件不是可运行文本文件" };
+      if (!window.wbIsRunnable(path)) return { enabled: false, reason: "该文件类型不支持运行" };
+    }
+    if (action === "runTask" && !selectedTerminalTask()) {
+      return { enabled: false, reason: "请先选择一个终端任务" };
+    }
+    if (action === "createTask" && !window.addWorkflowTask) {
+      return { enabled: false, reason: "任务面板尚未就绪" };
+    }
+    return { enabled: true, reason: "" };
+  }
+
+  async function runTerminalAction(action) {
+    const st = terminalActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "toggle") { toggle(); return true; }
+    if (action === "new") {
+      hideShellMenu();
+      expand();
+      await newGroup(selectedShellId());
+      return true;
+    }
+    if (action === "split") { await splitActive(); return true; }
+    if (action === "runCurrentFile") { await runFile(window.state && state.current); return true; }
+    if (action === "runTask") {
+      const task = selectedTerminalTask();
+      if (task) await runTask(task.name, task.kind);
+      return true;
+    }
+    if (action === "createTask") { await createTerminalWorkflowTask(); return true; }
+    return false;
+  }
+
+  window.wbTerminalActions = {
+    actionState: terminalActionState,
+    run: runTerminalAction,
+    summary: () => ({
+      hasWorkspace: hasWorkspace(),
+      collapsed: isCollapsed(),
+      groups: groups.length,
+      activeGroup: activeGid,
+      activePane: activePane() ? activePane().pid : null,
+      selectedTask: selectedTerminalTask(),
+    }),
+  };
+
   // ---------- base64 解码为字节 ----------
   function b64ToBytes(b64) {
     const bin = atob(b64);
@@ -386,15 +446,32 @@
     setBtn("#term-collapse", "折叠 / 展开", true);
     setBtn("#term-list-toggle", "切换终端列表", true);
     setBtn("#term-clear", "清屏（仅当前窗格）", !!activeGroup());
+    const toggleState = terminalActionState("toggle");
+    const collapse = $("#term-collapse");
+    if (collapse) {
+      collapse.disabled = !toggleState.enabled;
+      collapse.title = toggleState.enabled ? "折叠 / 展开" : (toggleState.reason || wsReason);
+    }
     const splitBtn = $("#term-split"), killBtn = $("#term-kill");
     if (splitBtn) {
-      splitBtn.disabled = !hasWs || !activeGroup();
-      splitBtn.title = hasWs ? "拆分终端 (Ctrl+Shift+5)" : wsReason;
+      const splitState = terminalActionState("split");
+      splitBtn.disabled = !splitState.enabled;
+      splitBtn.title = splitState.enabled ? "拆分终端 (Ctrl+Shift+5)" : (splitState.reason || wsReason);
     }
     if (killBtn) {
       killBtn.disabled = !hasWs || !activeGroup();
       killBtn.title = hasWs ? "关闭当前终端" : wsReason;
     }
+    updateStatusTermState();
+  }
+
+  function updateStatusTermState() {
+    const st = $("#status-term");
+    if (!st) return;
+    const actionState = terminalActionState("toggle");
+    st.classList.toggle("status-clickable", actionState.enabled);
+    st.classList.toggle("disabled", !actionState.enabled);
+    st.title = actionState.enabled ? "切换终端面板" : (actionState.reason || "当前不可用");
   }
 
   // ---------- 右侧列表渲染 ----------
@@ -1258,7 +1335,7 @@
       btn.className = "tab-run-btn hidden";
       btn.title = "运行此文件（在服务器本机执行）";
       btn.innerHTML = svgIcon("play", 14) + "<span>运行</span>";
-      btn.onclick = () => runFile(window.state && state.current);
+      btn.onclick = () => window.wbTerminalActions.run("runCurrentFile");
       const bar = $("#tabbar");
       if (bar && bar.parentElement) bar.parentElement.insertBefore(btn, bar.nextSibling);
     }
@@ -1302,7 +1379,7 @@
     };
 
     const collapseBtn = $("#term-collapse");
-    if (collapseBtn) collapseBtn.onclick = (e) => { e.stopPropagation(); toggle(); };
+    if (collapseBtn) collapseBtn.onclick = (e) => { e.stopPropagation(); window.wbTerminalActions.run("toggle"); };
 
     const maxBtn = $("#term-maximize");
     if (maxBtn) maxBtn.onclick = (e) => { e.stopPropagation(); toggleMaxed(); };
@@ -1317,21 +1394,19 @@
       // 点标题空白处折叠/展开，避开按钮、下拉、工具栏、列表
       if (e.target.closest("button") || e.target.closest("select") ||
           e.target.closest(".term-toolbar") || e.target.closest(".term-shell-menu")) return;
-      toggle();
+      window.wbTerminalActions.run("toggle");
     });
 
     const taskRun = $("#term-task-run");
-    if (taskRun) taskRun.onclick = runSelectedTask;
+    if (taskRun) taskRun.onclick = () => window.wbTerminalActions.run("runTask");
     const taskCreate = $("#term-task-create");
-    if (taskCreate) taskCreate.onclick = createTerminalWorkflowTask;
+    if (taskCreate) taskCreate.onclick = () => window.wbTerminalActions.run("createTask");
 
     // 分裂按钮：主体 = 用默认 shell 新建组
     const newBtn = $("#term-new");
     if (newBtn) newBtn.onclick = (e) => {
       e.stopPropagation();
-      hideShellMenu();
-      expand();
-      newGroup(selectedShellId());
+      window.wbTerminalActions.run("new");
     };
     // 下拉箭头：弹 shell 菜单
     const caret = $("#term-new-caret");
@@ -1339,7 +1414,7 @@
 
     // 拆分按钮
     const splitBtn = $("#term-split");
-    if (splitBtn) splitBtn.onclick = (e) => { e.stopPropagation(); splitActive(); };
+    if (splitBtn) splitBtn.onclick = (e) => { e.stopPropagation(); window.wbTerminalActions.run("split"); };
 
     // 列表显隐
     const listToggle = $("#term-list-toggle");
@@ -1357,19 +1432,19 @@
     });
 
     const st = $("#status-term");
-    if (st) st.onclick = toggle;
+    if (st) st.onclick = () => window.wbTerminalActions.run("toggle");
 
     // Ctrl+` 切换终端面板；Ctrl+Shift+5 拆分终端
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "`" || e.key === "~")) {
         e.preventDefault();
-        toggle();
+        window.wbTerminalActions.run("toggle");
         return;
       }
       // Ctrl+Shift+5 拆分（'5' 或 '%'）
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "5" || e.key === "%")) {
         e.preventDefault();
-        splitActive();
+        window.wbTerminalActions.run("split");
       }
     });
 
@@ -1379,19 +1454,40 @@
     // 命令面板动作
     if (window.registerAction) {
       registerAction({ id: "terminal.toggle", name: "切换终端面板", hint: "Ctrl+`", icon: "terminal",
-                       requires: ["workspace"], run: toggle });
+                       requires: ["workspace"],
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("toggle");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("toggle") });
       registerAction({ id: "terminal.runCurrentFile", name: "运行当前文件", hint: "", icon: "play",
                        requires: ["workspace", "currentFile"], risk: "exec",
-                       run: () => runFile(window.state && state.current) });
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("runCurrentFile");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("runCurrentFile") });
       registerAction({ id: "terminal.new", name: "新建终端", hint: "", icon: "plus",
                        requires: ["workspace"], risk: "exec",
-                       run: () => { if (requireWorkspace("新建终端")) { expand(); newGroup(selectedShellId()); } } });
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("new");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("new") });
       registerAction({ id: "terminal.split", name: "拆分终端", hint: "Ctrl+Shift+5", icon: "splitH",
                        requires: ["workspace"], risk: "exec",
-                       run: () => splitActive() });
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("split");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("split") });
       registerAction({ id: "task.fromTerminal", name: "任务: 从终端上下文创建", hint: "Terminal", icon: "terminal",
                        requires: ["workspace"], risk: "write",
-                       run: () => createTerminalWorkflowTask() });
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("createTask");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("createTask") });
     }
 
     window.addEventListener("wb:workspace-state", (e) => {
@@ -1400,6 +1496,7 @@
       loadTasks(true);
       updateRunButton();
       updateToolbar();
+      updateStatusTermState();
     });
     watchTheme();
     loadShells().then(updateToolbar);
