@@ -101,8 +101,10 @@
       createdAt: now,
       updatedAt: now,
     });
+    const task = tasks[0];
     await saveTasks("已创建任务");
     if (typeof switchView === "function") switchView("tasks");
+    return task;
   }
 
   function taskBrief(t) {
@@ -190,7 +192,11 @@
     list.innerHTML = tasks.map(t => {
       const plan = (t.plan || []).slice(0, 5).map(x => `<li>${esc(x)}</li>`).join("");
       const evidence = (t.evidence || []).slice(-4).map(x => `<li>${esc(x)}</li>`).join("");
-      const log = (t.log || []).slice(-3).map(x => `<li>${esc(x)}</li>`).join("");
+      const logLines = Array.isArray(t.log) ? t.log : [];
+      const logPreview = logLines.length > 4
+        ? logLines.slice(0, 2).concat(logLines.slice(-2))
+        : logLines;
+      const log = logPreview.map(x => `<li>${esc(x)}</li>`).join("");
       return `<article class="task-card" data-id="${esc(t.id)}">
         <div class="task-card-head">
           <span class="task-state ${esc(t.status)}">${esc(STATUS[t.status] || t.status)}</span>

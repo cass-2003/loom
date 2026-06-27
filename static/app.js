@@ -2023,7 +2023,7 @@ $("#quickopen").addEventListener("mousedown", (e) => {
   if (e.target === $("#quickopen")) closeQuickOpen();
 });
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "p") {
     e.preventDefault();
     if (quickOpenIsOpen()) closeQuickOpen(); else openQuickOpen();
   }

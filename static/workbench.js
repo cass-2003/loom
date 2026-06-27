@@ -212,6 +212,7 @@
     editableFile: "需要可编辑文件",
     markdown: "仅 Markdown 可用",
     gitRepo: "需要 Git 仓库",
+    gitChanges: "需要 Git 变更",
     terminal: "需要终端组件",
   };
 
@@ -231,12 +232,27 @@
   function gitHasRepo() {
     return !!(window.gitState && window.gitState.repo);
   }
+  function gitChangedFiles() {
+    if (!window.gitState) return [];
+    const all = (gitState.stagedFiles || []).concat(gitState.unstagedFiles || []);
+    const seen = new Set();
+    return all.filter(f => {
+      const key = f.repoPath || f.path || "";
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  function gitHasChanges() {
+    return gitHasRepo() && gitChangedFiles().length > 0;
+  }
   function reqOk(req) {
     if (req === "workspace") return hasWorkspace();
     if (req === "currentFile") return !!(window.state && state.current);
     if (req === "editableFile") return isEditableFile();
     if (req === "markdown") return isMarkdownTab();
     if (req === "gitRepo") return gitHasRepo();
+    if (req === "gitChanges") return gitHasChanges();
     if (req === "terminal") return !!window.Terminal;
     return true;
   }
@@ -287,6 +303,76 @@
   window.registerAction = registerAction;
   window.registerCapability = registerCapability;
   window.getCapabilities = () => capabilities.slice();
+
+  async function createTaskFromSeed(seed, fallbackMsg) {
+    if (!window.addWorkflowTask) {
+      if (window.setMsg) window.setMsg(fallbackMsg || "任务面板尚未就绪", "warn");
+      return;
+    }
+    await window.addWorkflowTask(seed);
+  }
+
+  function currentFileTaskSeed(kind) {
+    const st = window.state || {};
+    const tab = activeTab();
+    const path = st.current || (tab && tab.path) || "";
+    const name = (tab && tab.name) || (path ? path.split("/").pop() : "当前文件");
+    const lang = (tab && (tab.ext || tab.kind)) || st.kind || "file";
+    const workspace = window.currentWorkspaceId || window.currentRoot || "current workspace";
+    const isMd = kind === "markdown";
+    return {
+      title: isMd ? `Markdown 验证: ${name}` : `文件审计: ${name}`,
+      goal: isMd
+        ? `验证 Markdown 文档 ${path} 的编辑、预览、导出和保存链路。`
+        : `基于当前文件 ${path} 创建上下文任务，完成审计、修改或验证闭环。`,
+      plan: isMd ? [
+        "确认文档能以 Vditor/Markdown 视图正常打开",
+        "检查大纲、图片、代码块、表格或 Mermaid 等关键内容",
+        "执行保存或导出验证，并记录产物路径",
+        "把验证结果同步到任务证据或 Project Memory",
+      ] : [
+        "阅读当前文件和相关上下文",
+        "明确要修复或验证的行为",
+        "实施最小安全变更",
+        "运行相关语法、单元或浏览器烟测",
+        "记录验证结果和后续事项",
+      ],
+      evidence: [],
+      log: [
+        `Created from current file: ${path}`,
+        `Workspace: ${workspace}`,
+        `Kind: ${lang}`,
+      ],
+      next: isMd ? "Run Markdown smoke/export checks and attach evidence." : "Inspect the file and choose the narrowest validation path.",
+    };
+  }
+
+  function gitTaskSeed() {
+    const files = gitChangedFiles();
+    const branch = window.gitState && gitState.branch ? gitState.branch : "(unknown branch)";
+    const limit = 12;
+    const fileLines = files.slice(0, limit).map(f =>
+      `${f.status || "M"} ${f.repoPath || f.path || "(unknown)"}`);
+    if (files.length > limit) fileLines.push(`...and ${files.length - limit} more files`);
+    return {
+      title: `Git 变更审计: ${branch}`,
+      goal: `审计当前 Git 工作区变更，确认行为正确、风险可控，并形成可提交的验证记录。`,
+      plan: [
+        "查看 Git diff 和 staged/unstaged 文件列表",
+        "识别可能的行为回归、安全风险和缺失验证",
+        "修复必要问题或拆分不相关变更",
+        "运行语法检查、相关 smoke 或打包验证",
+        "记录证据并准备原子提交",
+      ],
+      evidence: [],
+      log: [
+        `Created from Git changes on ${branch}`,
+        `Changed files: ${files.length}`,
+        ...fileLines,
+      ],
+      next: "Open Source Control, inspect diffs, and attach validation output.",
+    };
+  }
 
   function buildDefaultActions() {
     const A = registerAction;
@@ -432,6 +518,15 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.createWorkflowTask) window.createWorkflowTask();
         } });
+    A({ id: "task.fromCurrentFile", name: "任务: 从当前文件创建", hint: "Context", icon: "fileText",
+        requires: ["workspace", "currentFile"], risk: "write",
+        run: () => createTaskFromSeed(currentFileTaskSeed("file")) });
+    A({ id: "task.fromMarkdown", name: "任务: 从当前 Markdown 创建验证任务", hint: "Markdown", icon: "markdown",
+        requires: ["workspace", "markdown"], risk: "write",
+        run: () => createTaskFromSeed(currentFileTaskSeed("markdown")) });
+    A({ id: "task.fromGitChanges", name: "任务: 从 Git 变更创建审计任务", hint: "SCM", icon: "git",
+        requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",
+        run: () => createTaskFromSeed(gitTaskSeed(), "没有可记录的 Git 变更") });
     A({ id: "task.refresh", name: "任务: 刷新任务列表", hint: "Agent", icon: "refresh",
         run: () => {
           typeof switchView === "function" && switchView("tasks");

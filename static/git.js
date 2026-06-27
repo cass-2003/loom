@@ -7,7 +7,17 @@ const gpost = (url, obj) => gjson(url, {
 
 function gitCurPath() { return (window.state && window.state.current) || ""; }
 
-const gitState = { repo: false, staged: 0, changed: 0, branch: null, ref: "", branchItems: [], branchFilterOpen: false };
+const gitState = {
+  repo: false,
+  staged: 0,
+  changed: 0,
+  branch: null,
+  ref: "",
+  branchItems: [],
+  branchFilterOpen: false,
+  stagedFiles: [],
+  unstagedFiles: [],
+};
 window.gitState = gitState;
 let gitRefreshSeq = 0;
 
@@ -25,6 +35,8 @@ function setGitControls(repo, d = {}) {
   const changed = repo ? (d.changed || staged.length + unstaged.length) : 0;
   gitState.repo = !!repo;
   gitState.changed = changed;
+  gitState.stagedFiles = staged.slice();
+  gitState.unstagedFiles = unstaged.slice();
   const noRepo = "当前目录不在 Git 仓库内";
   const noChanges = "没有可操作的更改";
   setButtonDisabled(document.querySelector("#git-commit"), !repo || changed === 0, repo ? noChanges : noRepo);
