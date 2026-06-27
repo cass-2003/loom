@@ -163,6 +163,56 @@
       return true;
     });
   }
+  function recoveryBrief() {
+    const latestTask = latestByUpdated(tasks);
+    const latestSession = latestByUpdated(sessions);
+    const shown = visibleTasks();
+    const filterText = [
+      `status=${taskFilters.status}`,
+      `source=${taskFilters.source}`,
+      `shown=${shown.length}/${tasks.length}`,
+    ].join(", ");
+    return [
+      "# Workbench Recovery Brief",
+      "",
+      "## Workspace",
+      workspaceLayoutBrief(),
+      "",
+      "## Current Filters",
+      `- ${filterText}`,
+      "",
+      "## Latest Task",
+      latestTask ? taskBrief(latestTask) : "（暂无任务）",
+      "",
+      "## Latest Session",
+      latestSession ? [
+        `- id: ${latestSession.id}`,
+        `- title: ${latestSession.title || latestSession.taskTitle || "Untitled"}`,
+        `- status: ${latestSession.status || "draft"}`,
+        `- taskId: ${latestSession.taskId || "none"}`,
+        "",
+        "### Context",
+        ...((latestSession.context || []).length ? latestSession.context.map(x => "- " + x) : ["- （暂无）"]),
+        "",
+        "### Evidence",
+        ...((latestSession.evidence || []).length ? latestSession.evidence.map(x => "- " + x) : ["- （暂无）"]),
+      ].join("\n") : "（暂无会话）",
+      "",
+      "## Next",
+      latestTask ? (latestTask.next || "打开最近任务，补充日志、证据或创建会话。") : "从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。",
+    ].join("\n");
+  }
+  async function copyRecoveryBrief() {
+    const text = recoveryBrief();
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) setMsg("已复制恢复 brief", "ok");
+      return true;
+    } catch {
+      prompt("复制下面的恢复 brief：", text);
+      return true;
+    }
+  }
   function setSelectOptions(sel, options, value) {
     if (!sel) return;
     sel.innerHTML = options.map(opt =>
@@ -174,6 +224,7 @@
     const statusSel = $("#task-status-filter");
     const sourceSel = $("#task-source-filter");
     const clear = $("#task-clear-filter");
+    const copy = $("#task-copy-recovery");
     if (!grid || !next || !statusSel || !sourceSel) return;
     const snap = workspaceLayoutSnapshot();
     const mainTabs = snap && snap.main && snap.main.tabs ? snap.main.tabs.length : 0;
@@ -204,6 +255,10 @@
     const filtered = visibleTasks().length;
     const hasFilter = taskFilters.status !== "all" || taskFilters.source !== "all";
     if (clear) clear.classList.toggle("hidden", !hasFilter);
+    if (copy) {
+      copy.disabled = !tasksLoaded && !sessionsLoaded;
+      copy.title = copy.disabled ? "任务/会话尚未加载" : "复制恢复 brief";
+    }
     next.textContent = latestTask
       ? `下一步：${latestTask.next || "打开最近任务，补充日志、证据或创建会话。"}`
       : "下一步：从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。";
@@ -671,6 +726,8 @@
       taskFilters.source = "all";
       renderTasks();
     };
+    const copy = $("#task-copy-recovery");
+    if (copy) copy.onclick = copyRecoveryBrief;
     loadTasks();
     loadSessions();
   }
