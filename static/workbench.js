@@ -929,6 +929,17 @@
           typeof switchView === "function" && switchView("ecosystem");
           if (window.wbEcosystemActions && window.wbEcosystemActions.run) window.wbEcosystemActions.run("refresh");
         } });
+    A({ id: "ecosystem.focusRecovery", name: "生态: 打开 Skills / Playbooks 恢复入口", hint: "Recovery", icon: "blocks",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbEcosystemActions;
+          if (!api || !api.actionState) return "生态面板尚未就绪";
+          const st = api.actionState("focusRecovery");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbEcosystemActions && window.wbEcosystemActions.run) window.wbEcosystemActions.run("focusRecovery");
+        } });
   }
 
   // ================= 命令面板 =================

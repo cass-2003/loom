@@ -145,6 +145,7 @@
 
   function ecosystemActionState(action, item) {
     if (action === "refresh") return { enabled: true, reason: "" };
+    if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (action === "task" && !window.addWorkflowTask) {
       return { enabled: false, reason: "任务面板尚未就绪" };
     }
@@ -164,6 +165,19 @@
       return false;
     }
     if (action === "refresh") { await loadEcosystem(); return true; }
+    if (action === "focusRecovery") {
+      if (typeof switchView === "function") switchView("ecosystem");
+      if (!cache.skills.length && !cache.playbooks.length) await loadEcosystem();
+      else renderRecovery();
+      const panel = $("#eco-recovery");
+      if (panel) {
+        panel.scrollIntoView({ block: "nearest" });
+        panel.classList.add("eco-recovery-pulse");
+        setTimeout(() => panel.classList.remove("eco-recovery-pulse"), 900);
+      }
+      if (window.setMsg) window.setMsg("已打开生态恢复入口", "ok");
+      return true;
+    }
     if (!item) {
       if (window.setMsg) window.setMsg("未找到生态入口", "warn");
       return false;
