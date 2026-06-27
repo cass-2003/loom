@@ -44,26 +44,52 @@ function gitActionState(action) {
   return { enabled: true, reason: "" };
 }
 
-function runGitAction(action) {
+async function runGitPush() {
+  const st = gitActionState("push");
+  if (!st.enabled) { setGitOut(st.reason || "当前不可用", false); return false; }
+  setGitOut("推送中…");
+  const r = await gpost("/api/git/push", { path: gitCurPath() });
+  setGitOut(r.output || "", r.ok);
+  refreshGit();
+  return !!r.ok;
+}
+
+async function runGitStashSave() {
+  const st = gitActionState("stash");
+  if (!st.enabled) { setGitOut(st.reason || "当前不可用", false); return false; }
+  const msg = prompt("储藏说明（可留空）：", "");
+  if (msg === null) return false;
+  setGitOut("储藏中…");
+  const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
+  setGitOut(r.output || r.error || "", r.ok);
+  refreshGit();
+  return !!r.ok;
+}
+
+function runGitBranchOps(anchor) {
+  const st = gitActionState("branchOps");
+  if (!st.enabled) {
+    setGitOut(st.reason || "当前不可用", false);
+    return false;
+  }
+  showBranchOps(anchor || document.querySelector("#git-branch-ops") || document.body);
+  return true;
+}
+
+async function runGitAction(action) {
   const st = gitActionState(action);
   if (!st.enabled) {
     if (typeof setGitOut === "function") setGitOut(st.reason || "当前不可用", false);
     return false;
   }
   if (action === "push") {
-    const btn = document.querySelector("#git-push");
-    if (btn) btn.click();
-    return true;
+    return runGitPush();
   }
   if (action === "branchOps") {
-    const btn = document.querySelector("#git-branch-ops");
-    if (btn) btn.click();
-    return true;
+    return runGitBranchOps();
   }
   if (action === "stash") {
-    const btn = document.querySelector("#git-stash-save");
-    if (btn) btn.click();
-    return true;
+    return runGitStashSave();
   }
   return false;
 }
@@ -742,11 +768,7 @@ function initGit() {
     refreshGit();
   };
   document.querySelector("#git-push").onclick = async () => {
-    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
-    setGitOut("推送中…");
-    const r = await gpost("/api/git/push", { path: gitCurPath() });
-    setGitOut(r.output || "", r.ok);
-    refreshGit();
+    await runGitPush();
   };
   msg.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -792,25 +814,14 @@ function initGit() {
   const stashSave = document.querySelector("#git-stash-save");
   if (stashSave) stashSave.onclick = async (e) => {
     e.stopPropagation();
-    if (!gitState.repo || gitState.changed === 0) {
-      setGitOut(gitState.repo ? "没有可储藏的更改" : "当前目录不在 Git 仓库内", false);
-      return;
-    }
-    const msg = prompt("储藏说明（可留空）：", "");
-    if (msg === null) return;
-    setGitOut("储藏中…");
-    const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
-    setGitOut(r.output || r.error || "", r.ok);
-    refreshGit();
+    await runGitStashSave();
   };
 
   // 分支操作菜单
   const branchOps = document.querySelector("#git-branch-ops");
   if (branchOps) branchOps.onclick = (e) => {
     e.stopPropagation();
-    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
-    if (!gitState.hasHead) { setGitOut("仓库还没有提交历史，首次提交后才能管理分支", false); return; }
-    showBranchOps(branchOps);
+    runGitBranchOps(branchOps);
   };
 }
 
