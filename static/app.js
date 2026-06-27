@@ -2433,6 +2433,7 @@ async function reloadRoot(workspace, recent) {
     }
     if (!state.tabs.length) showEmptyWorkspace(newRoot);
     if (window.refreshGit) window.refreshGit();
+    if (window.reloadProjectMemory) window.reloadProjectMemory();
     if (window.reloadTasks) window.reloadTasks();
     if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
     if (window.reloadAgentSessions) window.reloadAgentSessions();

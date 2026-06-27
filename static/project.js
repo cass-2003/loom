@@ -8,6 +8,7 @@
   ];
   let docs = [];
   let active = "progress";
+  let latestRecordTarget = "progress";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -29,6 +30,7 @@
       const data = await fetch("/api/project-state", { cache: "no-store" }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       docs = Array.isArray(data.files) ? data.files : [];
+      renderRecovery();
       renderTabs();
       renderDoc();
     } catch (e) {
@@ -51,6 +53,77 @@
     });
   }
 
+  function lineCount(text) {
+    return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").length;
+  }
+  function docByName(name) {
+    return docs.find(x => x.name === name) || null;
+  }
+  function workspaceSummary() {
+    if (window.getWorkspaceLayoutSnapshot) {
+      try { return window.getWorkspaceLayoutSnapshot(); } catch {}
+    }
+    return {
+      roots: Array.isArray(window.currentWorkspaceRoots) ? window.currentWorkspaceRoots : [],
+      activeFile: window.state && state.current ? state.current : null,
+      main: { tabs: [] },
+      side: { tabs: [] },
+    };
+  }
+  function extractRecentRecord(item) {
+    if (!item || !item.content) return null;
+    const lines = String(item.content).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (/^##\s+Loop Record\b/i.test(line) || /^##\s+(Decision|Validation|Note)\b/i.test(line) || /^##\s+\d{4}-\d{2}-\d{2}/.test(line)) {
+        const preview = lines.slice(i + 1, i + 6).map(x => x.trim()).filter(Boolean)
+          .join(" ").replace(/^>\s*/g, "");
+        return { target: item.name, title: line.replace(/^#+\s*/, ""), preview };
+      }
+    }
+    const fallback = lines.slice(-8).map(x => x.trim()).filter(Boolean).join(" ");
+    return fallback ? { target: item.name, title: item.file || item.name, preview: fallback } : null;
+  }
+  function recentRecords() {
+    return ["progress", "log", "memory", "requirements"]
+      .map(name => extractRecentRecord(docByName(name)))
+      .filter(Boolean);
+  }
+  function renderRecovery() {
+    const grid = $("#project-recovery-grid");
+    const latest = $("#project-latest");
+    const openLatest = $("#project-open-latest");
+    if (!grid || !latest) return;
+    const snap = workspaceSummary();
+    const roots = snap && snap.roots ? snap.roots : [];
+    const present = docs.filter(d => d.exists || d.content).length;
+    const records = recentRecords();
+    const top = records[0] || null;
+    latestRecordTarget = top ? top.target : active;
+    const mainTabs = snap && snap.main && snap.main.tabs ? snap.main.tabs.length : 0;
+    const sideTabs = snap && snap.side && snap.side.tabs ? snap.side.tabs.length : 0;
+    grid.innerHTML = [
+      ["工作区", roots.length > 1 ? `${roots.length} 个目录` : (window.currentRoot || "未打开")],
+      ["当前文件", snap && snap.activeFile ? snap.activeFile : "none"],
+      ["布局", `主 ${mainTabs} / 侧 ${sideTabs}`],
+      ["记忆文件", `${present}/${DOCS.length} 已就绪`],
+      ["Progress", docByName("progress") ? `${lineCount(docByName("progress").content)} 行` : "未创建"],
+      ["Log", docByName("log") ? `${lineCount(docByName("log").content)} 行` : "未创建"],
+    ].map(([k, v]) => `<div class="project-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
+    latest.innerHTML = top
+      ? `<b>最近记录</b><button data-target="${esc(top.target)}">${esc(top.title)}</button><span>${esc(top.preview || "无预览")}</span>`
+      : "<b>最近记录</b><span>暂无可恢复记录。可以追加验证或决策记录。</span>";
+    const btn = latest.querySelector("button[data-target]");
+    if (btn) btn.onclick = () => setProjectDoc(btn.dataset.target);
+    if (openLatest) {
+      openLatest.disabled = !top;
+      openLatest.title = top ? "打开最近记录来源" : "暂无最近记录";
+      openLatest.onclick = () => {
+        if (latestRecordTarget) setProjectDoc(latestRecordTarget);
+      };
+    }
+  }
+
   function renderDoc() {
     const meta = $("#project-meta");
     const doc = $("#project-doc");
@@ -65,6 +138,7 @@
       const stamp = item.mtime ? new Date(item.mtime * 1000).toLocaleString() : "未创建";
       meta.textContent = `${item.file} · ${stamp}`;
     }
+    renderRecovery();
     doc.textContent = item.content || "（空）";
   }
 
@@ -165,5 +239,6 @@
   window.reloadProjectMemory = loadProjectState;
   window.focusProjectMemory = () => {
     if (!docs.length) loadProjectState();
+    else renderRecovery();
   };
 })();
