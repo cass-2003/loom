@@ -21,6 +21,7 @@ const gitState = {
 };
 window.gitState = gitState;
 let gitRefreshSeq = 0;
+const gitBusyActions = new Set();
 
 function setButtonDisabled(el, disabled, reason) {
   if (!el) return;
@@ -41,7 +42,27 @@ function setStatusBranchState(stateInfo) {
 }
 
 function gitActionState(action) {
+  if (gitBusyActions.has(action)) return { enabled: false, reason: "操作正在进行中" };
+  if (action === "refresh") {
+    if (!window.currentRoot) return { enabled: false, reason: "请先打开工作区" };
+    return { enabled: true, reason: "" };
+  }
+  if (action === "init") {
+    if (!window.currentRoot) return { enabled: false, reason: "请先打开工作区" };
+    return { enabled: true, reason: "" };
+  }
   if (!gitState.repo) return { enabled: false, reason: "当前目录不在 Git 仓库内" };
+  if (action === "commit") {
+    if (gitState.changed === 0) return { enabled: false, reason: "没有可提交的更改" };
+    const msg = document.querySelector("#git-msg");
+    if (!msg || !msg.value.trim()) return { enabled: false, reason: "请填写提交信息" };
+  }
+  if (action === "stageAll") {
+    if (!gitState.unstagedFiles.length) return { enabled: false, reason: "没有可暂存的更改" };
+  }
+  if (action === "unstageAll") {
+    if (!gitState.stagedFiles.length) return { enabled: false, reason: "没有可取消暂存的更改" };
+  }
   if (action === "push" && !gitState.hasHead) {
     return { enabled: false, reason: "仓库还没有提交历史" };
   }
@@ -54,26 +75,133 @@ function gitActionState(action) {
   return { enabled: true, reason: "" };
 }
 
+function setGitBusy(action, busy) {
+  if (busy) gitBusyActions.add(action);
+  else gitBusyActions.delete(action);
+  applyGitActionState();
+}
+
+function applyGitActionState() {
+  const commitState = gitActionState("commit");
+  const pushState = gitActionState("push");
+  const stashState = gitActionState("stash");
+  const filterState = gitActionState("branchFilter");
+  const branchState = gitActionState("branchOps");
+  const stageAllState = gitActionState("stageAll");
+  const unstageAllState = gitActionState("unstageAll");
+  setButtonDisabled(document.querySelector("#git-commit"), !commitState.enabled, commitState.reason || "提交当前更改");
+  setButtonDisabled(document.querySelector("#git-push"), !pushState.enabled, pushState.reason || "推送");
+  setButtonDisabled(document.querySelector("#git-stash-save"), !stashState.enabled, stashState.reason || "储藏当前更改");
+  setButtonDisabled(document.querySelector("#git-branch-filter"), !filterState.enabled, filterState.reason || "筛选 Git 历史分支");
+  setButtonDisabled(document.querySelector("#git-branch-ops"), !branchState.enabled, branchState.reason || "分支操作");
+  setStatusBranchState(filterState);
+  document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
+    if (btn.id === "git-stash-save") return;
+    const st = btn.dataset.act === "stage-all" ? stageAllState : unstageAllState;
+    setButtonDisabled(btn, !st.enabled, st.reason || btn.dataset.enabledTitle || "");
+  });
+}
+
+async function withGitBusy(action, fn) {
+  const st = gitActionState(action);
+  if (!st.enabled) {
+    setGitOut(st.reason || "当前不可用", false);
+    if (action === "commit") document.querySelector("#git-msg")?.focus();
+    return false;
+  }
+  setGitBusy(action, true);
+  try {
+    return await fn();
+  } finally {
+    setGitBusy(action, false);
+  }
+}
+
+async function runGitRefresh() {
+  return withGitBusy("refresh", async () => {
+    await refreshGit();
+    return true;
+  });
+}
+
+async function runGitInit() {
+  return withGitBusy("init", async () => {
+    setGitOut("初始化仓库中…");
+    const r = await gpost("/api/git/init", { path: gitCurPath() });
+    setGitOut(r.output || r.error || "", r.ok);
+    await refreshGit();
+    return !!r.ok;
+  });
+}
+
+async function runGitCommit() {
+  return withGitBusy("commit", async () => {
+    const msg = document.querySelector("#git-msg");
+    const m = msg ? msg.value.trim() : "";
+    setGitOut("提交中…");
+    const r = await gpost("/api/git/commit", {
+      path: gitCurPath(), message: m, stageAll: gitState.staged === 0,
+    });
+    setGitOut(r.output || r.error || "", r.ok);
+    if (r.ok && msg) {
+      msg.value = "";
+      autosizeGitMessage();
+    }
+    await refreshGit();
+    return !!r.ok;
+  });
+}
+
 async function runGitPush() {
-  const st = gitActionState("push");
-  if (!st.enabled) { setGitOut(st.reason || "当前不可用", false); return false; }
-  setGitOut("推送中…");
-  const r = await gpost("/api/git/push", { path: gitCurPath() });
-  setGitOut(r.output || "", r.ok);
-  refreshGit();
-  return !!r.ok;
+  return withGitBusy("push", async () => {
+    setGitOut("推送中…");
+    const r = await gpost("/api/git/push", { path: gitCurPath() });
+    setGitOut(r.output || "", r.ok);
+    await refreshGit();
+    return !!r.ok;
+  });
 }
 
 async function runGitStashSave() {
-  const st = gitActionState("stash");
-  if (!st.enabled) { setGitOut(st.reason || "当前不可用", false); return false; }
   const msg = prompt("储藏说明（可留空）：", "");
   if (msg === null) return false;
-  setGitOut("储藏中…");
-  const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
-  setGitOut(r.output || r.error || "", r.ok);
-  refreshGit();
-  return !!r.ok;
+  return withGitBusy("stash", async () => {
+    setGitOut("储藏中…");
+    const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
+    setGitOut(r.output || r.error || "", r.ok);
+    await refreshGit();
+    return !!r.ok;
+  });
+}
+
+async function runGitStashPop(ref) {
+  return withGitBusy("stashPop", async () => {
+    setGitOut("应用储藏中…");
+    const r = await gpost("/api/git/stash-pop", { path: gitCurPath(), ref });
+    setGitOut(r.output || r.error || "", r.ok);
+    await refreshGit();
+    return !!r.ok;
+  });
+}
+
+async function runGitGroupAction(action) {
+  const stateAction = action === "stage-all" ? "stageAll" : "unstageAll";
+  return withGitBusy(stateAction, async () => {
+    const list = stateAction === "stageAll" ? gitState.unstagedFiles.slice() : gitState.stagedFiles.slice();
+    const ep = stateAction === "stageAll" ? "/api/git/stage" : "/api/git/unstage";
+    setGitOut(stateAction === "stageAll" ? "暂存全部更改中…" : "取消全部暂存中…");
+    let ok = true;
+    let output = "";
+    for (const f of list) {
+      if (!f.path) continue;
+      const r = await gpost(ep, { path: f.path });
+      if (!r.ok) ok = false;
+      if (r.output || r.error) output += (output ? "\n" : "") + (r.output || r.error);
+    }
+    setGitOut(output || (ok ? "操作完成" : "操作失败"), ok);
+    await refreshGit();
+    return ok;
+  });
 }
 
 function runGitBranchOps(anchor) {
@@ -104,6 +232,21 @@ async function runGitAction(action) {
     if (typeof setGitOut === "function") setGitOut(st.reason || "当前不可用", false);
     return false;
   }
+  if (action === "refresh") {
+    return runGitRefresh();
+  }
+  if (action === "init") {
+    return runGitInit();
+  }
+  if (action === "commit") {
+    return runGitCommit();
+  }
+  if (action === "stageAll") {
+    return runGitGroupAction("stage-all");
+  }
+  if (action === "unstageAll") {
+    return runGitGroupAction("unstage-all");
+  }
   if (action === "push") {
     return runGitPush();
   }
@@ -115,6 +258,9 @@ async function runGitAction(action) {
   }
   if (action === "stash") {
     return runGitStashSave();
+  }
+  if (action === "stashPop") {
+    return runGitStashPop(arguments[1]);
   }
   return false;
 }
@@ -131,27 +277,15 @@ function setGitControls(repo, d = {}) {
   const hasHead = !!(repo && d.hasHead);
   gitState.repo = !!repo;
   gitState.hasHead = hasHead;
+  gitState.staged = staged.length;
   gitState.changed = changed;
   gitState.stagedFiles = staged.slice();
   gitState.unstagedFiles = unstaged.slice();
   const noRepo = "当前目录不在 Git 仓库内";
-  const noChanges = "没有可操作的更改";
-  const noHistory = "仓库还没有提交历史";
-  setButtonDisabled(document.querySelector("#git-commit"), !repo || changed === 0, repo ? noChanges : noRepo);
-  const pushState = gitActionState("push");
-  const stashState = gitActionState("stash");
-  const filterState = gitActionState("branchFilter");
-  const branchState = gitActionState("branchOps");
-  setButtonDisabled(document.querySelector("#git-push"), !pushState.enabled, pushState.reason || noRepo);
-  setButtonDisabled(document.querySelector("#git-stash-save"), !stashState.enabled, stashState.reason || noChanges);
-  setButtonDisabled(document.querySelector("#git-branch-filter"), !filterState.enabled, filterState.reason || noHistory);
-  setButtonDisabled(document.querySelector("#git-branch-ops"), !branchState.enabled, branchState.reason || noHistory);
-  setStatusBranchState(filterState);
-  document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
-    const act = btn.dataset.act;
-    const empty = act === "stage-all" ? unstaged.length === 0 : staged.length === 0;
-    setButtonDisabled(btn, !repo || empty, repo ? noChanges : noRepo);
-  });
+  applyGitActionState();
+  if (!repo) {
+    setButtonDisabled(document.querySelector("#git-commit"), true, noRepo);
+  }
 }
 
 const G_CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
@@ -210,8 +344,7 @@ async function refreshGit() {
     document.querySelector("#scm-stash").classList.add("hidden");
     const ib = document.querySelector("#git-init");
     if (ib) ib.onclick = async () => {
-      const r = await gpost("/api/git/init", { path: gitCurPath() });
-      setGitOut(r.output || "", r.ok); refreshGit();
+      await window.wbGitActions.run("init");
     };
     return;
   }
@@ -291,9 +424,7 @@ async function renderStashList(token) {
       + `</span>`;
     row.querySelector(".scm-act").onclick = async (e) => {
       e.stopPropagation();
-      const r = await gpost("/api/git/stash-pop", { path: gitCurPath(), ref: s.ref });
-      setGitOut(r.output || r.error || "", r.ok);
-      refreshGit();
+      await window.wbGitActions.run("stashPop", s.ref);
     };
     listEl.appendChild(row);
   });
@@ -771,35 +902,31 @@ function setGitOut(text, ok) {
   if (text) gitOutTimer = setTimeout(() => { el.textContent = ""; }, 6000);
 }
 
+function autosizeGitMessage() {
+  const msg = document.querySelector("#git-msg");
+  if (!msg) return;
+  msg.style.height = "auto";
+  msg.style.height = Math.min(msg.scrollHeight, 160) + "px";
+}
+
 function initGit() {
-  document.querySelector("#git-refresh").onclick = refreshGit;
+  document.querySelector("#git-refresh").onclick = () => window.wbGitActions.run("refresh");
   const msg = document.querySelector("#git-msg");
 
-  const autosize = () => { msg.style.height = "auto"; msg.style.height = Math.min(msg.scrollHeight, 160) + "px"; };
-  msg.addEventListener("input", autosize);
+  msg.addEventListener("input", () => {
+    autosizeGitMessage();
+    applyGitActionState();
+  });
 
   document.querySelector("#git-commit").onclick = async () => {
-    if (!gitState.repo || gitState.changed === 0) {
-      setGitOut(gitState.repo ? "没有可提交的更改" : "当前目录不在 Git 仓库内", false);
-      return;
-    }
-    const m = msg.value.trim();
-    if (!m) { setGitOut("请填写提交信息", false); msg.focus(); return; }
-    setGitOut("提交中…");
-    // 有暂存内容 → 只提交暂存；否则提交所有更改
-    const r = await gpost("/api/git/commit", {
-      path: gitCurPath(), message: m, stageAll: gitState.staged === 0,
-    });
-    setGitOut(r.output || r.error || "", r.ok);
-    if (r.ok) { msg.value = ""; autosize(); }
-    refreshGit();
+    await window.wbGitActions.run("commit");
   };
   document.querySelector("#git-push").onclick = async () => {
-    await runGitPush();
+    await window.wbGitActions.run("push");
   };
   msg.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault(); document.querySelector("#git-commit").click();
+      e.preventDefault(); window.wbGitActions.run("commit");
     }
   });
 
@@ -807,13 +934,9 @@ function initGit() {
   document.querySelectorAll(".scm-gact").forEach(btn => {
     btn.onclick = async (e) => {
       e.stopPropagation();
-      if (btn.disabled || !gitState.repo) return;
-      const act = btn.dataset.act;
-      const d = await gjson(`/api/git/status?path=${encodeURIComponent(gitCurPath())}`);
-      const list = act === "stage-all" ? (d.unstaged || []) : (d.staged || []);
-      const ep = act === "stage-all" ? "/api/git/stage" : "/api/git/unstage";
-      for (const f of list) if (f.path) await gpost(ep, { path: f.path });
-      refreshGit();
+      if (btn.id === "git-stash-save") return;
+      if (btn.disabled) return;
+      await window.wbGitActions.run(btn.dataset.act === "stage-all" ? "stageAll" : "unstageAll");
     };
   });
 
@@ -843,14 +966,14 @@ function initGit() {
   const stashSave = document.querySelector("#git-stash-save");
   if (stashSave) stashSave.onclick = async (e) => {
     e.stopPropagation();
-    await runGitStashSave();
+    await window.wbGitActions.run("stash");
   };
 
   // 分支操作菜单
   const branchOps = document.querySelector("#git-branch-ops");
   if (branchOps) branchOps.onclick = (e) => {
     e.stopPropagation();
-    runGitBranchOps(branchOps);
+    window.wbGitActions.run("branchOps");
   };
 }
 

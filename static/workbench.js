@@ -638,12 +638,19 @@
     A({ id: "tab.closeCurrent", name: "关闭当前标签", hint: "", icon: "close",
         requires: ["currentFile"],
         run: () => { if (window.state && state.activeTab && typeof closeTab === "function") closeTab(state.activeTab); } });
-    // Git 提交（焦点到消息框）
+    // Git 提交
     A({ id: "git.commit.focus", name: "Git: 提交", hint: "Ctrl+Enter", icon: "check",
         requires: ["workspace"],
+        risk: "write",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("commit");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("git");
-          const m = document.querySelector("#git-msg"); if (m) m.focus();
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("commit");
         } });
     A({ id: "git.refresh", name: "Git: 刷新状态", hint: "SCM", icon: "refresh",
         requires: ["workspace"],
