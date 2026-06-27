@@ -30,6 +30,49 @@ function setButtonDisabled(el, disabled, reason) {
   el.title = disabled ? reason : el.dataset.enabledTitle;
 }
 
+function gitActionState(action) {
+  if (!gitState.repo) return { enabled: false, reason: "当前目录不在 Git 仓库内" };
+  if (action === "push" && !gitState.hasHead) {
+    return { enabled: false, reason: "仓库还没有提交历史" };
+  }
+  if ((action === "branchOps" || action === "branchFilter") && !gitState.hasHead) {
+    return { enabled: false, reason: "仓库还没有提交历史" };
+  }
+  if (action === "stash" && gitState.changed === 0) {
+    return { enabled: false, reason: "没有可储藏的更改" };
+  }
+  return { enabled: true, reason: "" };
+}
+
+function runGitAction(action) {
+  const st = gitActionState(action);
+  if (!st.enabled) {
+    if (typeof setGitOut === "function") setGitOut(st.reason || "当前不可用", false);
+    return false;
+  }
+  if (action === "push") {
+    const btn = document.querySelector("#git-push");
+    if (btn) btn.click();
+    return true;
+  }
+  if (action === "branchOps") {
+    const btn = document.querySelector("#git-branch-ops");
+    if (btn) btn.click();
+    return true;
+  }
+  if (action === "stash") {
+    const btn = document.querySelector("#git-stash-save");
+    if (btn) btn.click();
+    return true;
+  }
+  return false;
+}
+
+window.wbGitActions = {
+  actionState: gitActionState,
+  run: runGitAction,
+};
+
 function setGitControls(repo, d = {}) {
   const staged = d.staged || [];
   const unstaged = d.unstaged || [];
@@ -44,10 +87,14 @@ function setGitControls(repo, d = {}) {
   const noChanges = "没有可操作的更改";
   const noHistory = "仓库还没有提交历史";
   setButtonDisabled(document.querySelector("#git-commit"), !repo || changed === 0, repo ? noChanges : noRepo);
-  setButtonDisabled(document.querySelector("#git-push"), !repo, noRepo);
-  setButtonDisabled(document.querySelector("#git-stash-save"), !repo || changed === 0, repo ? noChanges : noRepo);
-  setButtonDisabled(document.querySelector("#git-branch-filter"), !repo || !hasHead, repo ? noHistory : noRepo);
-  setButtonDisabled(document.querySelector("#git-branch-ops"), !repo || !hasHead, repo ? noHistory : noRepo);
+  const pushState = gitActionState("push");
+  const stashState = gitActionState("stash");
+  const filterState = gitActionState("branchFilter");
+  const branchState = gitActionState("branchOps");
+  setButtonDisabled(document.querySelector("#git-push"), !pushState.enabled, pushState.reason || noRepo);
+  setButtonDisabled(document.querySelector("#git-stash-save"), !stashState.enabled, stashState.reason || noChanges);
+  setButtonDisabled(document.querySelector("#git-branch-filter"), !filterState.enabled, filterState.reason || noHistory);
+  setButtonDisabled(document.querySelector("#git-branch-ops"), !branchState.enabled, branchState.reason || noHistory);
   document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
     const act = btn.dataset.act;
     const empty = act === "stage-all" ? unstaged.length === 0 : staged.length === 0;

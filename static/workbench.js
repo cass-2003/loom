@@ -595,22 +595,39 @@
         run: () => { typeof switchView === "function" && switchView("git"); typeof refreshGit === "function" && refreshGit(); } });
     A({ id: "git.push", name: "Git: 推送", hint: "SCM", icon: "upload",
         requires: ["workspace", "gitRepo"], risk: "network",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("push");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          const btn = document.querySelector("#git-push");
-          if (btn) btn.click();
+          typeof switchView === "function" && switchView("git");
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("push");
         } });
     A({ id: "git.branchOps", name: "Git: 分支操作", hint: "新建 / 检出 / 删除", icon: "branch",
         requires: ["workspace", "gitRepo"], risk: "write",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("branchOps");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("git");
-          const btn = document.querySelector("#git-branch-ops");
-          if (btn) btn.click();
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("branchOps");
         } });
     A({ id: "git.stash", name: "Git: 储藏当前更改", hint: "Stash", icon: "download",
         requires: ["workspace", "gitRepo"], risk: "write",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("stash");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          const btn = document.querySelector("#git-stash-save");
-          if (btn) btn.click();
+          typeof switchView === "function" && switchView("git");
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("stash");
         } });
     [
       ["requirements", "Requirements"],
