@@ -1472,6 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tasks(qs.get("path", [""])[0])
         if path == "/api/project-state":
             return self._api_project_state(qs.get("name", [""])[0])
+        if path == "/api/project-state/open":
+            return self._api_project_state_file(qs.get("name", [""])[0])
         if path == "/api/term/shells":
             return self._api_term_shells()
         if path == "/api/term/read":
@@ -1535,6 +1537,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/create-workspace": "_api_create_workspace",
             "/api/recent/remove": "_api_recent_remove",
             "/api/project-state/append": "_api_project_state_append",
+            "/api/project-state/save": "_api_project_state_save",
         }
         if parsed.path in post_routes:
             handler = getattr(self, post_routes[parsed.path], None)
@@ -1998,6 +2001,37 @@ class Handler(BaseHTTPRequestHandler):
             out.append({"name": key, "file": fn, "content": text, "mtime": mtime})
         return self._json({"files": out})
 
+    def _project_state_path(self, key):
+        key = (key or "").strip().lower()
+        fn = PROJECT_STATE_FILES.get(key)
+        if not fn:
+            return None, None
+        base = (APP_DIR / "state").resolve()
+        fp = (base / fn).resolve()
+        if fp.parent != base:
+            return None, None
+        return fn, fp
+
+    def _api_project_state_file(self, name):
+        """GET /api/project-state/open → 读取单个白名单项目记忆文件供编辑。"""
+        key = (name or "").strip().lower()
+        fn, fp = self._project_state_path(key)
+        if not fn:
+            return self._err("unknown project state file", 404)
+        try:
+            text = fp.read_text(encoding="utf-8-sig") if fp.is_file() else ""
+            size = len(text.encode("utf-8"))
+        except OSError:
+            return self._err("读取失败", 500)
+        return self._json({
+            "kind": "text",
+            "name": fn,
+            "ext": ".md",
+            "content": text,
+            "size": size,
+            "virtualPath": f"project://{key}",
+        })
+
     @staticmethod
     def _md_line(text, limit=2000):
         text = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -2006,13 +2040,9 @@ class Handler(BaseHTTPRequestHandler):
         return "\n".join("> " + line for line in text.split("\n")) if text else "> （空）"
 
     def _append_state_file(self, key, block):
-        fn = PROJECT_STATE_FILES.get(key)
+        fn, fp = self._project_state_path(key)
         if not fn:
             return self._err("unknown project state file", 404)
-        base = (APP_DIR / "state").resolve()
-        fp = (base / fn).resolve()
-        if fp.parent != base:
-            return self._err("forbidden", 403)
         try:
             old = fp.read_text(encoding="utf-8-sig") if fp.is_file() else f"# {fn}\n"
             if old and not old.endswith("\n"):
@@ -2047,6 +2077,25 @@ class Handler(BaseHTTPRequestHandler):
         if err:
             return err
         return self._json({"ok": True, "target": target, "kind": kind})
+
+    def _api_project_state_save(self, body):
+        """POST /api/project-state/save → 保存单个白名单项目记忆文件。"""
+        key = str(body.get("name") or "").strip().lower()
+        content = body.get("content")
+        if not isinstance(content, str):
+            return self._err("content 必须是字符串")
+        data = content.encode("utf-8")
+        if len(data) > MAX_TEXT_BYTES:
+            return self._err(f"内容过大（>{MAX_TEXT_BYTES // (1024*1024)}MB），不宜在线编辑")
+        fn, fp = self._project_state_path(key)
+        if not fn:
+            return self._err("unknown project state file", 404)
+        try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_bytes(fp, data)
+        except OSError:
+            return self._err("保存失败", 500)
+        return self._json({"ok": True, "size": len(data), "target": key})
 
     def _resolve_workspace_root(self, raw, *, create=False):
         """把用户输入的绝对/相对路径解析成可用工作区目录。"""

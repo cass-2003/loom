@@ -398,6 +398,21 @@
         if (window.setProjectDoc) window.setProjectDoc(name);
       },
     }));
+    [
+      ["requirements", "Requirements"],
+      ["progress", "Progress"],
+      ["log", "Log"],
+      ["memory", "Memory"],
+    ].forEach(([name, label]) => A({
+      id: "project.edit." + name,
+      name: "项目记忆: 打开源文件 " + label,
+      hint: "state/" + label.toUpperCase() + ".md",
+      icon: "fileText",
+      risk: "write",
+      run: () => {
+        if (window.openProjectStateFile) window.openProjectStateFile(name);
+      },
+    }));
     A({ id: "project.appendDecision", name: "项目记忆: 追加决策记录", hint: "Decision", icon: "check",
         risk: "write",
         run: () => {

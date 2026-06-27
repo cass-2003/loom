@@ -136,9 +136,20 @@
     });
   }
 
+  function openProjectStateFile(name) {
+    const key = name || active;
+    if (!DOCS.some(d => d.name === key)) return;
+    active = key;
+    renderTabs();
+    if (typeof switchView === "function") switchView("files");
+    if (window.openFile) window.openFile("project://" + key);
+  }
+
   function initProjectMemory() {
     const refresh = $("#project-refresh");
     if (refresh) refresh.onclick = loadProjectState;
+    const openSource = $("#project-open-source");
+    if (openSource) openSource.onclick = () => openProjectStateFile(active);
     const decision = $("#project-add-decision");
     if (decision) decision.onclick = () => appendProjectRecord("decision");
     const validation = $("#project-add-validation");
@@ -150,6 +161,8 @@
   window.initProjectMemory = initProjectMemory;
   window.setProjectDoc = setProjectDoc;
   window.appendProjectRecord = appendProjectRecord;
+  window.openProjectStateFile = openProjectStateFile;
+  window.reloadProjectMemory = loadProjectState;
   window.focusProjectMemory = () => {
     if (!docs.length) loadProjectState();
   };

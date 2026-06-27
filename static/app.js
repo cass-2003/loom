@@ -3,9 +3,14 @@ const $ = (s) => document.querySelector(s);
 const api = {
   tree: (p) => fetch(`/api/tree?path=${encodeURIComponent(p)}`).then(r => r.json()),
   file: (p) => fetch(`/api/file?path=${encodeURIComponent(p)}`),
+  projectFile: (name) => fetch(`/api/project-state/open?name=${encodeURIComponent(name)}`),
   save: (p, c) => fetch(`/api/save`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: p, content: c }),
+  }).then(r => r.json()),
+  saveProjectFile: (name, c) => fetch(`/api/project-state/save`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, content: c }),
   }).then(r => r.json()),
 };
 
@@ -705,6 +710,11 @@ function extOf(nameOrPath) {
   return base.slice(dot + 1).toLowerCase();
 }
 
+function projectStateKey(path) {
+  const m = String(path || "").match(/^project:\/\/(requirements|progress|log|memory)$/);
+  return m ? m[1] : null;
+}
+
 // 卸载当前已 mount 的查看器（若有），并清空挂载容器
 function unmountViewer() {
   if (state.viewer && typeof state.viewer.unmount === "function") {
@@ -784,7 +794,8 @@ async function openFile(path, row, opts) {
 
   // 请求令牌：连续切换文件时，只让最后一次请求生效，丢弃过期响应
   const token = ++state.openSeq;
-  const res = await api.file(path);
+  const projectKey = projectStateKey(path);
+  const res = projectKey ? await api.projectFile(projectKey) : await api.file(path);
   if (token !== state.openSeq) return;
   const ctype = res.headers.get("Content-Type") || "";
 
@@ -814,7 +825,8 @@ async function openFile(path, row, opts) {
   const isMdFile = ext === ".md" || ext === ".markdown";
   const tab = { path, kind: isMdFile ? "md" : "text", name: data.name || name,
                 ext, dirty: false, draft: data.content,
-                viewMode: "split", pendingLine: gotoLine };
+                viewMode: "split", pendingLine: gotoLine,
+                projectStateKey: projectKey || null };
   addTab(tab);
   activateTab(path);
 }
@@ -1837,7 +1849,8 @@ async function save() {
     content = vditorGetValue();
   } else if (state.kind === "text") content = $("#editor").value;
   else return;
-  const res = await api.save(path, content);
+  const projectKey = projectStateKey(path);
+  const res = projectKey ? await api.saveProjectFile(projectKey, content) : await api.save(path, content);
   if (res.error) { setMsg("保存失败: " + res.error, "err"); return; }
   const t = tabByPath(path);           // 按固定路径回写，而不是 await 后的 state.current
   if (t) { t.dirty = false; t.draft = content; }
@@ -1847,6 +1860,7 @@ async function save() {
   }
   renderTabs();
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
+  if (projectKey && window.reloadProjectMemory) window.reloadProjectMemory();
   if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
 }
 // 焦点在副分屏组时存副组，否则存主组

@@ -26,6 +26,10 @@
 
   const wb = () => window.wb || {};
   const isMd = (ext) => ext === ".md" || ext === ".markdown";
+  function projectStateKey(path) {
+    const m = String(path || "").match(/^project:\/\/(requirements|progress|log|memory)$/);
+    return m ? m[1] : null;
+  }
   function sideTabByPath(p) { return side.tabs.find(t => t.path === p) || null; }
   function hasSide() { return side.tabs.length > 0; }
 
@@ -142,9 +146,13 @@
   }
   async function loadFromDisk(path) {
     try {
-      const data = await fetch("/api/file?path=" + encodeURIComponent(path)).then(r => r.json());
+      const pkey = projectStateKey(path);
+      const url = pkey
+        ? "/api/project-state/open?name=" + encodeURIComponent(pkey)
+        : "/api/file?path=" + encodeURIComponent(path);
+      const data = await fetch(url).then(r => r.json());
       if (!data || data.error || data.kind === "binary") return null;
-      const name = path.split("/").pop();
+      const name = data.name || path.split("/").pop();
       return { path, name, ext: data.ext || "", kind: "text", draft: data.content || "", dirty: false };
     } catch (_) { return null; }
   }
@@ -188,7 +196,8 @@
     // 加入副组（始终以源码文本编辑）
     if (!sideTabByPath(path))
       side.tabs.push({ path, name: tab.name, ext: tab.ext, kind: "text",
-                       draft: tab.draft != null ? tab.draft : "", dirty: !!tab.dirty });
+                       draft: tab.draft != null ? tab.draft : "", dirty: !!tab.dirty,
+                       projectStateKey: tab.projectStateKey || projectStateKey(path) || null });
     const prevOrient = orient;
     if (zone === "bottom") orient = "v";
     else if (zone === "right") orient = "h";
@@ -211,7 +220,8 @@
     // 放回主组：按扩展名还原 md/text，draft 即源码
     const ext = tab.ext || "";
     wb().addTab({ path, kind: isMd(ext) ? "md" : "text", name: tab.name, ext,
-                  dirty: !!tab.dirty, draft: tab.draft != null ? tab.draft : "", viewMode: "split" });
+                  dirty: !!tab.dirty, draft: tab.draft != null ? tab.draft : "", viewMode: "split",
+                  projectStateKey: tab.projectStateKey || projectStateKey(path) || null });
     wb().activateTab(path);
     setFocus("main");
   }
@@ -248,15 +258,19 @@
     if (!t) return;
     const path = t.path;                       // await 前固定，防存盘往返中切换副组标签存错
     const content = $("#side-editor").value;
-    const res = await fetch("/api/save", {
+    const pkey = t.projectStateKey || projectStateKey(path);
+    const url = pkey ? "/api/project-state/save" : "/api/save";
+    const body = pkey ? { name: pkey, content } : { path, content };
+    const res = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path, content }),
+      body: JSON.stringify(body),
     }).then(r => r.json());
     if (res.error) { if (window.setMsg) window.setMsg("保存失败: " + res.error, "err"); return; }
     t.dirty = false; t.draft = content;
     if (side.active === path) side.dirty = false;   // 仅当仍是当前副组标签才清全局副组脏标
     renderSideTabs();
     if (window.setMsg) window.setMsg(`已保存 · ${window.fmtSize ? window.fmtSize(res.size) : res.size + "B"}`, "ok");
+    if (pkey && window.reloadProjectMemory) window.reloadProjectMemory();
     if (window.refreshGit) window.refreshGit();     // 原 refreshGitIfActive 未定义
   }
 
@@ -423,7 +437,8 @@
         const i = st.tabs.findIndex(x => x.path === p);
         if (i >= 0) { t = st.tabs.splice(i, 1)[0]; if (st.activeTab === p) st.activeTab = null; }
       }
-      const stab = t ? { path: p, name: t.name, ext: t.ext, kind: "text", draft: t.draft || "", dirty: !!t.dirty }
+      const stab = t ? { path: p, name: t.name, ext: t.ext, kind: "text", draft: t.draft || "", dirty: !!t.dirty,
+                         projectStateKey: t.projectStateKey || projectStateKey(p) || null }
                      : await loadFromDisk(p);
       if (stab) side.tabs.push(stab);
     }
