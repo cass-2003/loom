@@ -1470,6 +1470,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_notes_get()
         if path == "/api/tasks":
             return self._api_tasks(qs.get("path", [""])[0])
+        if path == "/api/workflow-tasks":
+            return self._api_workflow_tasks()
         if path == "/api/project-state":
             return self._api_project_state(qs.get("name", [""])[0])
         if path == "/api/project-state/open":
@@ -1529,6 +1531,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/exec": "_api_exec",
             "/api/run-file": "_api_run_file",
             "/api/run-task": "_api_run_task",
+            "/api/workflow-tasks": "_api_workflow_tasks_save",
             "/api/term/open": "_api_term_open",
             "/api/term/input": "_api_term_input",
             "/api/term/resize": "_api_term_resize",
@@ -2096,6 +2099,107 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self._err("保存失败", 500)
         return self._json({"ok": True, "size": len(data), "target": key})
+
+    def _workflow_tasks_path(self) -> Path:
+        return (APP_DIR / "state" / "TASKS.json").resolve()
+
+    @staticmethod
+    def _text_list(value, *, item_limit=200, count_limit=20):
+        if isinstance(value, str):
+            value = value.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if not isinstance(value, list):
+            return []
+        out = []
+        for item in value:
+            text = str(item or "").strip()
+            if text:
+                out.append(text[:item_limit])
+            if len(out) >= count_limit:
+                break
+        return out
+
+    def _load_workflow_tasks(self):
+        fp = self._workflow_tasks_path()
+        if fp.parent != (APP_DIR / "state").resolve():
+            return []
+        if not fp.is_file():
+            return []
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return []
+        raw = data.get("tasks") if isinstance(data, dict) else data
+        if not isinstance(raw, list):
+            return []
+        return [t for t in (self._clean_workflow_task(x) for x in raw) if t]
+
+    def _save_workflow_tasks(self, tasks):
+        fp = self._workflow_tasks_path()
+        if fp.parent != (APP_DIR / "state").resolve():
+            return self._err("forbidden", 403)
+        payload = {
+            "version": 1,
+            "updatedAt": _now_iso(),
+            "tasks": tasks,
+        }
+        try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_bytes(fp, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+        except OSError:
+            return self._err("保存失败", 500)
+        return None
+
+    def _clean_workflow_task(self, item):
+        if not isinstance(item, dict):
+            return None
+        title = str(item.get("title") or "").strip()[:160]
+        goal = str(item.get("goal") or "").strip()[:1200]
+        if not title and not goal:
+            return None
+        tid = str(item.get("id") or "").strip()
+        if not re.fullmatch(r"task-\d{8}-\d{6}-[a-f0-9]{4}", tid):
+            tid = "task-" + time.strftime("%Y%m%d-%H%M%S", time.localtime()) + "-" + secrets.token_hex(2)
+        status = str(item.get("status") or "todo").strip().lower()
+        if status not in {"todo", "running", "verified", "blocked"}:
+            status = "todo"
+        now = _now_iso()
+        return {
+            "id": tid,
+            "title": title or "未命名任务",
+            "status": status,
+            "goal": goal,
+            "plan": self._text_list(item.get("plan"), item_limit=180, count_limit=24),
+            "evidence": self._text_list(item.get("evidence"), item_limit=260, count_limit=30),
+            "log": self._text_list(item.get("log"), item_limit=500, count_limit=80),
+            "next": str(item.get("next") or "").strip()[:500],
+            "createdAt": str(item.get("createdAt") or now)[:32],
+            "updatedAt": str(item.get("updatedAt") or now)[:32],
+        }
+
+    def _api_workflow_tasks(self):
+        """GET /api/workflow-tasks → 本地任务/Agent 工作流记录。"""
+        return self._json({"tasks": self._load_workflow_tasks()})
+
+    def _api_workflow_tasks_save(self, body):
+        """POST /api/workflow-tasks → 保存本地任务/Agent 工作流记录。"""
+        raw = body.get("tasks")
+        if not isinstance(raw, list):
+            return self._err("tasks 必须是数组")
+        if len(raw) > 80:
+            return self._err("任务数量过多")
+        now = _now_iso()
+        tasks = []
+        for item in raw:
+            if isinstance(item, dict):
+                item = dict(item)
+                item["updatedAt"] = now
+            clean = self._clean_workflow_task(item)
+            if clean:
+                tasks.append(clean)
+        err = self._save_workflow_tasks(tasks)
+        if err:
+            return err
+        return self._json({"ok": True, "tasks": tasks})
 
     def _resolve_workspace_root(self, raw, *, create=False):
         """把用户输入的绝对/相对路径解析成可用工作区目录。"""

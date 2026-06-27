@@ -1274,6 +1274,56 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .project-modal-text:focus { border-color: var(--accent); }
 .project-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* ===== 任务 / Agent 视图 ===== */
+#tasks-body {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  padding: 8px 10px 12px; overflow: hidden;
+}
+.task-empty {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 14px; color: var(--text-dim); background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, transparent), transparent 62%),
+    var(--bg3);
+  border: 1px solid var(--border-soft); border-radius: 10px;
+}
+.task-empty-icon { color: var(--accent); }
+.task-empty span { color: var(--muted); line-height: 1.45; }
+.task-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 9px; }
+.task-card {
+  padding: 10px; border-radius: 11px; border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--panel) 88%, var(--bg3)); color: var(--text-dim);
+}
+.task-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task-state {
+  display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .3px; border: 1px solid var(--border-soft);
+}
+.task-state.todo { color: var(--muted); }
+.task-state.running { color: var(--accent2); border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
+.task-state.verified { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 38%, transparent); }
+.task-state.blocked { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.task-mini {
+  display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  color: var(--muted); background: transparent; border: none; border-radius: 6px; cursor: pointer;
+}
+.task-mini:hover { color: var(--text); background: var(--hover); }
+.task-card h3 { margin: 8px 0 5px; color: var(--text); font-size: 13px; line-height: 1.35; }
+.task-goal { margin: 0 0 8px; color: var(--text-dim); line-height: 1.45; }
+.task-section {
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+.task-section b { display: block; margin-bottom: 4px; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; }
+.task-section ol, .task-section ul { margin: 0; padding-left: 18px; }
+.task-section li { margin: 2px 0; line-height: 1.42; word-break: break-word; }
+.task-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.task-actions button {
+  padding: 4px 7px; border-radius: 7px; border: 1px solid var(--border-soft);
+  background: var(--bg3); color: var(--text-dim); font: inherit; font-size: 11px; cursor: pointer;
+}
+.task-actions button:hover { color: var(--text); border-color: var(--border); background: var(--hover); }
+.task-error { padding: 10px; color: var(--danger); }
+
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px;
   border: 2px solid transparent; background-clip: padding-box; }

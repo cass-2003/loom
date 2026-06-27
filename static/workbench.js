@@ -320,7 +320,8 @@
     // 视图切换
     [["资源管理器", "files", "folder"], ["源代码管理", "git", "git"],
      ["搜索", "search", "search"], ["便签 / Todo", "notes", "checkSquare"],
-     ["工具箱", "tools", "tools"], ["项目记忆", "project", "notebook"]].forEach(([label, view, icon]) =>
+     ["工具箱", "tools", "tools"], ["项目记忆", "project", "notebook"],
+     ["任务 / Agent", "tasks", "listChecks"]].forEach(([label, view, icon]) =>
       A({ id: "view." + view, name: "切换到：" + label, hint: "视图", icon,
           run: () => { typeof switchView === "function" && switchView(view); } }));
     // Markdown 导出
@@ -424,6 +425,17 @@
         run: () => {
           typeof switchView === "function" && switchView("project");
           if (window.appendProjectRecord) window.appendProjectRecord("validation");
+        } });
+    A({ id: "task.create", name: "任务: 新建工作流任务", hint: "Agent", icon: "listChecks",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.createWorkflowTask) window.createWorkflowTask();
+        } });
+    A({ id: "task.refresh", name: "任务: 刷新任务列表", hint: "Agent", icon: "refresh",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
         } });
   }
 

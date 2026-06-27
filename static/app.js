@@ -2051,6 +2051,7 @@ function switchView(view) {
   if (view === "git") refreshGit();
   if (view === "search" && window.focusSearchInput) window.focusSearchInput();
   if (view === "project" && window.focusProjectMemory) window.focusProjectMemory();
+  if (view === "tasks" && window.focusWorkflowTasks) window.focusWorkflowTasks();
 }
 document.querySelectorAll(".act").forEach(btn => {
   btn.onclick = () => {
@@ -2458,6 +2459,7 @@ initGit();
 initSearch();
 initNotes();
 if (window.initProjectMemory) initProjectMemory();
+if (window.initTasksPanel) initTasksPanel();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
 bindWelcomeButtons();

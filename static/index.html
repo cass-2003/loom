@@ -59,6 +59,7 @@
       <button class="act" data-view="notes" data-icon="checkSquare" title="便签 / Todo"></button>
       <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
       <button class="act" data-view="project" data-icon="notebook" title="项目记忆"></button>
+      <button class="act" data-view="tasks" data-icon="listChecks" title="任务 / Agent"></button>
     </nav>
 
     <!-- 侧边栏 -->
@@ -214,6 +215,25 @@
           <div class="project-tabs" id="project-tabs"></div>
           <div class="project-meta" id="project-meta"></div>
           <pre class="project-doc" id="project-doc">加载中…</pre>
+        </div>
+      </div>
+
+      <!-- 任务 / Agent 工作流 -->
+      <div class="view hidden" id="view-tasks">
+        <div class="side-head">
+          <span>任务 / Agent</span>
+          <div class="head-actions">
+            <button id="task-new" class="icon-btn" data-icon="plus" title="新建任务"></button>
+            <button id="task-refresh" class="icon-btn" data-icon="refresh" title="刷新任务"></button>
+          </div>
+        </div>
+        <div id="tasks-body">
+          <div class="task-empty" id="task-empty">
+            <div class="task-empty-icon" data-icon="listChecks"></div>
+            <b>把工作变成可验证任务</b>
+            <span>记录目标、计划、执行日志和证据路径，后续可导出给 Agent / Playbook。</span>
+          </div>
+          <div id="task-list" class="task-list"></div>
         </div>
       </div>
     </aside>
@@ -461,6 +481,7 @@
 <script src="/static/search.js"></script>
 <script src="/static/notes.js"></script>
 <script src="/static/project.js"></script>
+<script src="/static/tasks.js"></script>
 <script src="/static/workbench.js"></script>
 <script src="/static/vendor/xterm/xterm.js"></script>
 <script src="/static/vendor/xterm/xterm-addon-fit.js"></script>
