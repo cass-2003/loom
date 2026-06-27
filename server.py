@@ -1472,6 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tasks(qs.get("path", [""])[0])
         if path == "/api/workflow-tasks":
             return self._api_workflow_tasks()
+        if path == "/api/agent-sessions":
+            return self._api_agent_sessions()
         if path == "/api/ecosystem":
             return self._api_ecosystem()
         if path == "/api/project-state":
@@ -1534,6 +1536,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/run-file": "_api_run_file",
             "/api/run-task": "_api_run_task",
             "/api/workflow-tasks": "_api_workflow_tasks_save",
+            "/api/agent-sessions": "_api_agent_sessions_save",
             "/api/term/open": "_api_term_open",
             "/api/term/input": "_api_term_input",
             "/api/term/resize": "_api_term_resize",
@@ -2105,6 +2108,9 @@ class Handler(BaseHTTPRequestHandler):
     def _workflow_tasks_path(self) -> Path:
         return (APP_DIR / "state" / "TASKS.json").resolve()
 
+    def _agent_sessions_path(self) -> Path:
+        return (APP_DIR / "state" / "SESSIONS.json").resolve()
+
     @staticmethod
     def _text_list(value, *, item_limit=200, count_limit=20):
         if isinstance(value, str):
@@ -2202,6 +2208,95 @@ class Handler(BaseHTTPRequestHandler):
         if err:
             return err
         return self._json({"ok": True, "tasks": tasks})
+
+    def _load_agent_sessions(self):
+        fp = self._agent_sessions_path()
+        if fp.parent != (APP_DIR / "state").resolve():
+            return []
+        if not fp.is_file():
+            return []
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return []
+        raw = data.get("sessions") if isinstance(data, dict) else data
+        if not isinstance(raw, list):
+            return []
+        return [s for s in (self._clean_agent_session(x) for x in raw) if s]
+
+    def _save_agent_sessions(self, sessions):
+        fp = self._agent_sessions_path()
+        if fp.parent != (APP_DIR / "state").resolve():
+            return self._err("forbidden", 403)
+        payload = {
+            "version": 1,
+            "updatedAt": _now_iso(),
+            "sessions": sessions,
+        }
+        try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_bytes(fp, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+        except OSError:
+            return self._err("保存失败", 500)
+        return None
+
+    def _clean_agent_session(self, item):
+        if not isinstance(item, dict):
+            return None
+        sid = str(item.get("id") or "").strip()
+        if not re.fullmatch(r"session-\d{8}-\d{6}-[a-f0-9]{4}", sid):
+            sid = "session-" + time.strftime("%Y%m%d-%H%M%S", time.localtime()) + "-" + secrets.token_hex(2)
+        title = str(item.get("title") or "").strip()[:180]
+        task_id = str(item.get("taskId") or "").strip()[:80]
+        task_title = str(item.get("taskTitle") or "").strip()[:180]
+        now = _now_iso()
+        if not title:
+            title = task_title or "未命名会话"
+        brief = str(item.get("brief") or "").strip()
+        if len(brief.encode("utf-8")) > MAX_TEXT_BYTES:
+            brief = brief[:MAX_TEXT_BYTES // 4]
+        status = str(item.get("status") or "draft").strip().lower()
+        if status not in {"draft", "running", "verified", "blocked", "archived"}:
+            status = "draft"
+        return {
+            "id": sid,
+            "title": title,
+            "status": status,
+            "taskId": task_id,
+            "taskTitle": task_title,
+            "brief": brief[:12000],
+            "context": self._text_list(item.get("context"), item_limit=500, count_limit=60),
+            "outputs": self._text_list(item.get("outputs"), item_limit=800, count_limit=80),
+            "evidence": self._text_list(item.get("evidence"), item_limit=260, count_limit=80),
+            "log": self._text_list(item.get("log"), item_limit=500, count_limit=120),
+            "createdAt": str(item.get("createdAt") or now)[:32],
+            "updatedAt": str(item.get("updatedAt") or now)[:32],
+        }
+
+    def _api_agent_sessions(self):
+        """GET /api/agent-sessions → 本地 Agent session 记录。"""
+        return self._json({"sessions": self._load_agent_sessions()})
+
+    def _api_agent_sessions_save(self, body):
+        """POST /api/agent-sessions → 保存本地 Agent session 记录。"""
+        raw = body.get("sessions")
+        if not isinstance(raw, list):
+            return self._err("sessions 必须是数组")
+        if len(raw) > 120:
+            return self._err("会话数量过多")
+        now = _now_iso()
+        sessions = []
+        for item in raw:
+            if isinstance(item, dict):
+                item = dict(item)
+                item["updatedAt"] = now
+            clean = self._clean_agent_session(item)
+            if clean:
+                sessions.append(clean)
+        err = self._save_agent_sessions(sessions)
+        if err:
+            return err
+        return self._json({"ok": True, "sessions": sessions})
 
     @staticmethod
     def _parse_frontmatter(text):

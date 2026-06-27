@@ -10,6 +10,9 @@
   let tasks = [];
   let tasksLoaded = false;
   let tasksLoading = null;
+  let sessions = [];
+  let sessionsLoaded = false;
+  let sessionsLoading = null;
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -26,6 +29,14 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(r => r.json());
+  }
+
+  function nowSessionId() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())
+      + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+    return "session-" + stamp + "-" + Math.random().toString(16).slice(2, 6);
   }
   function lines(text) {
     return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n")
@@ -63,6 +74,36 @@
       }
     })();
     return tasksLoading;
+  }
+
+  async function loadSessions() {
+    if (sessionsLoading) return sessionsLoading;
+    sessionsLoading = (async () => {
+      try {
+        const data = await fetch("/api/agent-sessions", { cache: "no-store" }).then(r => r.json());
+        if (data.error) throw new Error(data.error);
+        sessions = Array.isArray(data.sessions) ? data.sessions : [];
+        sessionsLoaded = true;
+        return true;
+      } catch (e) {
+        if (window.setMsg) setMsg("会话加载失败: " + (e && e.message ? e.message : e), "err");
+        return false;
+      } finally {
+        sessionsLoading = null;
+      }
+    })();
+    return sessionsLoading;
+  }
+
+  async function saveSessions(msg) {
+    const res = await postJson("/api/agent-sessions", { sessions });
+    if (res.error) {
+      if (window.setMsg) setMsg("会话保存失败: " + res.error, "err");
+      return false;
+    }
+    sessions = Array.isArray(res.sessions) ? res.sessions : sessions;
+    if (msg && window.setMsg) setMsg(msg, "ok");
+    return true;
   }
 
   function promptTask() {
@@ -131,6 +172,37 @@
     ].join("\n");
   }
 
+  function sessionBrief(t) {
+    const git = window.gitState && gitState.repo
+      ? `repo=${gitState.repo}, branch=${gitState.branch || ""}, changed=${gitState.changed || 0}`
+      : "repo=unknown";
+    const file = window.state && state.current ? state.current : "none";
+    return [
+      `# Agent Session: ${t.title}`,
+      "",
+      `- taskId: ${t.id}`,
+      `- status: draft`,
+      `- workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
+      `- currentFile: ${file}`,
+      `- git: ${git}`,
+      "",
+      "## Task Brief",
+      taskBrief(t),
+      "",
+      "## Instructions",
+      "- Work locally and preserve existing user changes.",
+      "- Prefer small verifiable changes.",
+      "- Record commands, outputs, screenshots, and changed files as evidence.",
+      "- Do not run high-risk commands without explicit confirmation.",
+      "",
+      "## Expected Return",
+      "- Summary of actions taken.",
+      "- Validation commands and results.",
+      "- Files changed or artifacts produced.",
+      "- Follow-up risks or blockers.",
+    ].join("\n");
+  }
+
   function taskMemoryTitle(t) {
     return `Task ${STATUS[t.status] || t.status}: ${t.title}`;
   }
@@ -164,6 +236,55 @@
     t.log.push("已同步任务验证记录到 Project Memory / Progress");
     await saveTasks("已写入项目记忆");
     if (window.reloadProjectMemory) window.reloadProjectMemory();
+  }
+
+  async function createSessionFromTask(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return null;
+    if (!sessionsLoaded) await loadSessions();
+    const now = new Date().toISOString().slice(0, 19);
+    const brief = sessionBrief(t);
+    const session = {
+      id: nowSessionId(),
+      title: t.title,
+      status: "draft",
+      taskId: t.id,
+      taskTitle: t.title,
+      brief,
+      context: [
+        `Task: ${t.title}`,
+        `Workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
+        `Current file: ${window.state && state.current ? state.current : "none"}`,
+      ],
+      outputs: [],
+      evidence: [],
+      log: [`Created from workflow task: ${t.id}`],
+      createdAt: now,
+      updatedAt: now,
+    };
+    sessions.unshift(session);
+    const ok = await saveSessions("已创建 Agent session");
+    if (!ok) return null;
+    t.log = Array.isArray(t.log) ? t.log : [];
+    t.log.push(`已创建 Agent session: ${session.id}`);
+    await saveTasks();
+    return session;
+  }
+
+  async function copySessionBrief(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    let session = null;
+    if (!sessionsLoaded) await loadSessions();
+    session = sessions.find(s => s.taskId === id) || await createSessionFromTask(id);
+    if (!session) return;
+    const text = session.brief || sessionBrief(t);
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) setMsg("已复制 Session brief", "ok");
+    } catch {
+      prompt("复制下面的 Session brief：", text);
+    }
   }
 
   function addTaskLine(id, field, label) {
@@ -213,6 +334,8 @@
           <button data-act="blocked">阻塞</button>
           <button data-act="log">追加日志</button>
           <button data-act="evidence">追加证据</button>
+          <button data-act="session">创建会话</button>
+          <button data-act="sessionBrief">复制会话 brief</button>
           <button data-act="memory">写入记忆</button>
         </div>
       </article>`;
@@ -226,6 +349,8 @@
         if (act === "brief") copyBrief(id);
         else if (act === "log") addTaskLine(id, "log", "追加日志");
         else if (act === "evidence") addTaskLine(id, "evidence", "追加证据路径 / 验证命令");
+        else if (act === "session") createSessionFromTask(id);
+        else if (act === "sessionBrief") copySessionBrief(id);
         else if (act === "memory") appendTaskToMemory(id);
         else setTaskStatus(id, act);
       });
@@ -238,6 +363,7 @@
     const create = $("#task-new");
     if (create) create.onclick = promptTask;
     loadTasks();
+    loadSessions();
   }
 
   window.initTasksPanel = initTasksPanel;
@@ -246,6 +372,12 @@
   window.addWorkflowTask = addWorkflowTask;
   window.appendActiveTaskToMemory = () => {
     if (tasks[0]) appendTaskToMemory(tasks[0].id);
+  };
+  window.createSessionFromActiveTask = () => {
+    if (tasks[0]) createSessionFromTask(tasks[0].id);
+  };
+  window.copyActiveSessionBrief = () => {
+    if (tasks[0]) copySessionBrief(tasks[0].id);
   };
   window.focusWorkflowTasks = () => {
     if (!tasks.length) loadTasks();

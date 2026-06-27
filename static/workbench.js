@@ -538,6 +538,18 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.appendActiveTaskToMemory) window.appendActiveTaskToMemory();
         } });
+    A({ id: "session.createFromTask", name: "Agent: 从当前任务创建会话", hint: "Session", icon: "listChecks",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.createSessionFromActiveTask) window.createSessionFromActiveTask();
+        } });
+    A({ id: "session.copyBrief", name: "Agent: 复制当前任务会话 brief", hint: "Session", icon: "copy",
+        risk: "read",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.copyActiveSessionBrief) window.copyActiveSessionBrief();
+        } });
     A({ id: "ecosystem.refresh", name: "生态: 刷新 Skills / Playbooks", hint: ".workbench", icon: "blocks",
         run: () => {
           typeof switchView === "function" && switchView("ecosystem");
