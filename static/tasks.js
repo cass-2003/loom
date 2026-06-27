@@ -8,6 +8,8 @@
     blocked: "阻塞",
   };
   let tasks = [];
+  let tasksLoaded = false;
+  let tasksLoading = null;
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -43,15 +45,24 @@
   }
 
   async function loadTasks() {
-    try {
-      const data = await fetch("/api/workflow-tasks", { cache: "no-store" }).then(r => r.json());
-      if (data.error) throw new Error(data.error);
-      tasks = Array.isArray(data.tasks) ? data.tasks : [];
-      renderTasks();
-    } catch (e) {
-      const host = $("#task-list");
-      if (host) host.innerHTML = `<div class="task-error">任务加载失败: ${esc(e && e.message ? e.message : e)}</div>`;
-    }
+    if (tasksLoading) return tasksLoading;
+    tasksLoading = (async () => {
+      try {
+        const data = await fetch("/api/workflow-tasks", { cache: "no-store" }).then(r => r.json());
+        if (data.error) throw new Error(data.error);
+        tasks = Array.isArray(data.tasks) ? data.tasks : [];
+        tasksLoaded = true;
+        renderTasks();
+        return true;
+      } catch (e) {
+        const host = $("#task-list");
+        if (host) host.innerHTML = `<div class="task-error">任务加载失败: ${esc(e && e.message ? e.message : e)}</div>`;
+        return false;
+      } finally {
+        tasksLoading = null;
+      }
+    })();
+    return tasksLoading;
   }
 
   function promptTask() {
@@ -73,6 +84,25 @@
       updatedAt: now,
     });
     saveTasks("已创建任务");
+  }
+
+  async function addWorkflowTask(seed) {
+    if (!tasksLoaded) await loadTasks();
+    const now = new Date().toISOString().slice(0, 19);
+    tasks.unshift({
+      id: nowId(),
+      title: String(seed && seed.title || "未命名任务").trim(),
+      status: "todo",
+      goal: String(seed && seed.goal || "").trim(),
+      plan: Array.isArray(seed && seed.plan) ? seed.plan : [],
+      evidence: Array.isArray(seed && seed.evidence) ? seed.evidence : [],
+      log: Array.isArray(seed && seed.log) ? seed.log : [],
+      next: String(seed && seed.next || "").trim(),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await saveTasks("已创建任务");
+    if (typeof switchView === "function") switchView("tasks");
   }
 
   function taskBrief(t) {
@@ -207,6 +237,7 @@
   window.initTasksPanel = initTasksPanel;
   window.reloadWorkflowTasks = loadTasks;
   window.createWorkflowTask = promptTask;
+  window.addWorkflowTask = addWorkflowTask;
   window.appendActiveTaskToMemory = () => {
     if (tasks[0]) appendTaskToMemory(tasks[0].id);
   };

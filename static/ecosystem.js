@@ -38,8 +38,31 @@
       <h3>${esc(item.title)}</h3>
       <p>${esc(desc)}</p>
       ${inputs}${ver}
-      <button class="eco-open" data-act="open">${item.source === "builtin" ? "查看定义" : "打开定义"}</button>
+      <div class="eco-actions">
+        <button class="eco-open" data-act="open">${item.source === "builtin" ? "查看定义" : "打开定义"}</button>
+        <button class="eco-open" data-act="task">创建任务</button>
+        <button class="eco-open" data-act="copy">复制验证命令</button>
+      </div>
     </article>`;
+  }
+
+  function stepsFromContent(item) {
+    const lines = String(item.content || "").split(/\r?\n/);
+    const steps = [];
+    let inSteps = false;
+    for (const line of lines) {
+      const s = line.trim();
+      if (/^##\s+Steps/i.test(s)) { inSteps = true; continue; }
+      if (inSteps && /^##\s+/.test(s)) break;
+      const m = s.match(/^\d+\.\s+(.+)/);
+      if (inSteps && m) steps.push(m[1].trim());
+    }
+    return steps;
+  }
+
+  function findItem(card) {
+    const all = cache.playbooks.concat(cache.skills);
+    return all.find(x => x.path === card.dataset.path && (x.source || "workspace") === card.dataset.source);
   }
 
   function showDefinition(item) {
@@ -80,13 +103,41 @@
     }
     list.innerHTML = parts.join("");
     list.querySelectorAll(".eco-card").forEach(card => {
-      card.querySelector("[data-act='open']").onclick = () => {
-        const all = cache.playbooks.concat(cache.skills);
-        const item = all.find(x => x.path === card.dataset.path && (x.source || "workspace") === card.dataset.source);
+      card.addEventListener("click", async e => {
+        const btn = e.target.closest("[data-act]");
+        if (!btn) return;
+        const item = findItem(card);
         if (!item) return;
-        if (item.source === "builtin") showDefinition(item);
-        else if (window.openFile) window.openFile(item.path);
-      };
+        const act = btn.dataset.act;
+        if (act === "open") {
+          if (item.source === "builtin") showDefinition(item);
+          else if (window.openFile) window.openFile(item.path);
+        } else if (act === "task") {
+          const plan = stepsFromContent(item);
+          if (window.addWorkflowTask) {
+            await window.addWorkflowTask({
+              title: item.title,
+              goal: item.summary || item.description || `Run ${item.title}`,
+              plan: plan.length ? plan : (item.verification || []),
+              evidence: [],
+              log: [`Created from ${item.kind}: ${item.path}`],
+              next: item.verification && item.verification.length ? "Run or copy verification commands manually." : "",
+            });
+          }
+        } else if (act === "copy") {
+          const text = (item.verification || []).join("\n");
+          if (!text) {
+            if (window.setMsg) window.setMsg("该定义没有验证命令", "warn");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(text);
+            if (window.setMsg) window.setMsg("已复制验证命令", "ok");
+          } catch {
+            prompt("复制验证命令：", text);
+          }
+        }
+      });
     });
   }
 
