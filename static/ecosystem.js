@@ -118,6 +118,7 @@
       <div class="eco-actions">
         <button class="eco-open" data-act="open">${item.source === "builtin" ? "查看定义" : "打开定义"}</button>
         <button class="eco-open" data-act="preview">执行预览</button>
+        <button class="eco-open" data-act="copy-preview">复制预览包</button>
         <button class="eco-open" data-act="task">创建任务</button>
         <button class="eco-open" data-act="copy">复制验证命令</button>
       </div>
@@ -179,6 +180,53 @@
     };
   }
 
+  function executionPreviewMarkdown(item) {
+    const p = previewPlan(item);
+    const lines = [
+      `# Execution Preview: ${item.title}`,
+      "",
+      `- kind: ${item.kind || "playbook"}`,
+      `- source: ${item.source || "workspace"}`,
+      `- path: ${item.path || ""}`,
+      `- risk: ${p.risk.key} (${p.risk.label})`,
+      `- scope: ${p.scope}`,
+      "",
+      "## Safety Boundary",
+      "",
+      "This preview is informational only. Workbench must not execute these commands until a whitelist, explicit confirmation, timeout/cancel path, output logging, and evidence writeback model exist.",
+      "",
+      "## Requirements",
+      "",
+      ...(p.requires.length ? p.requires.map(x => `- ${x}`) : ["- none declared"]),
+      "",
+      "## Inputs",
+      "",
+      ...(item.inputs && item.inputs.length ? item.inputs.map(x => `- ${x}`) : ["- none declared"]),
+      "",
+      "## Commands Preview",
+      "",
+      ...(p.commands.length ? p.commands.map(x => `- ${x}`) : ["- none declared"]),
+      "",
+      "## Verification",
+      "",
+      ...(p.verification.length ? p.verification.map(x => `- ${x}`) : ["- none declared"]),
+      "",
+      "## Evidence Fields",
+      "",
+      ...p.evidence.map(x => `- ${x}`),
+    ];
+    return lines.join("\n");
+  }
+
+  async function copyText(text, okMsg, fallbackTitle) {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) window.setMsg(okMsg, "ok");
+    } catch {
+      prompt(fallbackTitle, text);
+    }
+  }
+
   function renderPreviewBlock(item) {
     const p = previewPlan(item);
     const list = (title, values, empty) => `<div class="eco-preview-list"><b>${esc(title)}</b>${
@@ -196,6 +244,7 @@
       ${list("验证项", p.verification, "未声明验证项")}
       ${list("将写入的证据字段", p.evidence, "无")}
       <div class="eco-preview-disabled">执行入口已禁用：需要白名单、确认弹窗、超时/取消、输出日志和证据回写模型后才能开放。</div>
+      <button class="eco-preview-copy" data-act="copy-preview">复制执行预览包</button>
     </section>`;
   }
 
@@ -214,6 +263,8 @@
     document.body.appendChild(ov);
     const close = () => ov.remove();
     ov.querySelector("[data-act='close']").onclick = close;
+    ov.querySelector("[data-act='copy-preview']").onclick = () =>
+      copyText(executionPreviewMarkdown(item), "已复制执行预览包", "复制执行预览包：");
     ov.addEventListener("mousedown", e => { if (e.target === ov) ov.remove(); });
     ov.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
     ov.tabIndex = -1;
@@ -255,6 +306,8 @@
           else if (window.openFile) window.openFile(item.path);
         } else if (act === "preview") {
           showExecutionPreview(item);
+        } else if (act === "copy-preview") {
+          await copyText(executionPreviewMarkdown(item), "已复制执行预览包", "复制执行预览包：");
         } else if (act === "task") {
           const plan = stepsFromContent(item);
           const preview = previewPlan(item);
@@ -284,12 +337,7 @@
             if (window.setMsg) window.setMsg("该定义没有验证命令", "warn");
             return;
           }
-          try {
-            await navigator.clipboard.writeText(text);
-            if (window.setMsg) window.setMsg("已复制验证命令", "ok");
-          } catch {
-            prompt("复制验证命令：", text);
-          }
+          await copyText(text, "已复制验证命令", "复制验证命令：");
         }
       });
     });

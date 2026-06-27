@@ -1606,6 +1606,16 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   margin-top: 9px; color: var(--warn);
   border-color: color-mix(in srgb, var(--warn) 32%, var(--border-soft));
 }
+.eco-preview-copy {
+  margin-top: 10px; padding: 6px 9px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border-soft));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
+  color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer;
+}
+.eco-preview-copy:hover {
+  color: var(--text); border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, var(--hover));
+}
 .eco-preview-scope, .eco-preview-list {
   display: flex; flex-direction: column; gap: 4px; margin-top: 9px;
 }
