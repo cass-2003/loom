@@ -1674,6 +1674,21 @@ window.wbMarkdownExport = {
   run: runMarkdownExportAction,
 };
 
+function focusVditorOutline() {
+  const outline = $("#vditor .vditor-outline");
+  if (!outline) {
+    setMsg("Vditor 大纲尚未渲染", "warn");
+    return false;
+  }
+  outline.classList.remove("hidden");
+  outline.style.display = "";
+  outline.scrollIntoView({ block: "nearest", inline: "nearest" });
+  outline.classList.add("outline-pulse");
+  setTimeout(() => outline.classList.remove("outline-pulse"), 900);
+  setMsg("已定位 Vditor 左侧大纲", "ok");
+  return true;
+}
+
 function markdownOutlineActionState(action) {
   if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
   if (!activeTabIsMarkdown()) return { enabled: false, reason: "请先打开 Markdown 文件" };
@@ -1681,7 +1696,8 @@ function markdownOutlineActionState(action) {
     if (!vd.inst || !vd.ready || vd.curPath !== state.current) {
       return { enabled: false, reason: "Markdown 编辑器尚未就绪" };
     }
-    return { enabled: false, reason: "Vditor 模式使用编辑器左侧大纲" };
+    if (action === "menu") return { enabled: true, reason: "" };
+    return { enabled: true, reason: "" };
   }
   const toolbar = $("#md-toolbar");
   if (!toolbar || toolbar.classList.contains("hidden")) {
@@ -1698,6 +1714,7 @@ function runMarkdownOutlineAction(action) {
     return false;
   }
   if (action === "menu") {
+    if (state.kind === "md") return focusVditorOutline();
     const btn = $("#btn-toc");
     if (btn) btn.click();
     return true;

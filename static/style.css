@@ -2216,6 +2216,9 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   background: #171717;
   color: var(--text-dim);
 }
+#vditor .vditor-outline.outline-pulse {
+  box-shadow: inset -2px 0 0 var(--accent), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 #vditor .vditor-outline__content {
   padding: 0;
 }
