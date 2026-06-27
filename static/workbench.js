@@ -572,6 +572,18 @@
         if (window.setProjectDoc) window.setProjectDoc(name);
       },
     }));
+    A({ id: "project.open.roadmap", name: "项目记忆: 下一阶段路线", hint: "Roadmap", icon: "notebook",
+        risk: "read",
+        run: () => {
+          typeof switchView === "function" && switchView("project");
+          if (window.setProjectDoc) window.setProjectDoc("roadmap");
+        } });
+    A({ id: "project.copyRoadmap", name: "项目记忆: 复制下一阶段路线", hint: "Roadmap", icon: "copy",
+        risk: "read",
+        run: () => {
+          typeof switchView === "function" && switchView("project");
+          if (window.copyProjectRoadmapBrief) window.copyProjectRoadmapBrief();
+        } });
     [
       ["requirements", "Requirements"],
       ["progress", "Progress"],

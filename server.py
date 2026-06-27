@@ -36,6 +36,8 @@ BASE_DIR = BUNDLE_DIR
 # 必须 resolve()：打包后 _MEIPASS 在 Temp 下可能是 8.3 短名(ADMINI~1)，
 # 而 _serve_static 里 fp 是 resolve() 后的长名，不一致会导致包含性校验误判 403。
 STATIC_DIR = (BUNDLE_DIR / "static").resolve()
+DOCS_DIR = (BUNDLE_DIR / "docs").resolve()
+ROADMAP_FILE = "轻量生态化路线.md"
 
 # 这些扩展名按文本编辑处理。注：扩展名不在表里的文件，_api_file 还会做内容嗅探
 # （无 NUL 字节且能 UTF-8 解码即当可编辑文本），所以杂项/无扩展名文本也能打开。
@@ -1431,6 +1433,8 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/config":
             return self._api_config()
+        if path == "/api/project-roadmap":
+            return self._api_project_roadmap()
         if path == "/api/tree":
             return self._api_tree(qs.get("path", [""])[0])
         if path == "/api/file":
@@ -2048,6 +2052,24 @@ class Handler(BaseHTTPRequestHandler):
             "content": text,
             "size": size,
             "virtualPath": f"project://{key}",
+        })
+
+    def _api_project_roadmap(self):
+        """GET /api/project-roadmap → 只读内置生态路线文档。"""
+        fp = (DOCS_DIR / ROADMAP_FILE).resolve()
+        if fp.parent != DOCS_DIR:
+            return self._err("forbidden", 403)
+        try:
+            text = fp.read_text(encoding="utf-8-sig") if fp.is_file() else ""
+            mtime = fp.stat().st_mtime if fp.is_file() else None
+        except OSError:
+            return self._err("路线文档读取失败", 500)
+        return self._json({
+            "name": "roadmap",
+            "file": f"docs/{ROADMAP_FILE}",
+            "content": text,
+            "mtime": mtime,
+            "readonly": True,
         })
 
     @staticmethod

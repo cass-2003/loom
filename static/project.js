@@ -5,10 +5,12 @@
     { name: "progress", label: "Progress" },
     { name: "log", label: "Log" },
     { name: "memory", label: "Memory" },
+    { name: "roadmap", label: "Roadmap", readonly: true },
   ];
   let docs = [];
   let active = "progress";
   let latestRecordTarget = "progress";
+  let roadmap = null;
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -30,6 +32,12 @@
       const data = await fetch("/api/project-state", { cache: "no-store" }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       docs = Array.isArray(data.files) ? data.files : [];
+      try {
+        const road = await fetch("/api/project-roadmap", { cache: "no-store" }).then(r => r.json());
+        roadmap = road && !road.error ? road : null;
+      } catch {
+        roadmap = null;
+      }
       renderRecovery();
       renderTabs();
       renderDoc();
@@ -57,7 +65,26 @@
     return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").length;
   }
   function docByName(name) {
+    if (name === "roadmap") return roadmap;
     return docs.find(x => x.name === name) || null;
+  }
+  function roadmapSummary() {
+    const item = docByName("roadmap");
+    const text = String(item && item.content || "");
+    const m = text.match(/## 下一阶段工作包\s+([\s\S]*?)(?:\n## |\s*$)/);
+    const scope = m ? m[1] : text;
+    const goals = [];
+    for (const line of scope.split("\n")) {
+      const s = line.trim();
+      if (/^###\s+Work Package/.test(s)) goals.push(s.replace(/^###\s+/, ""));
+      if (goals.length >= 3) break;
+    }
+    return {
+      ready: !!text,
+      count: goals.length,
+      goals,
+      summary: goals.length ? goals.join(" · ") : "路线文档暂不可用",
+    };
   }
   function workspaceSummary() {
     if (window.getWorkspaceLayoutSnapshot) {
@@ -96,9 +123,11 @@
     if (!grid || !latest) return;
     const snap = workspaceSummary();
     const roots = snap && snap.roots ? snap.roots : [];
+    const stateDocs = DOCS.filter(d => !d.readonly);
     const present = docs.filter(d => d.exists || d.content).length;
     const records = recentRecords();
     const top = records[0] || null;
+    const road = roadmapSummary();
     latestRecordTarget = top ? top.target : active;
     const mainTabs = snap && snap.main && snap.main.tabs ? snap.main.tabs.length : 0;
     const sideTabs = snap && snap.side && snap.side.tabs ? snap.side.tabs.length : 0;
@@ -106,15 +135,25 @@
       ["工作区", roots.length > 1 ? `${roots.length} 个目录` : (window.currentRoot || "未打开")],
       ["当前文件", snap && snap.activeFile ? snap.activeFile : "none"],
       ["布局", `主 ${mainTabs} / 侧 ${sideTabs}`],
-      ["记忆文件", `${present}/${DOCS.length} 已就绪`],
+      ["记忆文件", `${present}/${stateDocs.length} 已就绪`],
       ["Progress", docByName("progress") ? `${lineCount(docByName("progress").content)} 行` : "未创建"],
       ["Log", docByName("log") ? `${lineCount(docByName("log").content)} 行` : "未创建"],
+      ["路线", road.ready ? `${road.count || 0} 个工作包` : "未打包"],
     ].map(([k, v]) => `<div class="project-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
     latest.innerHTML = top
       ? `<b>最近记录</b><button data-target="${esc(top.target)}">${esc(top.title)}</button><span>${esc(top.preview || "无预览")}</span>`
       : "<b>最近记录</b><span>暂无可恢复记录。可以追加验证或决策记录。</span>";
-    const btn = latest.querySelector("button[data-target]");
-    if (btn) btn.onclick = () => setProjectDoc(btn.dataset.target);
+    if (road.ready) {
+      latest.innerHTML += `<div class="project-roadmap-brief"><b>下一阶段路线</b>`
+        + `<button data-target="roadmap">${esc(road.goals[0] || "查看路线")}</button>`
+        + `<span>${esc(road.summary)}</span>`
+        + `<button class="project-copy-roadmap" data-act="copy-roadmap">复制路线</button></div>`;
+    }
+    latest.querySelectorAll("button[data-target]").forEach(b => {
+      b.onclick = () => setProjectDoc(b.dataset.target);
+    });
+    const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
+    if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;
     if (openLatest) {
       openLatest.disabled = !top;
       openLatest.title = top ? "打开最近记录来源" : "暂无最近记录";
@@ -127,16 +166,25 @@
   function renderDoc() {
     const meta = $("#project-meta");
     const doc = $("#project-doc");
+    const openSource = $("#project-open-source");
     if (!doc) return;
-    const item = docs.find(x => x.name === active) || docs[0];
+    const item = docByName(active) || docs[0];
     if (!item) {
       if (meta) meta.textContent = "未找到 state 文件";
+      if (openSource) {
+        openSource.disabled = true;
+        openSource.title = "未找到可打开的项目资料";
+      }
       doc.textContent = "";
       return;
     }
     if (meta) {
       const stamp = item.mtime ? new Date(item.mtime * 1000).toLocaleString() : "未创建";
-      meta.textContent = `${item.file} · ${stamp}`;
+      meta.textContent = `${item.file}${item.readonly ? " · 只读路线" : ""} · ${stamp}`;
+    }
+    if (openSource) {
+      openSource.disabled = false;
+      openSource.title = item.readonly ? "路线为只读资料，可在此处查看或复制" : "打开当前记忆文件";
     }
     renderRecovery();
     doc.textContent = item.content || "（空）";
@@ -212,11 +260,31 @@
 
   function openProjectStateFile(name) {
     const key = name || active;
+    if (key === "roadmap") {
+      setProjectDoc("roadmap");
+      if (window.setMsg) setMsg("路线文档为只读，可复制后用于任务规划", "warn");
+      return;
+    }
     if (!DOCS.some(d => d.name === key)) return;
     active = key;
     renderTabs();
     if (typeof switchView === "function") switchView("files");
     if (window.openFile) window.openFile("project://" + key);
+  }
+
+  async function copyRoadmapBrief() {
+    const item = docByName("roadmap");
+    const text = item && item.content ? item.content : "";
+    if (!text) {
+      if (window.setMsg) setMsg("路线文档暂不可用", "warn");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) setMsg("已复制下一阶段路线", "ok");
+    } catch {
+      prompt("复制下面的路线：", text);
+    }
   }
 
   function initProjectMemory() {
@@ -237,6 +305,7 @@
   window.appendProjectRecord = appendProjectRecord;
   window.openProjectStateFile = openProjectStateFile;
   window.reloadProjectMemory = loadProjectState;
+  window.copyProjectRoadmapBrief = copyRoadmapBrief;
   window.focusProjectMemory = () => {
     if (!docs.length) loadProjectState();
     else renderRecovery();
