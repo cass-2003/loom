@@ -211,6 +211,7 @@
     currentFile: "需要打开文件",
     editableFile: "需要可编辑文件",
     markdown: "仅 Markdown 可用",
+    viewer: "需要打开查看器文件",
     gitRepo: "需要 Git 仓库",
     gitChanges: "需要 Git 变更",
     terminal: "需要终端组件",
@@ -246,6 +247,9 @@
   function isEditableFile() {
     return !!(window.state && (state.kind === "text" || state.kind === "md"));
   }
+  function isViewerFile() {
+    return !!(window.state && state.kind === "viewer");
+  }
   function gitHasRepo() {
     return !!(window.gitState && window.gitState.repo);
   }
@@ -268,6 +272,7 @@
     if (req === "currentFile") return !!(window.state && state.current);
     if (req === "editableFile") return isEditableFile();
     if (req === "markdown") return isMarkdownTab();
+    if (req === "viewer") return isViewerFile();
     if (req === "gitRepo") return gitHasRepo();
     if (req === "gitChanges") return gitHasChanges();
     if (req === "terminal") return !!window.Terminal;
@@ -541,6 +546,11 @@
     A({ id: "task.fromMarkdown", name: "任务: 从当前 Markdown 创建验证任务", hint: "Markdown", icon: "markdown",
         requires: ["workspace", "markdown"], risk: "write",
         run: () => createTaskFromSeed(currentFileTaskSeed("markdown")) });
+    A({ id: "task.fromViewer", name: "任务: 从当前查看器创建验证任务", hint: "Viewer", icon: "listChecks",
+        requires: ["workspace", "viewer"], risk: "write",
+        run: () => {
+          if (window.createViewerTaskFromCurrent) window.createViewerTaskFromCurrent();
+        } });
     A({ id: "task.fromGitChanges", name: "任务: 从 Git 变更创建审计任务", hint: "SCM", icon: "git",
         requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",
         run: () => createTaskFromSeed(gitTaskSeed(), "没有可记录的 Git 变更") });

@@ -733,6 +733,19 @@ function mountViewer(viewer, info) {
   hostWrap.classList.remove("hidden");
   const host = document.createElement("div");
   host.className = "viewer-mount";
+  const actionBar = document.createElement("div");
+  actionBar.className = "viewer-actionbar";
+  const label = document.createElement("span");
+  label.className = "viewer-actionbar-label";
+  label.textContent = (viewer && viewer.label ? viewer.label : "查看器") + " · " + (info && info.name ? info.name : "");
+  const taskBtn = document.createElement("button");
+  taskBtn.type = "button";
+  taskBtn.className = "viewer-action";
+  taskBtn.title = "从当前查看器文件创建验证任务";
+  taskBtn.innerHTML = '<span class="i" data-icon="listChecks"></span>创建验证任务';
+  taskBtn.onclick = () => createViewerTask(viewer, info || {});
+  actionBar.append(label, taskBtn);
+  hostWrap.appendChild(actionBar);
   hostWrap.appendChild(host);
   state.viewer = viewer;
   state.viewerHost = host;
@@ -743,6 +756,44 @@ function mountViewer(viewer, info) {
       + escHtml(String(e && e.message || e)) + "</div>";
   }
 }
+
+async function createViewerTask(viewer, info) {
+  if (!window.addWorkflowTask) {
+    setMsg("任务面板尚未就绪", "warn");
+    return;
+  }
+  const name = info.name || String(info.path || "").split("/").pop() || "当前查看器文件";
+  const label = viewer && viewer.label ? viewer.label : "多格式查看器";
+  const ext = info.ext || extOf(name) || "";
+  const path = info.path || state.current || "";
+  await window.addWorkflowTask({
+    title: `${label} 验证: ${name}`,
+    goal: `验证 ${label} 查看器能正确打开、展示和处理 ${path || name}。`,
+    plan: [
+      "确认查看器成功加载且没有控制台错误",
+      "检查关键工具栏、分页、缩放、预览或文件列表等交互",
+      "记录截图、导出结果或失败信息作为证据",
+      "如发现渲染或交互问题，回到相关 viewer 模块修复并复测",
+    ],
+    evidence: [],
+    log: [
+      `Created from viewer: ${label}`,
+      `File: ${path || name}`,
+      `Ext: ${ext || "unknown"}`,
+      `Workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
+    ],
+    next: "Run a viewer smoke and attach screenshot or console output.",
+  });
+}
+window.createViewerTaskFromCurrent = () => {
+  const tab = tabByPath(state.activeTab);
+  if (!tab || tab.kind !== "viewer") {
+    setMsg("当前不是查看器文件", "warn");
+    return;
+  }
+  const viewer = tab.viewer || (typeof window.findViewer === "function" ? window.findViewer(tab.ext) : null);
+  return createViewerTask(viewer, tab.info || { path: tab.path, name: tab.name, ext: tab.ext });
+};
 
 // ---------- 打开文件 ----------
 window.openFile = openFile;

@@ -618,12 +618,28 @@ body.markdown-active #btn-view-edit {
 
 /* 多格式查看器挂载点：填满内容区，内部容器自行排布 */
 #viewer-host { flex: 1; min-width: 0; min-height: 0; display: flex; overflow: auto;
-  background: var(--bg); color: var(--text); }
+  flex-direction: column; background: var(--bg); color: var(--text); }
 #viewer-host.hidden { display: none !important; }
 #viewer-host .viewer-mount { flex: 1; min-width: 0; min-height: 0; display: flex;
   flex-direction: column; }
 #viewer-host .viewer-error { margin: auto; padding: 20px; color: var(--text-dim);
   text-align: center; }
+.viewer-actionbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 34px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--bg2) 86%, transparent);
+}
+.viewer-actionbar-label {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: 11.5px;
+}
+.viewer-action {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 4px 8px; border: 1px solid var(--border-soft); border-radius: 7px;
+  background: var(--bg3); color: var(--text-dim); font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.viewer-action:hover { color: var(--text); border-color: var(--border); background: var(--hover); }
+.viewer-action .icn { width: 13px; height: 13px; }
 
 /* 文件内查找/替换条 */
 #editor-find {
