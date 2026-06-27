@@ -1403,6 +1403,7 @@ function setCurrent(path, kind) {
   updateStatusFileAction();
   $("#crumb").textContent = path;
   updateTopActionState();
+  applyMarkdownToolbarState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
   window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
@@ -1610,6 +1611,40 @@ function toggleMenu(menu, others) {
   others.forEach(m => m.classList.add("hidden"));
   menu.classList.toggle("hidden", !willOpen);
 }
+
+function setActionDisabled(el, disabled, reason) {
+  if (!el) return;
+  if (el.dataset.enabledTitle === undefined) el.dataset.enabledTitle = el.title || "";
+  el.toggleAttribute("disabled", !!disabled);
+  el.setAttribute("aria-disabled", disabled ? "true" : "false");
+  el.classList.toggle("disabled", !!disabled);
+  el.title = disabled ? (reason || "当前不可用") : el.dataset.enabledTitle;
+}
+
+function applyMarkdownToolbarState() {
+  const toolbar = $("#md-toolbar");
+  const tocMenu = $("#toc-menu");
+  const exportMenu = $("#export-menu");
+  if (!toolbar) return;
+  const hidden = toolbar.classList.contains("hidden");
+  if (hidden) {
+    if (tocMenu) tocMenu.classList.add("hidden");
+    if (exportMenu) exportMenu.classList.add("hidden");
+  }
+  const tocState = markdownOutlineActionState("menu");
+  const menuState = markdownExportActionState("menu");
+  setActionDisabled($("#btn-toc"), !tocState.enabled, tocState.reason);
+  setActionDisabled($("#btn-md-export"), !menuState.enabled, menuState.reason);
+  if (exportMenu) {
+    exportMenu.querySelectorAll(".toc-act").forEach(el => {
+      const st = markdownExportActionState(el.dataset.act || "");
+      el.classList.toggle("disabled", !st.enabled);
+      el.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+      el.title = st.enabled ? "" : (st.reason || "当前不可用");
+    });
+  }
+}
+
 $("#btn-toc").onclick = (e) => {
   e.stopPropagation();
   const st = markdownOutlineActionState("menu");
@@ -1633,8 +1668,12 @@ document.addEventListener("mousedown", (e) => {
 $("#export-menu").querySelectorAll(".toc-act").forEach(el => {
   el.onclick = () => {
     $("#export-menu").classList.add("hidden");
-    if (el.dataset.act === "html") exportHtml();
-    else if (el.dataset.act === "print") printMarkdown();
+    if (el.getAttribute("aria-disabled") === "true") {
+      const st = markdownExportActionState(el.dataset.act || "");
+      setMsg(st.reason || "当前不可用", "warn");
+      return;
+    }
+    runMarkdownExportAction(el.dataset.act);
   };
 });
 
@@ -1662,8 +1701,7 @@ function runMarkdownExportAction(action) {
   if (action === "html") { exportHtml(); return true; }
   if (action === "print") { printMarkdown(); return true; }
   if (action === "menu") {
-    const btn = $("#btn-md-export");
-    if (btn) btn.click();
+    toggleMenu($("#export-menu"), [$("#toc-menu")]);
     return true;
   }
   return false;
@@ -1831,6 +1869,7 @@ function renderPreview() {
   const t = tabByPath(state.activeTab);
   const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
   $("#md-toolbar").classList.toggle("hidden", !isMd);
+  applyMarkdownToolbarState();
   if (!isMd) return;
   assignHeadingIds(preview);
   buildTOC(preview);

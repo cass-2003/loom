@@ -1100,6 +1100,16 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .toc-act { display: flex; align-items: center; gap: 8px; }
 .toc-act .icn { width: 15px; height: 15px; color: var(--text-dim); }
 .toc-item:hover, .toc-act:hover { background: var(--hover); }
+.toc-act.disabled,
+.toc-act[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: .58;
+}
+.toc-act.disabled:hover,
+.toc-act[aria-disabled="true"]:hover {
+  background: transparent;
+}
 .toc-l1 { font-weight: 600; }
 .toc-l2 { padding-left: 22px; color: var(--text-dim); }
 .toc-l3 { padding-left: 38px; color: var(--muted); font-size: 12.5px; }
