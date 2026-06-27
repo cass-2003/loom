@@ -2052,6 +2052,7 @@ function switchView(view) {
   if (view === "search" && window.focusSearchInput) window.focusSearchInput();
   if (view === "project" && window.focusProjectMemory) window.focusProjectMemory();
   if (view === "tasks" && window.focusWorkflowTasks) window.focusWorkflowTasks();
+  if (view === "ecosystem" && window.focusEcosystem) window.focusEcosystem();
 }
 document.querySelectorAll(".act").forEach(btn => {
   btn.onclick = () => {
@@ -2460,6 +2461,7 @@ initSearch();
 initNotes();
 if (window.initProjectMemory) initProjectMemory();
 if (window.initTasksPanel) initTasksPanel();
+if (window.initEcosystemPanel) initEcosystemPanel();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
 bindWelcomeButtons();

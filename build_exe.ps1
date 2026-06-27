@@ -25,8 +25,9 @@ Remove-Item dist\Workbench.exe -Force -ErrorAction SilentlyContinue
 
 # --windowed：GUI 程序，不带控制台黑窗
 # --add-data "static;static"：把整个 static/（含 vendor 离线库）打进 exe（运行时解压到 _MEIPASS）
+# --add-data ".workbench;.workbench"：打包内置 playbooks/skills 定义（运行数据仍在 APPDATA/state）
 # 入口 desktop.py 会 import server，PyInstaller 自动一并打包
-pyinstaller --noconfirm --onefile --name Workbench --add-data "static;static" --collect-all winpty --icon icon.ico --windowed desktop.py
+pyinstaller --noconfirm --onefile --name Workbench --add-data "static;static" --add-data ".workbench;.workbench" --collect-all winpty --icon icon.ico --windowed desktop.py
 $pyExit = $LASTEXITCODE
 
 # 因为上面已先删旧 exe，这里 Test-Path 为真即代表“本次确实新生成了 exe”，不再是假阳性

@@ -60,6 +60,7 @@
       <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
       <button class="act" data-view="project" data-icon="notebook" title="项目记忆"></button>
       <button class="act" data-view="tasks" data-icon="listChecks" title="任务 / Agent"></button>
+      <button class="act" data-view="ecosystem" data-icon="blocks" title="Skills / Playbooks"></button>
     </nav>
 
     <!-- 侧边栏 -->
@@ -234,6 +235,21 @@
             <span>记录目标、计划、执行日志和证据路径，后续可导出给 Agent / Playbook。</span>
           </div>
           <div id="task-list" class="task-list"></div>
+        </div>
+      </div>
+
+      <!-- Skills / Playbooks -->
+      <div class="view hidden" id="view-ecosystem">
+        <div class="side-head">
+          <span>Skills / Playbooks</span>
+          <div class="head-actions">
+            <button id="eco-refresh" class="icon-btn" data-icon="refresh" title="刷新生态入口"></button>
+          </div>
+        </div>
+        <div id="eco-body">
+          <div class="eco-note">只读扫描当前工作区的 <code>.workbench/skills</code> 和 <code>.workbench/playbooks</code>。</div>
+          <div id="eco-summary" class="eco-summary"></div>
+          <div id="eco-list" class="eco-list"></div>
         </div>
       </div>
     </aside>
@@ -482,6 +498,7 @@
 <script src="/static/notes.js"></script>
 <script src="/static/project.js"></script>
 <script src="/static/tasks.js"></script>
+<script src="/static/ecosystem.js"></script>
 <script src="/static/workbench.js"></script>
 <script src="/static/vendor/xterm/xterm.js"></script>
 <script src="/static/vendor/xterm/xterm-addon-fit.js"></script>

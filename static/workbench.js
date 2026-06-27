@@ -321,7 +321,7 @@
     [["资源管理器", "files", "folder"], ["源代码管理", "git", "git"],
      ["搜索", "search", "search"], ["便签 / Todo", "notes", "checkSquare"],
      ["工具箱", "tools", "tools"], ["项目记忆", "project", "notebook"],
-     ["任务 / Agent", "tasks", "listChecks"]].forEach(([label, view, icon]) =>
+     ["任务 / Agent", "tasks", "listChecks"], ["Skills / Playbooks", "ecosystem", "blocks"]].forEach(([label, view, icon]) =>
       A({ id: "view." + view, name: "切换到：" + label, hint: "视图", icon,
           run: () => { typeof switchView === "function" && switchView(view); } }));
     // Markdown 导出
@@ -442,6 +442,11 @@
         run: () => {
           typeof switchView === "function" && switchView("tasks");
           if (window.appendActiveTaskToMemory) window.appendActiveTaskToMemory();
+        } });
+    A({ id: "ecosystem.refresh", name: "生态: 刷新 Skills / Playbooks", hint: ".workbench", icon: "blocks",
+        run: () => {
+          typeof switchView === "function" && switchView("ecosystem");
+          if (window.reloadEcosystem) window.reloadEcosystem();
         } });
   }
 

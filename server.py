@@ -1472,6 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_tasks(qs.get("path", [""])[0])
         if path == "/api/workflow-tasks":
             return self._api_workflow_tasks()
+        if path == "/api/ecosystem":
+            return self._api_ecosystem()
         if path == "/api/project-state":
             return self._api_project_state(qs.get("name", [""])[0])
         if path == "/api/project-state/open":
@@ -2200,6 +2202,119 @@ class Handler(BaseHTTPRequestHandler):
         if err:
             return err
         return self._json({"ok": True, "tasks": tasks})
+
+    @staticmethod
+    def _parse_frontmatter(text):
+        meta = {}
+        body = text
+        if text.startswith("---\n"):
+            end = text.find("\n---", 4)
+            if end > 0:
+                raw = text[4:end].strip().splitlines()
+                body = text[end + 4:].lstrip("\r\n")
+                current = None
+                for line in raw:
+                    if not line.strip():
+                        continue
+                    if line.startswith("  - ") and current:
+                        meta.setdefault(current, []).append(line[4:].strip())
+                        continue
+                    if ":" in line:
+                        key, value = line.split(":", 1)
+                        current = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        meta[current] = value if value else []
+        return meta, body
+
+    @staticmethod
+    def _md_title(body, fallback):
+        for line in body.splitlines():
+            line = line.strip()
+            if line.startswith("# "):
+                return line[2:].strip()[:120] or fallback
+        return fallback
+
+    @staticmethod
+    def _summary(body, limit=240):
+        lines = []
+        for line in body.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or s.startswith("---"):
+                continue
+            lines.append(s)
+            if len(" ".join(lines)) >= limit:
+                break
+        return " ".join(lines)[:limit]
+
+    def _api_ecosystem(self):
+        """GET /api/ecosystem → 只读扫描工作区内 Skills / Playbooks。"""
+        skills, playbooks = [], []
+        max_bytes = 256 * 1024
+        sources = []
+        for root in current_workspace_roots():
+            sources.append(("workspace", root, (root / ".workbench").resolve()))
+        sources.append(("builtin", BUNDLE_DIR, (BUNDLE_DIR / ".workbench").resolve()))
+        seen_bases = set()
+        for source, root, base in sources:
+            if str(base) in seen_bases:
+                continue
+            seen_bases.add(str(base))
+            if not base.is_dir() or (base != root and root not in base.parents):
+                continue
+            pb_dir = base / "playbooks"
+            if pb_dir.is_dir():
+                for fp in sorted(pb_dir.glob("*.md"), key=lambda p: p.name.lower())[:80]:
+                    try:
+                        if fp.stat().st_size > max_bytes:
+                            continue
+                        text = fp.read_text(encoding="utf-8-sig")
+                        meta, body = self._parse_frontmatter(text)
+                        try:
+                            rel_path = workspace_relpath(fp)
+                        except ValueError:
+                            rel_path = str(fp.relative_to(base)).replace("\\", "/")
+                        playbooks.append({
+                            "kind": "playbook",
+                            "title": str(meta.get("title") or self._md_title(body, fp.stem))[:120],
+                            "path": rel_path,
+                            "source": source,
+                            "risk": str(meta.get("risk") or "read")[:40],
+                            "inputs": meta.get("inputs") if isinstance(meta.get("inputs"), list) else [],
+                            "verification": meta.get("verification") if isinstance(meta.get("verification"), list) else [],
+                            "summary": self._summary(body),
+                            "content": text[:20000],
+                        })
+                    except (OSError, UnicodeDecodeError, ValueError):
+                        continue
+            sk_dir = base / "skills"
+            if sk_dir.is_dir():
+                for fp in sorted(sk_dir.glob("**/SKILL.md"), key=lambda p: str(p).lower())[:80]:
+                    try:
+                        if fp.stat().st_size > max_bytes:
+                            continue
+                        text = fp.read_text(encoding="utf-8-sig")
+                        meta, body = self._parse_frontmatter(text)
+                        try:
+                            rel_path = workspace_relpath(fp)
+                        except ValueError:
+                            rel_path = str(fp.relative_to(base)).replace("\\", "/")
+                        skills.append({
+                            "kind": "skill",
+                            "title": str(meta.get("name") or meta.get("title") or fp.parent.name)[:120],
+                            "path": rel_path,
+                            "source": source,
+                            "risk": str(meta.get("risk") or "read")[:40],
+                            "description": str(meta.get("description") or self._summary(body))[:240],
+                            "summary": self._summary(body),
+                            "content": text[:20000],
+                        })
+                    except (OSError, UnicodeDecodeError, ValueError):
+                        continue
+        return self._json({
+            "skills": skills,
+            "playbooks": playbooks,
+            "hasWorkspace": has_workspace(),
+        })
 
     def _resolve_workspace_root(self, raw, *, create=False):
         """把用户输入的绝对/相对路径解析成可用工作区目录。"""

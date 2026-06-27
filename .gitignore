@@ -1,6 +1,11 @@
 static/vendor/
 __pycache__/
-.workbench/
+.workbench/*
+!.workbench/skills/
+!.workbench/skills/**
+!.workbench/playbooks/
+!.workbench/playbooks/**
+!.workbench/README.md
 build/
 dist/
 *.spec
