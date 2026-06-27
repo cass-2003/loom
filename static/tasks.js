@@ -777,6 +777,7 @@
   function taskActionState(action) {
     const hasTask = tasks.length > 0;
     const hasSession = sessions.length > 0;
+    if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (action === "copyRecoveryBrief") {
       if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
       return { enabled: true, reason: "" };
@@ -793,11 +794,24 @@
   }
   async function runTaskAction(action) {
     if (!tasksLoaded) await loadTasks();
+    if (action === "focusRecovery" && !sessionsLoaded) await loadSessions();
     if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief") && !sessionsLoaded) await loadSessions();
     const st = taskActionState(action);
     if (!st.enabled) {
       if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
       return false;
+    }
+    if (action === "focusRecovery") {
+      if (typeof switchView === "function") switchView("tasks");
+      renderTaskRecovery();
+      const panel = $("#task-recovery");
+      if (panel) {
+        panel.scrollIntoView({ block: "nearest" });
+        panel.classList.add("task-recovery-pulse");
+        setTimeout(() => panel.classList.remove("task-recovery-pulse"), 900);
+      }
+      if (window.setMsg) setMsg("已打开任务恢复中心", "ok");
+      return true;
     }
     if (action === "copyRecoveryBrief") return copyRecoveryBrief();
     if (action === "appendMemory") return appendTaskToMemory(tasks[0].id);

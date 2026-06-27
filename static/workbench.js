@@ -858,6 +858,17 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
         } });
+    A({ id: "task.focusRecovery", name: "任务: 打开恢复中心", hint: "Recovery", icon: "listChecks",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("focusRecovery");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("focusRecovery");
+        } });
     A({ id: "task.copyRecoveryBrief", name: "任务: 复制恢复 handoff brief", hint: "Recovery", icon: "copy",
         risk: "read",
         enabled: () => {
