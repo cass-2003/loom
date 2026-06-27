@@ -632,22 +632,61 @@
   window.reloadAgentSessions = loadSessions;
   window.createWorkflowTask = promptTask;
   window.addWorkflowTask = addWorkflowTask;
+  function taskActionState(action) {
+    const hasTask = tasks.length > 0;
+    const hasSession = sessions.length > 0;
+    if (action === "appendMemory" || action === "createSession" || action === "copySessionBrief" || action === "importTaskResult") {
+      if (!tasksLoaded) return { enabled: true, reason: "" };
+      if (!hasTask) return { enabled: false, reason: "还没有可操作的工作流任务" };
+    }
+    if (action === "importSessionResult" && !hasSession && !hasTask) {
+      if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
+      return { enabled: false, reason: "还没有可导入结果的任务或会话" };
+    }
+    return { enabled: true, reason: "" };
+  }
+  async function runTaskAction(action) {
+    if (!tasksLoaded) await loadTasks();
+    if ((action === "importSessionResult" || action === "copySessionBrief") && !sessionsLoaded) await loadSessions();
+    const st = taskActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "appendMemory") return appendTaskToMemory(tasks[0].id);
+    if (action === "createSession") return createSessionFromTask(tasks[0].id);
+    if (action === "copySessionBrief") return copySessionBrief(tasks[0].id);
+    if (action === "importTaskResult") return importAgentResult(null, tasks[0].id);
+    if (action === "importSessionResult") {
+      if (sessions[0]) return importAgentResult(sessions[0].id, sessions[0].taskId);
+      return importAgentResult(null, tasks[0].id);
+    }
+    return false;
+  }
+  window.wbTaskActions = {
+    actionState: taskActionState,
+    run: runTaskAction,
+    summary: () => ({
+      tasks: tasks.length,
+      sessions: sessions.length,
+      tasksLoaded,
+      sessionsLoaded,
+    }),
+  };
   window.appendActiveTaskToMemory = () => {
-    if (tasks[0]) appendTaskToMemory(tasks[0].id);
+    runTaskAction("appendMemory");
   };
   window.createSessionFromActiveTask = () => {
-    if (tasks[0]) createSessionFromTask(tasks[0].id);
+    runTaskAction("createSession");
   };
   window.copyActiveSessionBrief = () => {
-    if (tasks[0]) copySessionBrief(tasks[0].id);
+    runTaskAction("copySessionBrief");
   };
   window.importAgentResultToActiveTask = () => {
-    if (tasks[0]) importAgentResult(null, tasks[0].id);
+    runTaskAction("importTaskResult");
   };
-  window.importAgentResultToActiveSession = async () => {
-    if (!sessionsLoaded) await loadSessions();
-    if (sessions[0]) importAgentResult(sessions[0].id, sessions[0].taskId);
-    else if (tasks[0]) importAgentResult(null, tasks[0].id);
+  window.importAgentResultToActiveSession = () => {
+    runTaskAction("importSessionResult");
   };
   window.focusWorkflowTasks = () => {
     if (!tasks.length) loadTasks();

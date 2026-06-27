@@ -717,27 +717,51 @@
         } });
     A({ id: "task.appendMemory", name: "任务: 写入项目记忆", hint: "Progress", icon: "notebook",
         risk: "write",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("appendMemory");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("tasks");
-          if (window.appendActiveTaskToMemory) window.appendActiveTaskToMemory();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("appendMemory");
         } });
     A({ id: "session.createFromTask", name: "Agent: 从当前任务创建会话", hint: "Session", icon: "listChecks",
         risk: "write",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("createSession");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("tasks");
-          if (window.createSessionFromActiveTask) window.createSessionFromActiveTask();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("createSession");
         } });
     A({ id: "session.copyBrief", name: "Agent: 复制当前任务会话 brief", hint: "Session", icon: "copy",
         risk: "read",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("copySessionBrief");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("tasks");
-          if (window.copyActiveSessionBrief) window.copyActiveSessionBrief();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("copySessionBrief");
         } });
     A({ id: "session.importResult", name: "Agent: 导入会话结果", hint: "Session", icon: "download",
         risk: "write",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("importSessionResult");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("tasks");
-          if (window.importAgentResultToActiveSession) window.importAgentResultToActiveSession();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("importSessionResult");
         } });
     A({ id: "ecosystem.refresh", name: "生态: 刷新 Skills / Playbooks", hint: ".workbench", icon: "blocks",
         run: () => {
