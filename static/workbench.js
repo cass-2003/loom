@@ -334,6 +334,62 @@
     await window.addWorkflowTask(seed);
   }
 
+  function workspaceLayoutBrief() {
+    if (window.getWorkspaceLayoutSnapshot && window.formatWorkspaceLayoutBrief) {
+      return window.formatWorkspaceLayoutBrief(window.getWorkspaceLayoutSnapshot());
+    }
+    const roots = Array.isArray(window.currentWorkspaceRoots) ? window.currentWorkspaceRoots : [];
+    return [
+      "# Workspace Layout Snapshot",
+      "",
+      `- workspaceId: ${window.currentWorkspaceId || "none"}`,
+      `- activeFile: ${window.state && state.current ? state.current : "none"}`,
+      "",
+      "## Roots",
+      ...(roots.length ? roots.map((r, i) => `- root[${i}]: ${r}`) : ["- root: none"]),
+    ].join("\n");
+  }
+
+  function layoutLogLines() {
+    const text = workspaceLayoutBrief();
+    return text.split("\n").filter(line =>
+      /^- (workspaceId|activeFile|activeGroup|sidebarCollapsed|sideOrient):/.test(line));
+  }
+
+  function workspaceLayoutTaskSeed() {
+    const snapshot = window.getWorkspaceLayoutSnapshot ? window.getWorkspaceLayoutSnapshot() : null;
+    const mainCount = snapshot && snapshot.main && snapshot.main.tabs ? snapshot.main.tabs.length : 0;
+    const sideCount = snapshot && snapshot.side && snapshot.side.tabs ? snapshot.side.tabs.length : 0;
+    return {
+      title: "工作区布局交接: 当前上下文",
+      goal: "记录当前工作区根目录、打开文件、分栏和 UI 状态，用于后续审计、Agent handoff 或恢复工作上下文。",
+      plan: [
+        "确认工作区根目录与当前活动文件是否正确",
+        "检查主编辑组和副分栏打开的文件是否符合当前任务",
+        "把布局 brief 复制给外部 Agent / CLI 或写入 Project Memory",
+        "后续改动完成后更新任务证据和验证记录",
+      ],
+      evidence: [],
+      log: [
+        `Created from workspace layout snapshot`,
+        `Main tabs: ${mainCount}`,
+        `Side tabs: ${sideCount}`,
+        ...workspaceLayoutBrief().split("\n"),
+      ],
+      next: "Use the layout snapshot as the handoff context before making the next change.",
+    };
+  }
+
+  async function copyWorkspaceLayoutBrief() {
+    const text = workspaceLayoutBrief();
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) window.setMsg("已复制工作区布局 brief", "ok");
+    } catch {
+      prompt("复制下面的工作区布局 brief：", text);
+    }
+  }
+
   function currentFileTaskSeed(kind) {
     const st = window.state || {};
     const tab = activeTab();
@@ -364,6 +420,7 @@
         `Created from current file: ${path}`,
         `Workspace: ${workspace}`,
         `Kind: ${lang}`,
+        ...layoutLogLines(),
       ],
       next: isMd ? "Run Markdown smoke/export checks and attach evidence." : "Inspect the file and choose the narrowest validation path.",
     };
@@ -391,6 +448,7 @@
         `Created from Git changes on ${branch}`,
         `Changed files: ${files.length}`,
         ...fileLines,
+        ...layoutLogLines(),
       ],
       next: "Open Source Control, inspect diffs, and attach validation output.",
     };
@@ -418,6 +476,12 @@
     A({ id: "workspace.showEmpty", name: "显示工作区空状态", hint: "工作区", icon: "folder",
         requires: ["workspace"],
         run: () => { typeof showEmptyWorkspace === "function" && showEmptyWorkspace(window.currentRoot); } });
+    A({ id: "workspace.copyLayoutBrief", name: "工作区: 复制布局 brief", hint: "Layout", icon: "copy",
+        requires: ["workspace"], risk: "read",
+        run: () => copyWorkspaceLayoutBrief() });
+    A({ id: "task.fromWorkspaceLayout", name: "任务: 从工作区布局创建交接任务", hint: "Layout", icon: "columns",
+        requires: ["workspace"], risk: "write",
+        run: () => createTaskFromSeed(workspaceLayoutTaskSeed()) });
     A({ id: "editor.find", name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
         requires: ["editableFile"],
         run: () => { typeof openFind === "function" && openFind(); } });

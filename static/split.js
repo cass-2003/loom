@@ -491,6 +491,22 @@
 
   // ---------- 生命周期联动（被 app.js 的重命名/删除/切根目录调用）----------
   function hasUnsaved() { return side.dirty || side.tabs.some(t => t.dirty); }
+  function snapshot() {
+    return {
+      tabs: side.tabs.map(t => ({
+        path: t.path,
+        name: t.name,
+        kind: t.kind || "text",
+        ext: t.ext || "",
+        dirty: !!(t.dirty || (t.path === side.active && side.dirty)),
+      })),
+      active: side.active,
+      orient,
+      focus,
+      hasSide: hasSide(),
+      dirty: hasUnsaved(),
+    };
+  }
   // 文件/目录被重命名 → 同步副组里受影响的标签路径
   function remapPath(oldPath, newPath, isDir) {
     let changed = false;
@@ -540,7 +556,7 @@
     hasSide, save, focus: () => focus,
     has: (p) => !!sideTabByPath(p),       // 该文件是否在副组
     activate: (p) => activateSide(p),      // 切到副组里的该文件
-    remapPath, dropPath, reset, hasUnsaved,   // 生命周期联动
+    remapPath, dropPath, reset, hasUnsaved, snapshot,   // 生命周期联动
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

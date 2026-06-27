@@ -1221,6 +1221,87 @@ function updateWorkspaceActionState() {
 }
 window.updateWorkspaceActionState = updateWorkspaceActionState;
 
+function tabSnapshot(tab, activePath) {
+  if (!tab) return null;
+  return {
+    path: tab.path || "",
+    name: tab.name || (tab.path ? tab.path.split("/").pop() : ""),
+    kind: tab.kind || "",
+    ext: tab.ext || "",
+    dirty: !!(tab.dirty || (tab.path === activePath && state.dirty)),
+    viewMode: tab.viewMode || "",
+  };
+}
+
+function getWorkspaceLayoutSnapshot() {
+  const splitSnap = window.split && typeof window.split.snapshot === "function"
+    ? window.split.snapshot()
+    : { tabs: [], active: null, orient: null, focus: "main", hasSide: false, dirty: false };
+  const mainTabs = state.tabs.map(t => tabSnapshot(t, state.activeTab)).filter(Boolean);
+  const activeMain = tabByPath(state.activeTab);
+  const activeSide = splitSnap && Array.isArray(splitSnap.tabs)
+    ? splitSnap.tabs.find(t => t.path === splitSnap.active) || null
+    : null;
+  const activeGroup = splitSnap && splitSnap.focus === "side" && activeSide ? "side" : "main";
+  const active = activeGroup === "side" ? activeSide : tabSnapshot(activeMain, state.activeTab);
+  return {
+    workspaceId: currentWorkspaceId,
+    root: currentRoot,
+    roots: currentWorkspaceRoots.slice(),
+    hasWorkspace: !!currentRoot,
+    storageKeys: {
+      main: wsKey(),
+      side: currentWorkspaceId ? ("wb-split:" + currentWorkspaceId) : null,
+    },
+    activeGroup,
+    activeFile: active && active.path ? active.path : (state.current || null),
+    main: {
+      tabs: mainTabs,
+      active: state.activeTab,
+      dirty: !!(state.dirty || state.tabs.some(t => t.dirty)),
+    },
+    side: splitSnap,
+    ui: {
+      sidebarCollapsed: document.body.classList.contains("sidebar-collapsed"),
+      markdownActive: document.body.classList.contains("markdown-active"),
+      theme: document.documentElement.getAttribute("data-theme") || "dark",
+    },
+  };
+}
+
+function formatWorkspaceLayoutBrief(snapshot) {
+  const s = snapshot || getWorkspaceLayoutSnapshot();
+  const rootLines = s.roots && s.roots.length ? s.roots.map((r, i) => `- root[${i}]: ${r}`) : ["- root: none"];
+  const mainTabs = s.main && s.main.tabs && s.main.tabs.length
+    ? s.main.tabs.map(t => `- ${t.path}${t.path === s.main.active ? " (active)" : ""}${t.dirty ? " *dirty" : ""}`)
+    : ["- none"];
+  const sideTabs = s.side && s.side.tabs && s.side.tabs.length
+    ? s.side.tabs.map(t => `- ${t.path}${t.path === s.side.active ? " (active)" : ""}${t.dirty ? " *dirty" : ""}`)
+    : ["- none"];
+  return [
+    "# Workspace Layout Snapshot",
+    "",
+    `- workspaceId: ${s.workspaceId || "none"}`,
+    `- activeGroup: ${s.activeGroup || "main"}`,
+    `- activeFile: ${s.activeFile || "none"}`,
+    `- sidebarCollapsed: ${s.ui && s.ui.sidebarCollapsed ? "yes" : "no"}`,
+    `- sideOrient: ${s.side && s.side.orient ? s.side.orient : "none"}`,
+    `- theme: ${s.ui && s.ui.theme ? s.ui.theme : "unknown"}`,
+    "",
+    "## Roots",
+    ...rootLines,
+    "",
+    "## Main Tabs",
+    ...mainTabs,
+    "",
+    "## Side Tabs",
+    ...sideTabs,
+  ].join("\n");
+}
+
+window.getWorkspaceLayoutSnapshot = getWorkspaceLayoutSnapshot;
+window.formatWorkspaceLayoutBrief = formatWorkspaceLayoutBrief;
+
 function hideAllViews() {
   document.body.classList.remove("markdown-active");
   $("#welcome").classList.add("hidden");

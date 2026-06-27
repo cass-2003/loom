@@ -46,6 +46,43 @@
     const s = String(text || "").trim();
     return s.length > limit ? s.slice(0, limit - 1) + "…" : s;
   }
+  function workspaceLayoutSnapshot() {
+    if (window.getWorkspaceLayoutSnapshot) {
+      try { return window.getWorkspaceLayoutSnapshot(); } catch {}
+    }
+    return null;
+  }
+  function workspaceLayoutBrief() {
+    const snap = workspaceLayoutSnapshot();
+    if (window.formatWorkspaceLayoutBrief) {
+      try { return window.formatWorkspaceLayoutBrief(snap); } catch {}
+    }
+    return [
+      "# Workspace Layout Snapshot",
+      "",
+      `- workspaceId: ${window.currentWorkspaceId || "none"}`,
+      `- activeFile: ${window.state && state.current ? state.current : "none"}`,
+    ].join("\n");
+  }
+  function workspaceContextLines() {
+    const snap = workspaceLayoutSnapshot();
+    if (!snap) {
+      return [
+        `Workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
+        `Current file: ${window.state && state.current ? state.current : "none"}`,
+      ];
+    }
+    const mainTabs = snap.main && snap.main.tabs ? snap.main.tabs.length : 0;
+    const sideTabs = snap.side && snap.side.tabs ? snap.side.tabs.length : 0;
+    return [
+      `Workspace: ${snap.workspaceId || snap.root || "unknown"}`,
+      `Active file: ${snap.activeFile || "none"}`,
+      `Active group: ${snap.activeGroup || "main"}`,
+      `Main tabs: ${mainTabs}`,
+      `Side tabs: ${sideTabs}`,
+      `Sidebar collapsed: ${snap.ui && snap.ui.sidebarCollapsed ? "yes" : "no"}`,
+    ];
+  }
 
   async function saveTasks(msg) {
     const res = await postJson("/api/workflow-tasks", { tasks });
@@ -192,6 +229,9 @@
       `- currentFile: ${file}`,
       `- git: ${git}`,
       "",
+      "## Workspace Layout",
+      workspaceLayoutBrief(),
+      "",
       "## Task Brief",
       taskBrief(t),
       "",
@@ -323,8 +363,7 @@
       brief,
       context: [
         `Task: ${t.title}`,
-        `Workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
-        `Current file: ${window.state && state.current ? state.current : "none"}`,
+        ...workspaceContextLines(),
       ],
       outputs: [],
       evidence: [],
