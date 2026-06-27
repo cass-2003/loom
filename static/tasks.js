@@ -740,6 +740,10 @@
   function taskActionState(action) {
     const hasTask = tasks.length > 0;
     const hasSession = sessions.length > 0;
+    if (action === "copyRecoveryBrief") {
+      if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
+      return { enabled: true, reason: "" };
+    }
     if (action === "appendMemory" || action === "createSession" || action === "copySessionBrief" || action === "importTaskResult") {
       if (!tasksLoaded) return { enabled: true, reason: "" };
       if (!hasTask) return { enabled: false, reason: "还没有可操作的工作流任务" };
@@ -752,12 +756,13 @@
   }
   async function runTaskAction(action) {
     if (!tasksLoaded) await loadTasks();
-    if ((action === "importSessionResult" || action === "copySessionBrief") && !sessionsLoaded) await loadSessions();
+    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief") && !sessionsLoaded) await loadSessions();
     const st = taskActionState(action);
     if (!st.enabled) {
       if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
       return false;
     }
+    if (action === "copyRecoveryBrief") return copyRecoveryBrief();
     if (action === "appendMemory") return appendTaskToMemory(tasks[0].id);
     if (action === "createSession") return createSessionFromTask(tasks[0].id);
     if (action === "copySessionBrief") return copySessionBrief(tasks[0].id);
@@ -777,6 +782,9 @@
       tasksLoaded,
       sessionsLoaded,
     }),
+  };
+  window.copyWorkflowRecoveryBrief = () => {
+    runTaskAction("copyRecoveryBrief");
   };
   window.appendActiveTaskToMemory = () => {
     runTaskAction("appendMemory");

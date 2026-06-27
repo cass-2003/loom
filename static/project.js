@@ -195,6 +195,14 @@
     if (task && window.setMsg) setMsg("已从最近验证创建任务", "ok");
     return !!task;
   }
+  function copyTasksRecoveryBrief() {
+    const api = window.wbTaskActions;
+    if (!api || !api.run) {
+      if (window.setMsg) setMsg("任务恢复 brief 尚未就绪", "warn");
+      return false;
+    }
+    return api.run("copyRecoveryBrief");
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
@@ -231,6 +239,7 @@
           + `<span>${esc(recentValidation.evidence || recentValidation.goal || "暂无验证摘要")}</span>`
           + (recentValidation.next ? `<em>${esc(recentValidation.next)}</em>` : "")
           + `<button class="project-validation-task" data-act="validation-task"${taskReady ? "" : " disabled title=\"任务面板尚未就绪\""}>从验证创建任务</button>`
+          + `<button class="project-validation-task" data-act="copy-task-recovery"${window.wbTaskActions ? "" : " disabled title=\"任务恢复 brief 尚未就绪\""}>复制任务恢复 brief</button>`
         : "<b>最近验证</b><span>暂无验证记录。运行检查后可追加验证记录。</span>";
     }
     if (road.ready) {
@@ -248,6 +257,8 @@
       });
       const taskBtn = validation.querySelector("[data-act='validation-task']");
       if (taskBtn) taskBtn.onclick = () => createTaskFromRecentValidation(recentValidation);
+      const copyTaskBrief = validation.querySelector("[data-act='copy-task-recovery']");
+      if (copyTaskBrief) copyTaskBrief.onclick = copyTasksRecoveryBrief;
     }
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;
