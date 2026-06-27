@@ -28,7 +28,8 @@
       ".arc-actions{margin-left:auto;display:flex;gap:6px;}",
       ".arc-btn{font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;",
       "  background:var(--panel);color:var(--text-dim);border:1px solid var(--border);transition:background .12s,color .12s;}",
-      ".arc-btn:hover{background:var(--hover);color:var(--text);}",
+      ".arc-btn:hover:not(:disabled){background:var(--hover);color:var(--text);}",
+      ".arc-btn:disabled{opacity:.5;cursor:not-allowed;color:var(--muted);background:var(--bg2);}",
       ".arc-tree{flex:1;min-height:0;overflow:auto;padding:6px 8px 14px;}",
       ".arc-row{display:flex;align-items:center;gap:7px;padding:3px 8px;border-radius:6px;",
       "  cursor:default;font-size:12.5px;color:var(--text-dim);white-space:nowrap;}",
@@ -224,7 +225,7 @@
   }
 
   // —— 渲染一个节点行 + 子树 ——
-  function renderNode(node, depth, listeners) {
+  function renderNode(node, depth, listeners, onTreeStateChange) {
     var wrap = document.createElement("div");
 
     var row = document.createElement("div");
@@ -278,7 +279,7 @@
         if (built) return;
         built = true;
         sortedChildren(node).forEach(function (child) {
-          childWrap.appendChild(renderNode(child, depth + 1, listeners));
+          childWrap.appendChild(renderNode(child, depth + 1, listeners, onTreeStateChange));
         });
       }
       if (!collapsed) buildChildren();
@@ -286,6 +287,7 @@
         var nowCollapsed = childWrap.classList.toggle("collapsed");
         twist.classList.toggle("open", !nowCollapsed);
         if (!nowCollapsed) buildChildren();
+        if (typeof onTreeStateChange === "function") onTreeStateChange();
       };
       row.classList.add("clickable");
       row.addEventListener("click", onToggle);
@@ -469,17 +471,25 @@
         treeWrap.className = "arc-tree";
         root.appendChild(treeWrap);
 
-        sortedChildren(tree).forEach(function (child) {
-          treeWrap.appendChild(renderNode(child, 0, state.listeners));
-        });
-
         if (fileCount === 0) {
           showMsg(root, "压缩包为空", info.name || "");
           return;
         }
 
+        function updateActionState() {
+          expandBtn.disabled = !treeWrap.querySelector(".arc-children.collapsed");
+          collapseBtn.disabled = !treeWrap.querySelector(".arc-children:not(.collapsed)");
+          expandBtn.title = expandBtn.disabled ? "当前没有可展开的目录" : "展开压缩包内所有目录";
+          collapseBtn.title = collapseBtn.disabled ? "当前没有可折叠的目录" : "折叠压缩包内所有目录";
+        }
+
+        sortedChildren(tree).forEach(function (child) {
+          treeWrap.appendChild(renderNode(child, 0, state.listeners, updateActionState));
+        });
+
         // 全部展开/折叠：操作所有 .arc-children + .arc-twist（仅目录）
         var onExpand = function () {
+          if (expandBtn.disabled) return;
           treeWrap.querySelectorAll(".arc-children.collapsed").forEach(function (el) {
             var rowToggle = el.previousElementSibling;
             if (rowToggle && rowToggle.classList.contains("arc-row")) rowToggle.click();
@@ -493,8 +503,10 @@
             });
             pass++;
           }
+          updateActionState();
         };
         var onCollapse = function () {
+          if (collapseBtn.disabled) return;
           // 从最深处往外收：直接给所有 children 加 collapsed
           treeWrap.querySelectorAll(".arc-children:not(.collapsed)").forEach(function (el) {
             el.classList.add("collapsed");
@@ -504,11 +516,13 @@
               if (tw) tw.classList.remove("open");
             }
           });
+          updateActionState();
         };
         expandBtn.addEventListener("click", onExpand);
         collapseBtn.addEventListener("click", onCollapse);
         state.listeners.push([expandBtn, "click", onExpand]);
         state.listeners.push([collapseBtn, "click", onCollapse]);
+        updateActionState();
       }).catch(function (err) {
         if (state.root !== root) return;
         showMsg(root, "无法打开压缩包",
