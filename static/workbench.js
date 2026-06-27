@@ -847,6 +847,18 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
         } });
+    A({ id: "task.copyRecoveryBrief", name: "任务: 复制恢复 handoff brief", hint: "Recovery", icon: "copy",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("copyRecoveryBrief");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("copyRecoveryBrief");
+        } });
     A({ id: "task.appendMemory", name: "任务: 写入项目记忆", hint: "Progress", icon: "notebook",
         risk: "write",
         enabled: () => {
