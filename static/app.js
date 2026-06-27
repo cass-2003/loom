@@ -36,6 +36,10 @@ const state = {
 };
 window.state = state;  // 供工具箱 (Git) 读取当前文件
 
+const explorerState = {
+  selected: null,   // { path, name, type }
+};
+
 // 行号槽状态（在 activateTab 之前用到，提前声明）
 let gutterLineCount = -1;   // 当前已渲染的行数（避免无谓重绘）
 let curGLine = -1;          // 当前高亮行
@@ -289,6 +293,88 @@ function renderNode(entry) {
   return node;
 }
 
+function setExplorerSelection(entry, row) {
+  if (!entry) {
+    explorerState.selected = null;
+    return;
+  }
+  explorerState.selected = {
+    path: entry.path || "",
+    name: entry.name || String(entry.path || "").split("/").pop() || "",
+    type: entry.type || "file",
+  };
+  document.querySelectorAll("#tree .node-row.context").forEach(e => e.classList.remove("context"));
+  if (row) row.classList.add("context");
+}
+
+function getExplorerSelection() {
+  return explorerState.selected ? Object.assign({}, explorerState.selected) : null;
+}
+
+function syncExplorerSelection() {
+  const sel = getExplorerSelection();
+  if (!sel) return;
+  const row = findRow(sel.path);
+  if (row) {
+    document.querySelectorAll("#tree .node-row.context").forEach(e => e.classList.remove("context"));
+    row.classList.add("context");
+  } else {
+    explorerState.selected = null;
+  }
+}
+
+function explorerActionState(action) {
+  if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  const sel = getExplorerSelection();
+  if (!sel) return { enabled: false, reason: "请先在资源管理器选择文件或文件夹" };
+  const isDir = sel.type === "dir";
+  if ((action === "newFile" || action === "newFolder") && !isDir) {
+    return { enabled: false, reason: "请先选择文件夹" };
+  }
+  if ((action === "history" || action === "blame") && isDir) {
+    return { enabled: false, reason: "请先选择文件" };
+  }
+  if (action === "history" || action === "blame") {
+    if (!window.gitState || !gitState.repo) return { enabled: false, reason: "当前目录不在 Git 仓库内" };
+    if (!gitState.hasHead) return { enabled: false, reason: "仓库还没有提交历史" };
+  }
+  return { enabled: true, reason: "" };
+}
+
+async function runExplorerAction(action) {
+  const st = explorerActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  const sel = getExplorerSelection();
+  const row = findRow(sel.path);
+  const container = row ? containerOf(row) : $("#tree");
+  const parentRel = sel.path.includes("/") ? sel.path.slice(0, sel.path.lastIndexOf("/")) : "";
+  const isDir = sel.type === "dir";
+  if (action === "newFile" || action === "newFolder") {
+    const children = row ? childrenOf(row) : null;
+    await ensureExpanded(row, children);
+    if (action === "newFile") return fsCreate(sel.path, children);
+    return fsCreateDir(sel.path, children);
+  }
+  if (action === "rename") return fsRename(sel.path, sel.name, isDir, container, parentRel);
+  if (action === "delete") return fsDelete(sel.path, isDir, container, parentRel);
+  if (action === "history") {
+    if (window.showFileHistory) return window.showFileHistory(sel.path);
+  }
+  if (action === "blame") {
+    if (window.showBlame) return window.showBlame(sel.path);
+  }
+  return false;
+}
+
+window.wbExplorer = {
+  selection: getExplorerSelection,
+  actionState: explorerActionState,
+  run: runExplorerAction,
+};
+
 // ---------- 文件操作（新建/重命名/删除）----------
 // 刷新某层目录的 container（重新拉取该目录列表）。container 为 #tree 时刷新根。
 async function refreshDir(parentRel, container) {
@@ -299,6 +385,7 @@ async function refreshDir(parentRel, container) {
     container.dataset.loaded = "1";
   }
   hydrateIcons(container);
+  syncExplorerSelection();
 }
 
 // 找到某行所属的「子容器」(.node-children) —— 即该 row 的兄弟节点
@@ -506,6 +593,7 @@ async function fullRefresh() {
       }
     }
   }
+  syncExplorerSelection();
 }
 function waitFor(cond, tries = 50) {
   return new Promise((resolve) => {
@@ -534,9 +622,18 @@ function showCtxMenu(x, y, items) {
       continue;
     }
     const el = document.createElement("div");
-    el.className = "ctx-item" + (it.danger ? " danger" : "");
+    const disabled = typeof it.enabled === "function" ? !it.enabled() : !!it.disabled;
+    el.className = "ctx-item" + (it.danger ? " danger" : "") + (disabled ? " disabled" : "");
+    if (disabled) el.title = it.reason || "当前不可用";
     el.innerHTML = svgIcon(it.icon, 15) + `<span>${escHtml(it.label)}</span>`;
-    el.onclick = () => { closeCtxMenu(); it.action(); };
+    el.onclick = () => {
+      if (disabled) {
+        if (it.reason) setMsg(it.reason, "warn");
+        return;
+      }
+      closeCtxMenu();
+      it.action();
+    };
     menu.appendChild(el);
   }
   document.body.appendChild(menu);
@@ -562,12 +659,15 @@ function escHtml(s) {
 
 // 给某个 .node-row 绑定右键菜单
 function bindRowContextMenu(row, entry) {
+  row.addEventListener("click", () => setExplorerSelection(entry, row), { capture: true });
   row.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setExplorerSelection(entry, row);
     const container = containerOf(row);
     const parentRel = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
     const isDir = entry.type === "dir";
+    const gitHistoryState = explorerActionState("history");
     const items = [];
     if (isDir) {
       const children = childrenOf(row);
@@ -590,10 +690,14 @@ function bindRowContextMenu(row, entry) {
     if (!isDir) {
       items.push({
         icon: "history", label: "文件历史 (Git)",
+        disabled: !gitHistoryState.enabled,
+        reason: gitHistoryState.reason,
         action: () => { if (window.showFileHistory) window.showFileHistory(entry.path); },
       });
       items.push({
         icon: "list", label: "Blame (逐行作者)",
+        disabled: !gitHistoryState.enabled,
+        reason: gitHistoryState.reason,
         action: () => { if (window.showBlame) window.showBlame(entry.path); },
       });
       items.push({ sep: true });
@@ -611,6 +715,7 @@ function bindRowContextMenu(row, entry) {
 }
 // 确保文件夹已展开（懒加载完成）
 async function ensureExpanded(row, children) {
+  if (!row || !children) return;
   if (children && children.classList.contains("hidden")) {
     row.click();
     await waitFor(() => children.dataset.loaded === "1");

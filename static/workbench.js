@@ -524,6 +524,26 @@
     A({ id: "workspace.refreshTree", name: "刷新文件树", hint: "", icon: "refresh",
         requires: ["workspace"],
         run: () => { if (window.state) state.expanded.clear(); typeof initTree === "function" && initTree(); } });
+    [
+      ["explorer.newFileInSelection", "资源管理器: 在所选文件夹中新建文件", "filePlus", "newFile", "write"],
+      ["explorer.newFolderInSelection", "资源管理器: 在所选文件夹中新建文件夹", "folderPlus", "newFolder", "write"],
+      ["explorer.renameSelection", "资源管理器: 重命名所选项", "pencil", "rename", "write"],
+      ["explorer.deleteSelection", "资源管理器: 删除所选项", "trash", "delete", "write"],
+      ["explorer.fileHistory", "资源管理器: 所选文件历史", "history", "history", "read"],
+      ["explorer.blame", "资源管理器: 所选文件 Blame", "list", "blame", "read"],
+    ].forEach(([id, name, icon, action, risk]) => A({
+      id, name, icon, risk, hint: "Explorer", requires: ["workspace"],
+      enabled: () => {
+        const api = window.wbExplorer;
+        if (!api || !api.actionState) return "资源管理器尚未就绪";
+        const st = api.actionState(action);
+        return st.enabled ? true : st.reason;
+      },
+      run: () => {
+        const api = window.wbExplorer;
+        if (api && api.run) api.run(action);
+      },
+    }));
     // 关闭当前标签
     A({ id: "tab.closeCurrent", name: "关闭当前标签", hint: "", icon: "close",
         requires: ["currentFile"],

@@ -194,6 +194,7 @@ body.sidebar-collapsed #activitybar .act.active::before {
   color: var(--text-dim); transition: background .1s;
 }
 .node-row:hover { background: var(--hover); }
+.node-row.context { outline: 1px solid var(--border); color: var(--text); }
 .node-row.active { background: var(--sel); color: #fff; }
 .node-row .twist { width: 14px; height: 14px; display: flex; align-items: center;
   color: var(--muted); transition: transform .12s; }
@@ -232,6 +233,10 @@ body.sidebar-collapsed #activitybar .act.active::before {
   padding: 7px 11px; border-radius: 6px; cursor: pointer; color: var(--text-dim);
 }
 #ctx-menu .ctx-item:hover { background: var(--hover); color: var(--text); }
+#ctx-menu .ctx-item.disabled,
+#ctx-menu .ctx-item.disabled:hover {
+  opacity: .45; cursor: not-allowed; background: transparent; color: var(--muted);
+}
 #ctx-menu .ctx-item .icn { color: var(--muted); }
 #ctx-menu .ctx-item:hover .icn { color: var(--text); }
 #ctx-menu .ctx-item.danger { color: var(--danger); }
