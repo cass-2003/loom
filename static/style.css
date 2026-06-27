@@ -1533,14 +1533,26 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .eco-risk.network { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 44%, transparent); }
 .eco-card h3 { margin: 7px 0 5px; color: var(--text); font-size: 13px; line-height: 1.35; }
 .eco-card p { margin: 0 0 8px; color: var(--text-dim); line-height: 1.45; }
+.eco-scope {
+  display: flex; align-items: flex-start; gap: 7px; margin-top: 7px;
+  color: var(--text-dim); font-size: 11.5px; line-height: 1.4;
+}
+.eco-scope b {
+  flex: 0 0 auto; color: var(--muted); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .5px;
+}
 .eco-lines { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
 .eco-lines b { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; }
 .eco-lines span {
   color: var(--text-dim); background: var(--bg3); border: 1px solid var(--border-soft);
   border-radius: 6px; padding: 4px 6px; word-break: break-word;
 }
+.eco-lines.compact span {
+  font-size: 11px; padding: 3px 6px; font-family: "Cascadia Code", Consolas, monospace;
+}
+.eco-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .eco-open {
-  margin-top: 9px; padding: 4px 8px; border-radius: 7px; border: 1px solid var(--border-soft);
+  padding: 4px 8px; border-radius: 7px; border: 1px solid var(--border-soft);
   background: var(--bg3); color: var(--text-dim); font: inherit; font-size: 11px; cursor: pointer;
 }
 .eco-open:hover { color: var(--text); border-color: var(--border); background: var(--hover); }
@@ -1565,6 +1577,47 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   margin: 0; padding: 12px; overflow: auto; color: var(--text-dim);
   white-space: pre-wrap; word-break: break-word;
   font: 12.5px/1.55 "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+.eco-modal-body { overflow: auto; padding: 12px; }
+.eco-preview-modal { width: min(820px, calc(100vw - 40px)); }
+.eco-exec-preview {
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border-soft));
+  border-radius: 12px; padding: 11px; background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--warn) 12%, transparent), transparent 36%),
+    color-mix(in srgb, var(--bg2) 88%, transparent);
+}
+.eco-preview-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  color: var(--text); font-weight: 800; font-size: 13px; margin-bottom: 8px;
+}
+.eco-preview-head em {
+  font-style: normal; font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--border-soft); color: var(--muted);
+}
+.eco-preview-head em.write { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 44%, transparent); }
+.eco-preview-head em.exec { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 46%, transparent); }
+.eco-preview-head em.network { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 44%, transparent); }
+.eco-preview-boundary, .eco-preview-disabled {
+  border: 1px solid var(--border-soft); border-radius: 9px; padding: 8px 9px;
+  color: var(--text-dim); background: color-mix(in srgb, var(--bg3) 72%, transparent);
+  font-size: 12px; line-height: 1.45;
+}
+.eco-preview-disabled {
+  margin-top: 9px; color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 32%, var(--border-soft));
+}
+.eco-preview-scope, .eco-preview-list {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 9px;
+}
+.eco-preview-scope b, .eco-preview-list b {
+  color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .55px;
+}
+.eco-preview-scope span, .eco-preview-list span {
+  color: var(--text-dim); background: var(--bg3); border: 1px solid var(--border-soft);
+  border-radius: 7px; padding: 5px 7px; word-break: break-word;
+}
+.eco-preview-list span {
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 11.5px;
 }
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }

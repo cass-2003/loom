@@ -2333,6 +2333,22 @@ class Handler(BaseHTTPRequestHandler):
         return meta, body
 
     @staticmethod
+    def _fm_list(meta, key, limit=40):
+        value = meta.get(key)
+        if isinstance(value, list):
+            return [str(x)[:500] for x in value[:limit] if str(x).strip()]
+        if isinstance(value, str) and value.strip():
+            return [value[:500]]
+        return []
+
+    @staticmethod
+    def _fm_text(meta, key, limit=500):
+        value = meta.get(key)
+        if isinstance(value, str):
+            return value[:limit]
+        return ""
+
+    @staticmethod
     def _md_title(body, fallback):
         for line in body.splitlines():
             line = line.strip()
@@ -2385,8 +2401,11 @@ class Handler(BaseHTTPRequestHandler):
                             "path": rel_path,
                             "source": source,
                             "risk": str(meta.get("risk") or "read")[:40],
-                            "inputs": meta.get("inputs") if isinstance(meta.get("inputs"), list) else [],
-                            "verification": meta.get("verification") if isinstance(meta.get("verification"), list) else [],
+                            "scope": self._fm_text(meta, "scope"),
+                            "requires": self._fm_list(meta, "requires"),
+                            "inputs": self._fm_list(meta, "inputs"),
+                            "commands": self._fm_list(meta, "commands"),
+                            "verification": self._fm_list(meta, "verification"),
                             "summary": self._summary(body),
                             "content": text[:20000],
                         })
@@ -2410,6 +2429,11 @@ class Handler(BaseHTTPRequestHandler):
                             "path": rel_path,
                             "source": source,
                             "risk": str(meta.get("risk") or "read")[:40],
+                            "scope": self._fm_text(meta, "scope"),
+                            "requires": self._fm_list(meta, "requires"),
+                            "inputs": self._fm_list(meta, "inputs"),
+                            "commands": self._fm_list(meta, "commands"),
+                            "verification": self._fm_list(meta, "verification"),
                             "description": str(meta.get("description") or self._summary(body))[:240],
                             "summary": self._summary(body),
                             "content": text[:20000],

@@ -100,6 +100,11 @@
       ? `<div class="eco-lines"><b>验证</b>${item.verification.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
     const inputs = item.inputs && item.inputs.length
       ? `<div class="eco-lines"><b>输入</b>${item.inputs.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
+    const req = item.requires && item.requires.length
+      ? `<div class="eco-lines compact"><b>要求</b>${item.requires.slice(0, 3).map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
+    const commands = item.commands && item.commands.length
+      ? `<div class="eco-lines compact"><b>命令预览</b>${item.commands.slice(0, 2).map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
+    const scope = item.scope ? `<div class="eco-scope"><b>范围</b><span>${esc(item.scope)}</span></div>` : "";
     const desc = item.description || item.summary || "未提供说明";
     const risk = riskInfo(item.risk);
     return `<article class="eco-card" data-path="${esc(item.path)}" data-source="${esc(item.source || "workspace")}">
@@ -109,9 +114,10 @@
       </div>
       <h3>${esc(item.title)}</h3>
       <p>${esc(desc)}</p>
-      ${inputs}${ver}
+      ${scope}${inputs}${req}${commands}${ver}
       <div class="eco-actions">
         <button class="eco-open" data-act="open">${item.source === "builtin" ? "查看定义" : "打开定义"}</button>
+        <button class="eco-open" data-act="preview">执行预览</button>
         <button class="eco-open" data-act="task">创建任务</button>
         <button class="eco-open" data-act="copy">复制验证命令</button>
       </div>
@@ -155,6 +161,65 @@
     ov.focus();
   }
 
+  function previewPlan(item) {
+    const risk = riskInfo(item.risk);
+    const commands = item.commands && item.commands.length ? item.commands : [];
+    const verification = item.verification && item.verification.length ? item.verification : [];
+    return {
+      risk,
+      commands,
+      verification,
+      scope: item.scope || "未声明；默认仅限当前工作区人工操作。",
+      requires: item.requires && item.requires.length ? item.requires : ["人工确认工作区范围", "创建任务或复制命令后手动执行"],
+      evidence: [
+        "命令输出或浏览器 console 摘要",
+        "截图路径或构建产物路径",
+        "任务日志 / Project Memory 验证记录",
+      ],
+    };
+  }
+
+  function renderPreviewBlock(item) {
+    const p = previewPlan(item);
+    const list = (title, values, empty) => `<div class="eco-preview-list"><b>${esc(title)}</b>${
+      values.length ? values.map(x => `<span>${esc(x)}</span>`).join("") : `<span>${esc(empty)}</span>`
+    }</div>`;
+    return `<section class="eco-exec-preview">
+      <div class="eco-preview-head">
+        <span>安全执行预览</span>
+        <em class="${esc(p.risk.key)}">${esc(p.risk.label)}</em>
+      </div>
+      <div class="eco-preview-boundary">当前版本不会直接执行 Playbook / Skill。这里仅展示未来执行前必须确认的命令、范围、风险和证据字段。</div>
+      <div class="eco-preview-scope"><b>作用范围</b><span>${esc(p.scope)}</span></div>
+      ${list("前置要求", p.requires, "未声明前置要求")}
+      ${list("命令预览", p.commands, "未声明命令；只能查看定义、创建任务或复制验证项")}
+      ${list("验证项", p.verification, "未声明验证项")}
+      ${list("将写入的证据字段", p.evidence, "无")}
+      <div class="eco-preview-disabled">执行入口已禁用：需要白名单、确认弹窗、超时/取消、输出日志和证据回写模型后才能开放。</div>
+    </section>`;
+  }
+
+  function showExecutionPreview(item) {
+    const ov = document.createElement("div");
+    ov.className = "eco-modal";
+    ov.innerHTML = `<div class="eco-modal-box eco-preview-modal">
+      <div class="eco-modal-head">
+        <b>${esc(item.title)} · 执行预览</b>
+        <button class="icon-btn" data-act="close">${svgIcon("close", 14)}</button>
+      </div>
+      <div class="eco-modal-body">
+        ${renderPreviewBlock(item)}
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.querySelector("[data-act='close']").onclick = close;
+    ov.addEventListener("mousedown", e => { if (e.target === ov) ov.remove(); });
+    ov.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    ov.tabIndex = -1;
+    ov.focus();
+  }
+
   function renderEcosystem() {
     const list = $("#eco-list");
     const summary = $("#eco-summary");
@@ -188,16 +253,29 @@
         if (act === "open") {
           if (item.source === "builtin") showDefinition(item);
           else if (window.openFile) window.openFile(item.path);
+        } else if (act === "preview") {
+          showExecutionPreview(item);
         } else if (act === "task") {
           const plan = stepsFromContent(item);
+          const preview = previewPlan(item);
           if (window.addWorkflowTask) {
             await window.addWorkflowTask({
               title: item.title,
               goal: item.summary || item.description || `Run ${item.title}`,
-              plan: plan.length ? plan : (item.verification || []),
+              plan: (plan.length ? plan : []).concat([
+                "Review execution preview before running any command manually.",
+                ...preview.commands.map(x => `Command preview: ${x}`),
+                ...preview.verification.map(x => `Verify: ${x}`),
+              ]),
               evidence: [],
-              log: [`Created from ${item.kind}: ${item.path}`],
-              next: item.verification && item.verification.length ? "Run or copy verification commands manually." : "",
+              log: [
+                `Created from ${item.kind}: ${item.path}`,
+                `Risk: ${preview.risk.key}`,
+                `Scope: ${preview.scope}`,
+                ...preview.requires.map(x => `Requires: ${x}`),
+                ...preview.evidence.map(x => `Evidence field: ${x}`),
+              ],
+              next: "Review the execution preview, then copy commands or run checks manually with evidence logging.",
             });
           }
         } else if (act === "copy") {
