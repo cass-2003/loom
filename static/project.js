@@ -11,6 +11,7 @@
   let active = "progress";
   let latestRecordTarget = "progress";
   let roadmap = null;
+  let projectLoaded = false;
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -43,6 +44,8 @@
       renderDoc();
     } catch (e) {
       doc.textContent = "项目记忆加载失败: " + (e && e.message ? e.message : e);
+    } finally {
+      projectLoaded = true;
     }
   }
 
@@ -67,6 +70,23 @@
   function docByName(name) {
     if (name === "roadmap") return roadmap;
     return docs.find(x => x.name === name) || null;
+  }
+  function hasWorkspace() {
+    return typeof window.hasOpenWorkspace === "function" ? window.hasOpenWorkspace() : !!window.currentRoot;
+  }
+  function projectActionState(action, name) {
+    const key = name || active;
+    if ((action === "edit" || action === "append") && !hasWorkspace()) {
+      return { enabled: false, reason: "请先打开工作区" };
+    }
+    if (action === "copyRoadmap" && !roadmap) {
+      if (!projectLoaded) return { enabled: true, reason: "" };
+      return { enabled: false, reason: "路线文档尚未加载" };
+    }
+    if (action === "open" || action === "edit") {
+      if (!DOCS.some(d => d.name === key)) return { enabled: false, reason: "未知的项目记忆文档" };
+    }
+    return { enabled: true, reason: "" };
   }
   function roadmapSummary() {
     const item = docByName("roadmap");
@@ -191,10 +211,15 @@
   }
 
   function setProjectDoc(name) {
-    if (!DOCS.some(d => d.name === name)) return;
+    const st = projectActionState("open", name);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
     active = name;
     renderTabs();
     renderDoc();
+    return true;
   }
 
   function askMultiline({ title, placeholder, okLabel, onSubmit }) {
@@ -241,6 +266,11 @@
   }
 
   function appendProjectRecord(kind) {
+    const st = projectActionState("append", kind);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
     const isValidation = kind === "validation";
     askMultiline({
       title: isValidation ? "追加验证记录" : "追加决策记录",
@@ -260,6 +290,11 @@
 
   function openProjectStateFile(name) {
     const key = name || active;
+    const st = projectActionState("edit", key);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
     if (key === "roadmap") {
       setProjectDoc("roadmap");
       if (window.setMsg) setMsg("路线文档为只读，可复制后用于任务规划", "warn");
@@ -270,6 +305,7 @@
     renderTabs();
     if (typeof switchView === "function") switchView("files");
     if (window.openFile) window.openFile("project://" + key);
+    return true;
   }
 
   async function copyRoadmapBrief() {
@@ -301,6 +337,22 @@
   }
 
   window.initProjectMemory = initProjectMemory;
+  window.wbProjectActions = {
+    actionState: projectActionState,
+    run: async (action, name) => {
+      if (!docs.length || (action === "copyRoadmap" && !roadmap)) await loadProjectState();
+      const st = projectActionState(action, name);
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        return false;
+      }
+      if (action === "open") return setProjectDoc(name);
+      if (action === "edit") return openProjectStateFile(name);
+      if (action === "append") return appendProjectRecord(name);
+      if (action === "copyRoadmap") return copyRoadmapBrief();
+      return false;
+    },
+  };
   window.setProjectDoc = setProjectDoc;
   window.appendProjectRecord = appendProjectRecord;
   window.openProjectStateFile = openProjectStateFile;

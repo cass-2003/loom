@@ -639,22 +639,40 @@
       name: "项目记忆: " + label,
       hint: "Project",
       icon: "notebook",
+      enabled: () => {
+        const api = window.wbProjectActions;
+        if (!api || !api.actionState) return "项目记忆尚未就绪";
+        const st = api.actionState("open", name);
+        return st.enabled ? true : st.reason;
+      },
       run: () => {
         typeof switchView === "function" && switchView("project");
-        if (window.setProjectDoc) window.setProjectDoc(name);
+        if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("open", name);
       },
     }));
     A({ id: "project.open.roadmap", name: "项目记忆: 下一阶段路线", hint: "Roadmap", icon: "notebook",
         risk: "read",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("open", "roadmap");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("project");
-          if (window.setProjectDoc) window.setProjectDoc("roadmap");
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("open", "roadmap");
         } });
     A({ id: "project.copyRoadmap", name: "项目记忆: 复制下一阶段路线", hint: "Roadmap", icon: "copy",
         risk: "read",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("copyRoadmap");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("project");
-          if (window.copyProjectRoadmapBrief) window.copyProjectRoadmapBrief();
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("copyRoadmap");
         } });
     [
       ["requirements", "Requirements"],
@@ -667,21 +685,39 @@
       hint: "state/" + label.toUpperCase() + ".md",
       icon: "fileText",
       risk: "write",
+      enabled: () => {
+        const api = window.wbProjectActions;
+        if (!api || !api.actionState) return "项目记忆尚未就绪";
+        const st = api.actionState("edit", name);
+        return st.enabled ? true : st.reason;
+      },
       run: () => {
-        if (window.openProjectStateFile) window.openProjectStateFile(name);
+        if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("edit", name);
       },
     }));
     A({ id: "project.appendDecision", name: "项目记忆: 追加决策记录", hint: "Decision", icon: "check",
         risk: "write",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("append", "decision");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("project");
-          if (window.appendProjectRecord) window.appendProjectRecord("decision");
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("append", "decision");
         } });
     A({ id: "project.appendValidation", name: "项目记忆: 追加验证记录", hint: "Validation", icon: "play",
         risk: "write",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("append", "validation");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("project");
-          if (window.appendProjectRecord) window.appendProjectRecord("validation");
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("append", "validation");
         } });
     A({ id: "task.create", name: "任务: 新建工作流任务", hint: "Agent", icon: "listChecks",
         risk: "write",
