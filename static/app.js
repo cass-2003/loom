@@ -1583,6 +1583,8 @@ $("#btn-toc").onclick = (e) => {
 };
 $("#btn-md-export").onclick = (e) => {
   e.stopPropagation();
+  const st = markdownExportActionState("menu");
+  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return; }
   toggleMenu($("#export-menu"), [$("#toc-menu")]);
 };
 // 点击别处关闭浮层菜单
@@ -1597,9 +1599,45 @@ $("#export-menu").querySelectorAll(".toc-act").forEach(el => {
   el.onclick = () => {
     $("#export-menu").classList.add("hidden");
     if (el.dataset.act === "html") exportHtml();
-    else if (el.dataset.act === "print") window.print();
+    else if (el.dataset.act === "print") printMarkdown();
   };
 });
+
+function markdownExportActionState(action) {
+  if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (!activeTabIsMarkdown()) return { enabled: false, reason: "请先打开 Markdown 文件" };
+  if (state.kind === "md" && (!vd.inst || !vd.ready || vd.curPath !== state.current)) {
+    return { enabled: false, reason: "Markdown 编辑器尚未就绪" };
+  }
+  if (action === "menu") {
+    const toolbar = $("#md-toolbar");
+    if (!toolbar || toolbar.classList.contains("hidden")) {
+      return { enabled: false, reason: "Vditor 模式使用命令直接导出或打印" };
+    }
+  }
+  return { enabled: true, reason: "" };
+}
+
+function runMarkdownExportAction(action) {
+  const st = markdownExportActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "html") { exportHtml(); return true; }
+  if (action === "print") { printMarkdown(); return true; }
+  if (action === "menu") {
+    const btn = $("#btn-md-export");
+    if (btn) btn.click();
+    return true;
+  }
+  return false;
+}
+
+window.wbMarkdownExport = {
+  actionState: markdownExportActionState,
+  run: runMarkdownExportAction,
+};
 
 // 收集页面里已加载的 highlight / markdown 相关样式，内联进导出的 HTML
 function collectStyleText() {
@@ -1614,6 +1652,8 @@ function collectStyleText() {
 
 // 把当前预览渲染结果导出为内联样式的独立 .html 下载
 function exportHtml() {
+  const st = markdownExportActionState("html");
+  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return false; }
   const preview = $("#preview");
   const title = (state.current || "document").split("/").pop().replace(/\.(md|markdown)$/i, "");
   const theme = document.documentElement.getAttribute("data-theme") || "dark";
@@ -1659,6 +1699,14 @@ ${bodyHtml}
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   setMsg("已导出 " + title + ".html", "ok");
+  return true;
+}
+
+function printMarkdown() {
+  const st = markdownExportActionState("print");
+  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return false; }
+  window.print();
+  return true;
 }
 
 // ---------- HTML 消毒（零依赖，防存储型 XSS→本机 RCE）----------

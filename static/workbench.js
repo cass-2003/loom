@@ -500,8 +500,14 @@
     // Markdown 导出
     A({ id: "markdown.exportHtml", name: "导出为 HTML", hint: "Markdown", icon: "download",
         requires: ["markdown"], risk: "write",
+        enabled: () => {
+          const api = window.wbMarkdownExport;
+          if (!api || !api.actionState) return "Markdown 导出状态尚未就绪";
+          const st = api.actionState("html");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          if (typeof exportHtml === "function") exportHtml();
+          if (window.wbMarkdownExport && window.wbMarkdownExport.run) window.wbMarkdownExport.run("html");
         } });
     A({ id: "markdown.openToc", name: "Markdown: 打开大纲", hint: "Markdown", icon: "list",
         requires: ["markdown"],
@@ -511,14 +517,25 @@
         } });
     A({ id: "markdown.openExportMenu", name: "Markdown: 打开导出菜单", hint: "Markdown", icon: "download",
         requires: ["markdown"],
+        enabled: () => {
+          const api = window.wbMarkdownExport;
+          if (!api || !api.actionState) return "Markdown 导出状态尚未就绪";
+          const st = api.actionState("menu");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          const btn = document.querySelector("#btn-md-export");
-          if (btn) btn.click();
+          if (window.wbMarkdownExport && window.wbMarkdownExport.run) window.wbMarkdownExport.run("menu");
         } });
     A({ id: "markdown.print", name: "打印 / 另存 PDF", hint: "Markdown", icon: "printer",
         requires: ["markdown"],
+        enabled: () => {
+          const api = window.wbMarkdownExport;
+          if (!api || !api.actionState) return "Markdown 打印状态尚未就绪";
+          const st = api.actionState("print");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          window.print();
+          if (window.wbMarkdownExport && window.wbMarkdownExport.run) window.wbMarkdownExport.run("print");
         } });
     // 刷新文件树
     A({ id: "workspace.refreshTree", name: "刷新文件树", hint: "", icon: "refresh",
