@@ -110,6 +110,52 @@
     return (items || []).slice().sort((a, b) =>
       String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))[0] || null;
   }
+  function sessionLayoutSummary(s) {
+    const sourceLines = [
+      ...((s && Array.isArray(s.context)) ? s.context : []),
+      ...String(s && s.brief || "").split(/\r?\n/),
+    ];
+    const values = {};
+    sourceLines.forEach(line => {
+      const raw = String(line || "").trim();
+      let m = raw.match(/^[-*]?\s*(workspace|workspaceId|activeFile|activeGroup|sideOrient|sidebarCollapsed|theme|currentFile)\s*:\s*(.+)$/i);
+      if (m) {
+        values[m[1].toLowerCase()] = m[2].trim();
+        return;
+      }
+      m = raw.match(/^[-*]?\s*(main tabs|side tabs)\s*:\s*(\d+)/i);
+      if (m) values[m[1].toLowerCase().replace(/\s+/g, "")] = m[2];
+    });
+    const task = findTaskForSession(s);
+    const workspace = values.workspace || values.workspaceid || window.currentWorkspaceId || window.currentRoot || "unknown";
+    const file = values.activefile || values.currentfile || "none";
+    const mainTabs = values.maintabs || "";
+    const sideTabs = values.sidetabs || "";
+    return {
+      workspace,
+      file,
+      group: values.activegroup || "main",
+      tabs: mainTabs || sideTabs ? `主 ${mainTabs || "?"} / 侧 ${sideTabs || "?"}` : "",
+      sideOrient: values.sideorient || "",
+      sidebarCollapsed: values.sidebarcollapsed || "",
+      theme: values.theme || "",
+      taskStatus: task ? (STATUS[task.status] || task.status || "") : "",
+    };
+  }
+  function renderSessionLayout(summary) {
+    const chips = [
+      ["工作区", summary.workspace],
+      ["当前文件", summary.file],
+      ["焦点", summary.group],
+      summary.tabs ? ["标签", summary.tabs] : null,
+      summary.sideOrient ? ["侧栏方向", summary.sideOrient] : null,
+      summary.sidebarCollapsed ? ["侧栏", summary.sidebarCollapsed] : null,
+      summary.theme ? ["主题", summary.theme] : null,
+      summary.taskStatus ? ["任务状态", summary.taskStatus] : null,
+    ].filter(Boolean);
+    return `<div class="session-layout">${chips.map(([k, v]) =>
+      `<span><b>${esc(k)}</b>${esc(v)}</span>`).join("")}</div>`;
+  }
   function visibleTasks() {
     return tasks.filter(t => {
       if (taskFilters.status !== "all" && t.status !== taskFilters.status) return false;
@@ -567,6 +613,7 @@
     list.innerHTML = sessions.map(s => {
       const outputs = (s.outputs || []).slice(-2).map(x => `<li>${esc(x)}</li>`).join("");
       const evidence = (s.evidence || []).slice(-3).map(x => `<li>${esc(x)}</li>`).join("");
+      const layout = renderSessionLayout(sessionLayoutSummary(s));
       return `<article class="session-card" data-id="${esc(s.id)}">
         <div class="session-card-head">
           <span class="task-state ${esc(s.status)}">${esc(STATUS[s.status] || s.status || "draft")}</span>
@@ -574,6 +621,7 @@
         </div>
         <h3>${esc(s.title || s.taskTitle || "未命名会话")}</h3>
         <div class="session-sub">${esc(s.taskTitle || s.taskId || "未绑定任务")}</div>
+        ${layout}
         <div class="task-section"><b>Outputs</b><ul>${outputs || "<li>暂无</li>"}</ul></div>
         <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
         <div class="task-actions">
