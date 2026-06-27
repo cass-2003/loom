@@ -101,7 +101,7 @@
     const open = () => { ov.classList.remove("hidden"); renderSettingsUI(); };
     const close = () => ov.classList.add("hidden");
     window.openSettings = open;
-    $("#btn-settings").onclick = open;
+    $("#btn-settings").onclick = () => window.wbChromeActions && wbChromeActions.run("settings");
     $("#settings-close").onclick = close;
     ov.addEventListener("mousedown", (e) => { if (e.target === ov) close(); });
 
@@ -508,9 +508,35 @@
         requires: ["editableFile"],
         run: () => { typeof openFind === "function" && openFind(); } });
     A({ id: "theme.toggle", name: "切换深浅主题", hint: "", icon: "moon",
-        run: () => { typeof toggleTheme === "function" && toggleTheme(); } });
-    A({ id: "settings.open", name: "打开设置", hint: "", icon: "gear", run: () => window.openSettings && openSettings() });
-    A({ id: "help.open", name: "快捷键帮助", hint: "?", icon: "help", run: () => openHelp() });
+        enabled: () => {
+          const api = window.wbChromeActions;
+          if (!api || !api.actionState) return "界面动作尚未就绪";
+          const st = api.actionState("theme");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbChromeActions && window.wbChromeActions.run) window.wbChromeActions.run("theme");
+        } });
+    A({ id: "settings.open", name: "打开设置", hint: "", icon: "gear",
+        enabled: () => {
+          const api = window.wbChromeActions;
+          if (!api || !api.actionState) return "界面动作尚未就绪";
+          const st = api.actionState("settings");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbChromeActions && window.wbChromeActions.run) window.wbChromeActions.run("settings");
+        } });
+    A({ id: "help.open", name: "快捷键帮助", hint: "?", icon: "help",
+        enabled: () => {
+          const api = window.wbChromeActions;
+          if (!api || !api.actionState) return "界面动作尚未就绪";
+          const st = api.actionState("help");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbChromeActions && window.wbChromeActions.run) window.wbChromeActions.run("help");
+        } });
     // 视图切换
     [["资源管理器", "files", "folder"], ["源代码管理", "git", "git"],
      ["搜索", "search", "search"], ["便签 / Todo", "notes", "checkSquare"],
@@ -1066,8 +1092,47 @@
   }
   function closeHelp() { $("#help-overlay").classList.add("hidden"); }
   window.openHelp = openHelp;
+
+  function chromeActionState(action) {
+    if (action === "settings") {
+      if (!$("#settings-overlay") || !window.openSettings) return { enabled: false, reason: "设置面板尚未就绪" };
+      return { enabled: true, reason: "" };
+    }
+    if (action === "help") {
+      if (!$("#help-overlay") || !$("#help-body")) return { enabled: false, reason: "帮助面板尚未就绪" };
+      return { enabled: true, reason: "" };
+    }
+    if (action === "theme") {
+      if (typeof window.toggleTheme !== "function") return { enabled: false, reason: "主题切换尚未就绪" };
+      return { enabled: true, reason: "" };
+    }
+    return { enabled: false, reason: "未知界面动作" };
+  }
+
+  function runChromeAction(action) {
+    const st = chromeActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "settings") { window.openSettings(); return true; }
+    if (action === "help") { openHelp(); return true; }
+    if (action === "theme") { window.toggleTheme(); return true; }
+    return false;
+  }
+
+  window.wbChromeActions = {
+    actionState: chromeActionState,
+    run: runChromeAction,
+    summary: () => ({
+      theme: document.documentElement.getAttribute("data-theme") || "dark",
+      settingsReady: !!$("#settings-overlay"),
+      helpReady: !!$("#help-overlay"),
+    }),
+  };
+
   function initHelp() {
-    $("#btn-help").onclick = openHelp;
+    $("#btn-help").onclick = () => wbChromeActions.run("help");
     $("#help-close").onclick = closeHelp;
     $("#help-overlay").addEventListener("mousedown", (e) => {
       if (e.target === $("#help-overlay")) closeHelp();

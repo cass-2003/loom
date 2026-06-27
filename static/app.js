@@ -2793,7 +2793,10 @@ function toggleTheme() {
   }
 }
 window.toggleTheme = toggleTheme;
-$("#btn-theme").onclick = toggleTheme;
+$("#btn-theme").onclick = () => {
+  if (window.wbChromeActions && window.wbChromeActions.run) wbChromeActions.run("theme");
+  else toggleTheme();
+};
 applyTheme(localStorage.getItem("wb-theme") || "dark");
 
 // ---------- 工作区记忆：保存/恢复打开的标签（按根路径分区）----------
