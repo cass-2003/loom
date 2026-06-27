@@ -251,7 +251,7 @@ function renderFileRow(f, group) {
 }
 
 /* ============ 提交图（侧栏紧凑图形，仿 Cursor 源代码管理「图形」区） ============ */
-const ROW_H = 28, LANE_W = 15, PAD_X = 13, NODE_R = 4.5;
+const ROW_H = 28, LANE_W = 17, PAD_X = 12, NODE_R = 4.4;
 const LANE_COLORS = ["#2f81f7", "#3fb950", "#d29922", "#a371f7",
   "#ec6a5e", "#56b6c2", "#e879f9", "#fb923c"];
 
@@ -260,13 +260,19 @@ function computeLanes(commits) {
   commits.forEach((c, i) => { rowOf[c.hash] = i; });
   const lanes = [];          // 每条 lane 当前期待的下一个提交 hash（或 null）
   const nodeLane = {};
+  const activeByRow = {};
   let maxLane = 0;
+  const nextEmptyLane = (start = 0) => {
+    let idx = Math.max(0, start);
+    while (lanes[idx]) idx++;
+    if (idx >= lanes.length) lanes.length = idx + 1;
+    return idx;
+  };
   for (let i = 0; i < commits.length; i++) {
     const c = commits[i];
     let lane = lanes.indexOf(c.hash);
     if (lane === -1) {
-      lane = lanes.indexOf(null);
-      if (lane === -1) { lane = lanes.length; lanes.push(null); }
+      lane = nextEmptyLane(0);
     }
     nodeLane[c.hash] = lane;
     for (let k = 0; k < lanes.length; k++) if (lanes[k] === c.hash) lanes[k] = null;
@@ -275,45 +281,68 @@ function computeLanes(commits) {
       lanes[lane] = ps[0];
       for (let p = 1; p < ps.length; p++) {
         let nl = lanes.indexOf(ps[p]);
-        if (nl === -1) { nl = lanes.indexOf(null); if (nl === -1) { nl = lanes.length; lanes.push(null); } }
+        if (nl === -1) nl = nextEmptyLane(lane + 1);
         lanes[nl] = ps[p];
       }
     } else {
       lanes[lane] = null;
     }
+    activeByRow[i] = lanes
+      .map((hash, idx) => hash || idx === lane ? idx : null)
+      .filter(idx => idx !== null);
     maxLane = Math.max(maxLane, lanes.length - 1, lane);
   }
-  return { nodeLane, rowOf, maxLane };
+  return { nodeLane, rowOf, activeByRow, maxLane };
+}
+
+function graphPath(d, color, crossLane = false, cls = "") {
+  const stroke = crossLane ? 2 : 2.15;
+  const opacity = crossLane ? .82 : .92;
+  return `<path class="${cls}" d="${d}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`;
 }
 
 function edgePath(x1, y1, x2, y2, color, crossLane = false) {
-  const stroke = crossLane ? 2.05 : 2.2;
-  const opacity = crossLane ? .88 : .94;
   if (x1 === x2) {
-    return `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" opacity="${opacity}"/>`;
+    return graphPath(`M${x1} ${y1} L${x2} ${y2}`, color, false, "ggraph-edge vertical");
   }
-  const radius = 6;
-  const joinY = Math.max(y1 + 10, y2 - Math.max(10, ROW_H * 0.42));
-  const dir = x2 > x1 ? 1 : -1;
-  const d = [
-    `M${x1} ${y1}`,
-    `L${x1} ${joinY - radius}`,
-    `Q${x1} ${joinY} ${x1 + dir * radius} ${joinY}`,
-    `L${x2 - dir * radius} ${joinY}`,
-    `Q${x2} ${joinY} ${x2} ${joinY + radius}`,
-    `L${x2} ${y2}`
-  ].join(" ");
-  return `<path d="${d}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" opacity="${opacity}"/>`;
+  const midY = Math.round((y1 + y2) / 2);
+  const d = `M${x1} ${y1} L${x1} ${midY} L${x2} ${y2}`;
+  return graphPath(d, color, crossLane, "ggraph-edge cross");
+}
+
+function activeLanePath(lane, fromRow, toRow, laneX, rowY) {
+  if (toRow <= fromRow) return "";
+  const x = laneX(lane);
+  const y1 = rowY(fromRow) + NODE_R + 1.5;
+  const y2 = rowY(toRow) - NODE_R - 1.5;
+  if (y2 <= y1) return "";
+  const color = LANE_COLORS[lane % LANE_COLORS.length];
+  return graphPath(`M${x} ${y1} L${x} ${y2}`, color, false, "ggraph-edge rail");
 }
 
 function buildGraphSvg(commits, lay) {
-  const { nodeLane, rowOf, maxLane } = lay;
+  const { nodeLane, rowOf, activeByRow, maxLane } = lay;
   const laneX = l => PAD_X + l * LANE_W;
   const rowY = i => i * ROW_H + ROW_H / 2;
-  const w = PAD_X * 2 + maxLane * LANE_W + 8;
+  const w = PAD_X * 2 + maxLane * LANE_W + 10;
   const h = commits.length * ROW_H;
   const hasHead = commits.some(c => (c.refs || []).some(r => r.kind === "head"));
-  let backPaths = "", mergePaths = "", nodes = "";
+  let rails = "", backPaths = "", mergePaths = "", nodes = "";
+  const openRail = new Map();
+  for (let i = 0; i < commits.length; i++) {
+    const active = new Set(activeByRow[i] || []);
+    active.forEach(lane => {
+      if (!openRail.has(lane)) openRail.set(lane, i);
+    });
+    Array.from(openRail.keys()).forEach(lane => {
+      if (!active.has(lane) || i === commits.length - 1) {
+        const from = openRail.get(lane);
+        const to = active.has(lane) && i === commits.length - 1 ? i : i - 1;
+        rails += activeLanePath(lane, from, to, laneX, rowY);
+        openRail.delete(lane);
+      }
+    });
+  }
   commits.forEach((c, i) => {
     const x1 = laneX(nodeLane[c.hash]), y1 = rowY(i);
     const childLane = nodeLane[c.hash];
@@ -333,7 +362,7 @@ function buildGraphSvg(commits, lay) {
       ? `<circle cx="${x1}" cy="${y1}" r="${NODE_R + 2}" fill="var(--bg2)" stroke="${col}" stroke-width="2.8"/>`
       : `<circle cx="${x1}" cy="${y1}" r="${NODE_R + .5}" fill="${col}" stroke="rgba(255,255,255,.18)" stroke-width=".8"/>`;
   });
-  return { svg: `<svg class="ggraph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${mergePaths}${backPaths}${nodes}</svg>`, w };
+  return { svg: `<svg class="ggraph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${rails}${mergePaths}${backPaths}${nodes}</svg>`, w };
 }
 
 let branchesLoaded = "";   // 已填充的分支列表签名，避免重复重建 <select>

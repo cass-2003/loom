@@ -2934,7 +2934,7 @@ class Handler(BaseHTTPRequestHandler):
         repo = self._resolve_repo(rel)
         if repo is None:
             return
-        args = ["log", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"]
+        args = ["log", "--topo-order", "-100", "--pretty=format:%h\x1f%an\x1f%ar\x1f%s\x1f%D\x1f%p"]
         if ref == "__all__":
             args.append("--all")
         elif ref and self._valid_ref(ref):   # 用统一校验器：拒前导 '-'(选项注入)/'..'/.lock
