@@ -381,6 +381,46 @@ window.wbExplorer = {
   run: runExplorerAction,
 };
 
+function currentFileActionState(action) {
+  if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (!state.current) return { enabled: false, reason: "当前没有打开文件" };
+  if (action === "revealInExplorer" && String(state.current).startsWith("project://")) {
+    return { enabled: false, reason: "项目记忆虚拟文件不在资源管理器中" };
+  }
+  return { enabled: true, reason: "" };
+}
+
+async function revealCurrentFileInExplorer() {
+  const st = currentFileActionState("revealInExplorer");
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (sidebarCollapsed) setSidebarCollapsed(false);
+  switchView("files");
+  await expandTreeToPath(state.current);
+  const row = findRow(state.current);
+  if (!row) {
+    setMsg("无法在资源管理器中定位当前文件", "warn");
+    return false;
+  }
+  const entry = {
+    path: row.dataset.path || state.current,
+    name: (row.querySelector(".node-name") || {}).textContent || String(state.current).split("/").pop(),
+    type: row.dataset.type || "file",
+  };
+  setExplorerSelection(entry, row);
+  highlightTreeRow(state.current);
+  row.scrollIntoView({ block: "nearest" });
+  setMsg("已在资源管理器中定位当前文件", "ok");
+  return true;
+}
+
+window.wbCurrentFile = {
+  actionState: currentFileActionState,
+  revealInExplorer: revealCurrentFileInExplorer,
+};
+
 // ---------- 文件操作（新建/重命名/删除）----------
 // 刷新某层目录的 container（重新拉取该目录列表）。container 为 #tree 时刷新根。
 async function refreshDir(parentRel, container) {
@@ -562,6 +602,7 @@ function closeCurrent() {
   state.dirty = false; document.body.classList.remove("dirty");
   renderTabs();
   $("#status-file").textContent = "未打开文件";
+  updateStatusFileAction();
   $("#crumb").textContent = currentWorkspaceRoots.length > 1
     ? `工作区: ${currentWorkspaceRoots.length} 个目录`
     : (currentRoot ? "根目录: " + currentRoot : "");
@@ -1330,10 +1371,20 @@ function revokeImage() {
 function setCurrent(path, kind) {
   state.current = path; state.kind = kind;
   $("#status-file").textContent = path;
+  updateStatusFileAction();
   $("#crumb").textContent = path;
   updateTopActionState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
+}
+
+function updateStatusFileAction() {
+  const el = $("#status-file");
+  if (!el) return;
+  const st = currentFileActionState("revealInExplorer");
+  el.classList.toggle("status-clickable", st.enabled);
+  el.classList.toggle("disabled", !st.enabled);
+  el.title = st.enabled ? "点击在资源管理器中定位当前文件" : (st.reason || "当前没有可定位文件");
 }
 
 function updateTopActionState() {
@@ -1366,6 +1417,7 @@ function updateWorkspaceActionState() {
     btn.title = hasWs ? title : reason;
     btn.setAttribute("aria-disabled", hasWs ? "false" : "true");
   });
+  updateStatusFileAction();
   window.dispatchEvent(new CustomEvent("wb:workspace-state", {
     detail: {
       hasWorkspace: hasWs,
@@ -2358,6 +2410,7 @@ setSidebarCollapsed(sidebarCollapsed);
 $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
 $("#btn-new-file").onclick = () => fsCreate("", $("#tree"));
 $("#btn-new-dir").onclick = () => fsCreateDir("", $("#tree"));
+$("#status-file").onclick = () => revealCurrentFileInExplorer();
 
 // ---------- 杂项 ----------
 let msgTimer = null;
@@ -2496,6 +2549,7 @@ function showEmptyWorkspace(root) {
     : (root ? ("根目录: " + root) : "未打开工作区");
   $("#status-file").textContent = "未打开文件";
   state.current = null; state.kind = null; state.activeTab = null;
+  updateStatusFileAction();
   updateTopActionState();
   updateWorkspaceActionState();
 }

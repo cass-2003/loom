@@ -1031,6 +1031,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   font-size: 12px; color: var(--muted); flex-shrink: 0;
 }
 #status-branch { display: inline-flex; align-items: center; gap: 5px; }
+#status-file { max-width: min(42vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-msg.ok { color: var(--accent2); }
 #status-msg.err { color: var(--danger); }
 .dirty #status-file::after { content: " ●"; color: var(--accent2); }
@@ -2041,6 +2042,8 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 /* 状态栏终端入口 */
 .status-clickable { cursor: pointer; gap: 4px; }
 .status-clickable:hover { color: var(--text-dim); }
+.status-item.disabled,
+#status-file.disabled { cursor: default; color: var(--muted); opacity: .72; }
 #status-term.active { color: var(--accent); }
 
 /* 运行此文件按钮（浮于内容右上角） */

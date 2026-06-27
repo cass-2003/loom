@@ -524,6 +524,19 @@
     A({ id: "workspace.refreshTree", name: "刷新文件树", hint: "", icon: "refresh",
         requires: ["workspace"],
         run: () => { if (window.state) state.expanded.clear(); typeof initTree === "function" && initTree(); } });
+    A({ id: "file.revealInExplorer", name: "文件: 在资源管理器中定位当前文件", hint: "Status Bar", icon: "folder",
+        requires: ["workspace", "currentFile"],
+        enabled: () => {
+          const api = window.wbCurrentFile;
+          if (!api || !api.actionState) return "当前文件状态尚未就绪";
+          const st = api.actionState("revealInExplorer");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbCurrentFile && window.wbCurrentFile.revealInExplorer) {
+            window.wbCurrentFile.revealInExplorer();
+          }
+        } });
     [
       ["explorer.newFileInSelection", "资源管理器: 在所选文件夹中新建文件", "filePlus", "newFile", "write"],
       ["explorer.newFolderInSelection", "资源管理器: 在所选文件夹中新建文件夹", "folderPlus", "newFolder", "write"],
