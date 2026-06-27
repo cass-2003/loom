@@ -276,6 +276,18 @@
         </div>
         <div id="eco-body">
           <div class="eco-note">只读扫描当前工作区的 <code>.workbench/skills</code> 和 <code>.workbench/playbooks</code>。</div>
+          <section class="eco-recovery" id="eco-recovery">
+            <div class="eco-recovery-head">
+              <span>生态上下文</span>
+              <button id="eco-clear-filter" class="task-mini hidden" data-icon="close" title="清除生态过滤"></button>
+            </div>
+            <div class="eco-recovery-grid" id="eco-recovery-grid"></div>
+            <div class="eco-filter-row">
+              <label>风险 <select id="eco-risk-filter"></select></label>
+              <label>来源 <select id="eco-source-filter"></select></label>
+            </div>
+            <div class="eco-next" id="eco-next"></div>
+          </section>
           <div id="eco-summary" class="eco-summary"></div>
           <div id="eco-list" class="eco-list"></div>
         </div>

@@ -2437,6 +2437,7 @@ async function reloadRoot(workspace, recent) {
     if (window.reloadTasks) window.reloadTasks();
     if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
     if (window.reloadAgentSessions) window.reloadAgentSessions();
+    if (window.reloadEcosystem) window.reloadEcosystem();
     setMsg("已切换工作区: " + (workspace && workspace.name ? workspace.name : newRoot), "ok");
   } finally {
     wsSuspendSave = false;

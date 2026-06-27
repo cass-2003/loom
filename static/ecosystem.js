@@ -2,6 +2,7 @@
 (function () {
   const $ = (s) => document.querySelector(s);
   let cache = { skills: [], playbooks: [] };
+  const filters = { risk: "all", source: "all" };
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -9,6 +10,71 @@
   function riskInfo(risk) {
     if (window.describeWorkbenchRisk) return window.describeWorkbenchRisk(risk);
     return { key: risk || "read", label: risk || "read", description: "" };
+  }
+  function allItems() {
+    return cache.playbooks.concat(cache.skills);
+  }
+  function visibleItems() {
+    return allItems().filter(item => {
+      const risk = item.risk || "read";
+      const source = item.source || "workspace";
+      if (filters.risk !== "all" && risk !== filters.risk) return false;
+      if (filters.source !== "all" && source !== filters.source) return false;
+      return true;
+    });
+  }
+  function countBy(items, fn) {
+    return items.reduce((acc, item) => {
+      const key = fn(item);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+  }
+  function setSelectOptions(sel, options, value) {
+    if (!sel) return;
+    sel.innerHTML = options.map(opt =>
+      `<option value="${esc(opt.value)}"${opt.value === value ? " selected" : ""}>${esc(opt.label)}</option>`).join("");
+  }
+  function renderRecovery() {
+    const grid = $("#eco-recovery-grid");
+    const next = $("#eco-next");
+    const riskSel = $("#eco-risk-filter");
+    const sourceSel = $("#eco-source-filter");
+    const clear = $("#eco-clear-filter");
+    if (!grid || !next || !riskSel || !sourceSel) return;
+    const items = allItems();
+    const visible = visibleItems();
+    const risks = countBy(items, item => item.risk || "read");
+    const sources = countBy(items, item => item.source || "workspace");
+    const workspace = Array.isArray(window.currentWorkspaceRoots) && window.currentWorkspaceRoots.length > 1
+      ? `${window.currentWorkspaceRoots.length} 个目录`
+      : (window.currentRoot || "未打开");
+    const riskText = ["read", "write", "exec", "network"]
+      .filter(k => risks[k])
+      .map(k => `${riskInfo(k).label} ${risks[k]}`)
+      .join(" · ") || "无";
+    const sourceText = Object.keys(sources).sort().map(k => `${k} ${sources[k]}`).join(" · ") || "无";
+    const recommended = cache.playbooks.find(p => (p.risk || "read") === "write")
+      || cache.playbooks[0] || cache.skills[0] || null;
+    grid.innerHTML = [
+      ["工作区", workspace],
+      ["入口", `${cache.playbooks.length} Playbooks · ${cache.skills.length} Skills`],
+      ["风险", riskText],
+      ["来源", sourceText],
+      ["当前过滤", `${visible.length}/${items.length} 可见`],
+      ["推荐", recommended ? recommended.title : "暂无"],
+    ].map(([k, v]) => `<div class="eco-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
+    const riskOptions = [{ value: "all", label: "全部" }]
+      .concat(["read", "write", "exec", "network"].filter(k => risks[k]).map(k => ({ value: k, label: riskInfo(k).label })));
+    const sourceOptions = [{ value: "all", label: "全部" }]
+      .concat(Object.keys(sources).sort().map(k => ({ value: k, label: k })));
+    setSelectOptions(riskSel, riskOptions, filters.risk);
+    setSelectOptions(sourceSel, sourceOptions, filters.source);
+    const hasFilter = filters.risk !== "all" || filters.source !== "all";
+    if (clear) clear.classList.toggle("hidden", !hasFilter);
+    next.textContent = recommended
+      ? `下一步：查看 ${recommended.title}，或创建任务记录验证过程。`
+      : "下一步：在 .workbench/playbooks 或 .workbench/skills 中添加本地流程定义。";
   }
 
   async function loadEcosystem() {
@@ -67,8 +133,7 @@
   }
 
   function findItem(card) {
-    const all = cache.playbooks.concat(cache.skills);
-    return all.find(x => x.path === card.dataset.path && (x.source || "workspace") === card.dataset.source);
+    return allItems().find(x => x.path === card.dataset.path && (x.source || "workspace") === card.dataset.source);
   }
 
   function showDefinition(item) {
@@ -94,19 +159,23 @@
     const list = $("#eco-list");
     const summary = $("#eco-summary");
     if (!list || !summary) return;
-    summary.textContent = `${cache.playbooks.length} playbooks · ${cache.skills.length} skills`;
+    renderRecovery();
+    const shown = visibleItems();
+    const shownPlaybooks = shown.filter(x => x.kind === "playbook");
+    const shownSkills = shown.filter(x => x.kind === "skill");
+    summary.textContent = `${shownPlaybooks.length}/${cache.playbooks.length} playbooks · ${shownSkills.length}/${cache.skills.length} skills`;
     const parts = [];
     parts.push(`<div class="eco-safety">安全边界：当前只支持查看定义、创建任务和复制验证命令；不会直接执行 Playbook / Skill 脚本。</div>`);
-    if (cache.playbooks.length) {
+    if (shownPlaybooks.length) {
       parts.push(`<div class="eco-group-title">Playbooks</div>`);
-      parts.push(cache.playbooks.map(renderItem).join(""));
+      parts.push(shownPlaybooks.map(renderItem).join(""));
     }
-    if (cache.skills.length) {
+    if (shownSkills.length) {
       parts.push(`<div class="eco-group-title">Skills</div>`);
-      parts.push(cache.skills.map(renderItem).join(""));
+      parts.push(shownSkills.map(renderItem).join(""));
     }
-    if (!parts.length) {
-      parts.push(`<div class="eco-empty">未发现本地 Skills / Playbooks。可在 <code>.workbench/playbooks</code> 放置 Markdown playbook。</div>`);
+    if (!shown.length) {
+      parts.push(`<div class="eco-empty">${allItems().length ? "当前过滤没有匹配入口。" : "未发现本地 Skills / Playbooks。可在 <code>.workbench/playbooks</code> 放置 Markdown playbook。"}</div>`);
     }
     list.innerHTML = parts.join("");
     list.querySelectorAll(".eco-card").forEach(card => {
@@ -151,6 +220,16 @@
   function initEcosystemPanel() {
     const refresh = $("#eco-refresh");
     if (refresh) refresh.onclick = loadEcosystem;
+    const riskSel = $("#eco-risk-filter");
+    if (riskSel) riskSel.onchange = () => { filters.risk = riskSel.value || "all"; renderEcosystem(); };
+    const sourceSel = $("#eco-source-filter");
+    if (sourceSel) sourceSel.onchange = () => { filters.source = sourceSel.value || "all"; renderEcosystem(); };
+    const clear = $("#eco-clear-filter");
+    if (clear) clear.onclick = () => {
+      filters.risk = "all";
+      filters.source = "all";
+      renderEcosystem();
+    };
     loadEcosystem();
   }
 
@@ -158,5 +237,6 @@
   window.reloadEcosystem = loadEcosystem;
   window.focusEcosystem = () => {
     if (!cache.skills.length && !cache.playbooks.length) loadEcosystem();
+    else renderRecovery();
   };
 })();
