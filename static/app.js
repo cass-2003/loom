@@ -2036,6 +2036,7 @@ function switchView(view) {
   $("#view-" + view).classList.remove("hidden");
   if (view === "git") refreshGit();
   if (view === "search" && window.focusSearchInput) window.focusSearchInput();
+  if (view === "project" && window.focusProjectMemory) window.focusProjectMemory();
 }
 document.querySelectorAll(".act").forEach(btn => {
   btn.onclick = () => {
@@ -2442,6 +2443,7 @@ initTools();
 initGit();
 initSearch();
 initNotes();
+if (window.initProjectMemory) initProjectMemory();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
 bindWelcomeButtons();

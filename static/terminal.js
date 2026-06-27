@@ -1302,12 +1302,16 @@
 
     // 命令面板动作
     if (window.registerAction) {
-      registerAction({ name: "切换终端面板", hint: "Ctrl+`", icon: "terminal", run: toggle });
-      registerAction({ name: "运行当前文件", hint: "", icon: "play",
+      registerAction({ id: "terminal.toggle", name: "切换终端面板", hint: "Ctrl+`", icon: "terminal",
+                       requires: ["workspace"], run: toggle });
+      registerAction({ id: "terminal.runCurrentFile", name: "运行当前文件", hint: "", icon: "play",
+                       requires: ["workspace", "currentFile"], risk: "exec",
                        run: () => runFile(window.state && state.current) });
-      registerAction({ name: "新建终端", hint: "", icon: "plus",
+      registerAction({ id: "terminal.new", name: "新建终端", hint: "", icon: "plus",
+                       requires: ["workspace"], risk: "exec",
                        run: () => { if (requireWorkspace("新建终端")) { expand(); newGroup(selectedShellId()); } } });
-      registerAction({ name: "拆分终端", hint: "Ctrl+Shift+5", icon: "splitH",
+      registerAction({ id: "terminal.split", name: "拆分终端", hint: "Ctrl+Shift+5", icon: "splitH",
+                       requires: ["workspace"], risk: "exec",
                        run: () => splitActive() });
     }
 

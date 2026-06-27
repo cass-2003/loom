@@ -8,6 +8,7 @@ const gpost = (url, obj) => gjson(url, {
 function gitCurPath() { return (window.state && window.state.current) || ""; }
 
 const gitState = { repo: false, staged: 0, changed: 0, branch: null, ref: "", branchItems: [], branchFilterOpen: false };
+window.gitState = gitState;
 let gitRefreshSeq = 0;
 
 function setButtonDisabled(el, disabled, reason) {
@@ -144,6 +145,7 @@ async function refreshGit() {
   renderSidebarGraph(token);
   renderStashList(token);
 }
+window.refreshGit = refreshGit;
 
 /* ============ Stash（储藏）侧栏 ============ */
 async function renderStashList(token) {

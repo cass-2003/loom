@@ -58,6 +58,7 @@
       <button class="act" data-view="search" data-icon="search" title="搜索"></button>
       <button class="act" data-view="notes" data-icon="checkSquare" title="便签 / Todo"></button>
       <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
+      <button class="act" data-view="project" data-icon="notebook" title="项目记忆"></button>
     </nav>
 
     <!-- 侧边栏 -->
@@ -196,6 +197,21 @@
         <div class="side-head"><span>工具箱</span></div>
         <div class="tool-tabs" id="tool-tabs"></div>
         <div id="tool-body"></div>
+      </div>
+
+      <!-- 项目记忆 / 生态底座 -->
+      <div class="view hidden" id="view-project">
+        <div class="side-head">
+          <span>项目记忆</span>
+          <div class="head-actions">
+            <button id="project-refresh" class="icon-btn" data-icon="refresh" title="刷新项目记忆"></button>
+          </div>
+        </div>
+        <div id="project-body">
+          <div class="project-tabs" id="project-tabs"></div>
+          <div class="project-meta" id="project-meta"></div>
+          <pre class="project-doc" id="project-doc">加载中…</pre>
+        </div>
       </div>
     </aside>
 
@@ -441,6 +457,7 @@
 <script src="/static/git.js"></script>
 <script src="/static/search.js"></script>
 <script src="/static/notes.js"></script>
+<script src="/static/project.js"></script>
 <script src="/static/workbench.js"></script>
 <script src="/static/vendor/xterm/xterm.js"></script>
 <script src="/static/vendor/xterm/xterm-addon-fit.js"></script>

@@ -52,6 +52,12 @@ TEXT_EXTS = {
 }
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"}
 MAX_TEXT_BYTES = 5 * 1024 * 1024  # 5MB 以上不当文本读
+PROJECT_STATE_FILES = {
+    "requirements": "REQUIREMENTS.md",
+    "progress": "PROGRESS.md",
+    "log": "LOG.md",
+    "memory": "MEMORY.md",
+}
 
 ROOT = Path("/")  # 运行时覆盖
 WORKSPACE_ROOTS = []  # 当前工作区包含的根目录（主根在第 0 项）
@@ -1464,6 +1470,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_notes_get()
         if path == "/api/tasks":
             return self._api_tasks(qs.get("path", [""])[0])
+        if path == "/api/project-state":
+            return self._api_project_state(qs.get("name", [""])[0])
         if path == "/api/term/shells":
             return self._api_term_shells()
         if path == "/api/term/read":
@@ -1960,6 +1968,34 @@ class Handler(BaseHTTPRequestHandler):
             "workspaceId": cur.get("id") if isinstance(cur, dict) else None,
             "hasWorkspace": has_workspace(),
         })
+
+    def _api_project_state(self, name):
+        """GET /api/project-state → 读取 Workbench 项目记忆文件。
+
+        只允许 `state/` 下固定白名单，避免把它变成任意本机文件读取接口。
+        """
+        base = (APP_DIR / "state").resolve()
+        if name:
+            key = (name or "").strip().lower()
+            fn = PROJECT_STATE_FILES.get(key)
+            if not fn:
+                return self._err("unknown project state file", 404)
+            files = [(key, fn)]
+        else:
+            files = list(PROJECT_STATE_FILES.items())
+        out = []
+        for key, fn in files:
+            fp = (base / fn).resolve()
+            if fp.parent != base:
+                continue
+            try:
+                exists = fp.is_file()
+                text = fp.read_text(encoding="utf-8-sig") if exists else ""
+                mtime = fp.stat().st_mtime if exists else None
+            except OSError:
+                text, mtime = "", None
+            out.append({"name": key, "file": fn, "content": text, "mtime": mtime})
+        return self._json({"files": out})
 
     def _resolve_workspace_root(self, raw, *, create=False):
         """把用户输入的绝对/相对路径解析成可用工作区目录。"""

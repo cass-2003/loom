@@ -200,62 +200,204 @@
     });
   }
 
-  // ================= 动作注册表 =================
-  const actions = [];
-  function registerAction(a) { actions.push(a); }
+  // ================= 能力注册表 =================
+  // Phase 1 生态底座：先把命令面板的动作升级为带元信息的 capability。
+  // 旧模块仍可调用 registerAction；内部会被正规化为 capability。
+  const capabilities = [];
+  const capabilityById = new Map();
+
+  const REQ_LABELS = {
+    workspace: "需要打开工作区",
+    currentFile: "需要打开文件",
+    editableFile: "需要可编辑文件",
+    markdown: "仅 Markdown 可用",
+    gitRepo: "需要 Git 仓库",
+    terminal: "需要终端组件",
+  };
+
+  function hasWorkspace() {
+    return typeof window.hasOpenWorkspace === "function" ? window.hasOpenWorkspace() : !!window.currentRoot;
+  }
+  function activeTab() {
+    return window.wb && window.state ? window.wb.tabByPath(window.state.activeTab) : null;
+  }
+  function isMarkdownTab() {
+    const t = activeTab();
+    return !!(t && (t.ext === ".md" || t.ext === ".markdown" || t.kind === "md"));
+  }
+  function isEditableFile() {
+    return !!(window.state && (state.kind === "text" || state.kind === "md"));
+  }
+  function gitHasRepo() {
+    return !!(window.gitState && window.gitState.repo);
+  }
+  function reqOk(req) {
+    if (req === "workspace") return hasWorkspace();
+    if (req === "currentFile") return !!(window.state && state.current);
+    if (req === "editableFile") return isEditableFile();
+    if (req === "markdown") return isMarkdownTab();
+    if (req === "gitRepo") return gitHasRepo();
+    if (req === "terminal") return !!window.Terminal;
+    return true;
+  }
+  function capabilityState(cap) {
+    if (typeof cap.enabled === "function") {
+      try {
+        const r = cap.enabled();
+        if (r === false) return { enabled: false, reason: cap.disabledReason || "当前不可用" };
+        if (typeof r === "string") return { enabled: false, reason: r };
+      } catch {
+        return { enabled: false, reason: "状态检查失败" };
+      }
+    }
+    const missing = (cap.requires || []).filter(r => !reqOk(r));
+    if (missing.length) return { enabled: false, reason: REQ_LABELS[missing[0]] || "当前不可用" };
+    return { enabled: true, reason: "" };
+  }
+
+  function normalizeCapability(a) {
+    const title = a.title || a.name || a.id || "未命名能力";
+    const id = a.id || ("legacy." + title.toLowerCase().replace(/\s+/g, "-"));
+    return Object.assign({
+      id,
+      title,
+      name: title,
+      kind: "command",
+      surface: ["commandPalette"],
+      requires: [],
+      risk: "read",
+      hint: "",
+      icon: "command",
+      description: "",
+      run: () => {},
+    }, a, { id, title, name: title });
+  }
+  function registerCapability(a) {
+    const cap = normalizeCapability(a);
+    if (capabilityById.has(cap.id)) {
+      const idx = capabilities.findIndex(x => x.id === cap.id);
+      if (idx >= 0) capabilities[idx] = cap;
+    } else {
+      capabilities.push(cap);
+    }
+    capabilityById.set(cap.id, cap);
+    return cap;
+  }
+  function registerAction(a) { return registerCapability(a); }
   window.registerAction = registerAction;
+  window.registerCapability = registerCapability;
+  window.getCapabilities = () => capabilities.slice();
 
   function buildDefaultActions() {
     const A = registerAction;
-    A({ name: "新建文件", hint: "在根目录", icon: "filePlus",
+    A({ id: "file.new", name: "新建文件", hint: "在根目录", icon: "filePlus",
+        requires: ["workspace"], risk: "write",
         run: () => { typeof fsCreate === "function" && fsCreate("", document.querySelector("#tree")); } });
-    A({ name: "新建文件夹", hint: "在根目录", icon: "folderPlus",
+    A({ id: "file.newFolder", name: "新建文件夹", hint: "在根目录", icon: "folderPlus",
+        requires: ["workspace"], risk: "write",
         run: () => { typeof fsCreateDir === "function" && fsCreateDir("", document.querySelector("#tree")); } });
-    A({ name: "保存文件", hint: "Ctrl+S", icon: "save",
+    A({ id: "file.save", name: "保存文件", hint: "Ctrl+S", icon: "save",
+        requires: ["editableFile"], risk: "write",
         run: () => { typeof save === "function" && save(); } });
-    A({ name: "快速打开文件", hint: "Ctrl+P", icon: "search",
+    A({ id: "file.quickOpen", name: "快速打开文件", hint: "Ctrl+P", icon: "search",
+        requires: ["workspace"],
         run: () => { typeof openQuickOpen === "function" && openQuickOpen(); } });
-    A({ name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
+    A({ id: "workspace.open", name: "打开工作区", hint: "文件夹", icon: "folderOpen",
+        run: () => {
+          const btn = document.querySelector("#btn-open-folder");
+          if (btn) btn.click();
+        } });
+    A({ id: "workspace.showEmpty", name: "显示工作区空状态", hint: "工作区", icon: "folder",
+        requires: ["workspace"],
+        run: () => { typeof showEmptyWorkspace === "function" && showEmptyWorkspace(window.currentRoot); } });
+    A({ id: "editor.find", name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
+        requires: ["editableFile"],
         run: () => { typeof openFind === "function" && openFind(); } });
-    A({ name: "切换深浅主题", hint: "", icon: "moon",
+    A({ id: "theme.toggle", name: "切换深浅主题", hint: "", icon: "moon",
         run: () => { typeof toggleTheme === "function" && toggleTheme(); } });
-    A({ name: "打开设置", hint: "", icon: "gear", run: () => window.openSettings && openSettings() });
-    A({ name: "快捷键帮助", hint: "?", icon: "help", run: () => openHelp() });
+    A({ id: "settings.open", name: "打开设置", hint: "", icon: "gear", run: () => window.openSettings && openSettings() });
+    A({ id: "help.open", name: "快捷键帮助", hint: "?", icon: "help", run: () => openHelp() });
     // 视图切换
     [["资源管理器", "files", "folder"], ["源代码管理", "git", "git"],
      ["搜索", "search", "search"], ["便签 / Todo", "notes", "checkSquare"],
-     ["工具箱", "tools", "tools"]].forEach(([label, view, icon]) =>
-      A({ name: "切换到：" + label, hint: "视图", icon,
+     ["工具箱", "tools", "tools"], ["项目记忆", "project", "notebook"]].forEach(([label, view, icon]) =>
+      A({ id: "view." + view, name: "切换到：" + label, hint: "视图", icon,
           run: () => { typeof switchView === "function" && switchView(view); } }));
     // Markdown 导出
-    A({ name: "导出为 HTML", hint: "Markdown", icon: "download",
+    A({ id: "markdown.exportHtml", name: "导出为 HTML", hint: "Markdown", icon: "download",
+        requires: ["markdown"], risk: "write",
         run: () => {
-          // 导出读 Markdown 预览；非 Markdown 下 #preview 为空/陈旧 → 静默导出空文件，先 gate
-          const t = window.wb && window.wb.tabByPath && window.state ? window.wb.tabByPath(window.state.activeTab) : null;
-          const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
-          if (!isMd) { if (window.setMsg) window.setMsg("导出为 HTML 仅在 Markdown 下可用", "warn"); return; }
           if (typeof exportHtml === "function") exportHtml();
         } });
-    A({ name: "打印 / 另存 PDF", hint: "Markdown", icon: "printer",
+    A({ id: "markdown.openToc", name: "Markdown: 打开大纲", hint: "Markdown", icon: "list",
+        requires: ["markdown"],
         run: () => {
-          // 打印样式表只为 Markdown 预览写死；非 Markdown / 编辑态打印会泄漏或空白 → 先 gate
-          const t = window.wb && window.wb.tabByPath && window.state ? window.wb.tabByPath(window.state.activeTab) : null;
-          const isMd = t && (t.ext === ".md" || t.ext === ".markdown");
-          if (!isMd) { if (window.setMsg) window.setMsg("打印 / 另存 PDF 仅在 Markdown 下可用", "warn"); return; }
+          const btn = document.querySelector("#btn-toc");
+          if (btn) btn.click();
+        } });
+    A({ id: "markdown.openExportMenu", name: "Markdown: 打开导出菜单", hint: "Markdown", icon: "download",
+        requires: ["markdown"],
+        run: () => {
+          const btn = document.querySelector("#btn-md-export");
+          if (btn) btn.click();
+        } });
+    A({ id: "markdown.print", name: "打印 / 另存 PDF", hint: "Markdown", icon: "printer",
+        requires: ["markdown"],
+        run: () => {
           window.print();
         } });
     // 刷新文件树
-    A({ name: "刷新文件树", hint: "", icon: "refresh",
+    A({ id: "workspace.refreshTree", name: "刷新文件树", hint: "", icon: "refresh",
+        requires: ["workspace"],
         run: () => { if (window.state) state.expanded.clear(); typeof initTree === "function" && initTree(); } });
     // 关闭当前标签
-    A({ name: "关闭当前标签", hint: "", icon: "close",
+    A({ id: "tab.closeCurrent", name: "关闭当前标签", hint: "", icon: "close",
+        requires: ["currentFile"],
         run: () => { if (window.state && state.activeTab && typeof closeTab === "function") closeTab(state.activeTab); } });
     // Git 提交（焦点到消息框）
-    A({ name: "Git: 提交", hint: "Ctrl+Enter", icon: "check",
+    A({ id: "git.commit.focus", name: "Git: 提交", hint: "Ctrl+Enter", icon: "check",
+        requires: ["workspace"],
         run: () => {
           typeof switchView === "function" && switchView("git");
           const m = document.querySelector("#git-msg"); if (m) m.focus();
         } });
+    A({ id: "git.refresh", name: "Git: 刷新状态", hint: "SCM", icon: "refresh",
+        requires: ["workspace"],
+        run: () => { typeof switchView === "function" && switchView("git"); typeof refreshGit === "function" && refreshGit(); } });
+    A({ id: "git.push", name: "Git: 推送", hint: "SCM", icon: "upload",
+        requires: ["workspace", "gitRepo"], risk: "network",
+        run: () => {
+          const btn = document.querySelector("#git-push");
+          if (btn) btn.click();
+        } });
+    A({ id: "git.branchOps", name: "Git: 分支操作", hint: "新建 / 检出 / 删除", icon: "branch",
+        requires: ["workspace", "gitRepo"], risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("git");
+          const btn = document.querySelector("#git-branch-ops");
+          if (btn) btn.click();
+        } });
+    A({ id: "git.stash", name: "Git: 储藏当前更改", hint: "Stash", icon: "download",
+        requires: ["workspace", "gitRepo"], risk: "write",
+        run: () => {
+          const btn = document.querySelector("#git-stash-save");
+          if (btn) btn.click();
+        } });
+    [
+      ["requirements", "Requirements"],
+      ["progress", "Progress"],
+      ["log", "Log"],
+      ["memory", "Memory"],
+    ].forEach(([name, label]) => A({
+      id: "project.open." + name,
+      name: "项目记忆: " + label,
+      hint: "Project",
+      icon: "notebook",
+      run: () => {
+        typeof switchView === "function" && switchView("project");
+        if (window.setProjectDoc) window.setProjectDoc(name);
+      },
+    }));
   }
 
   // ================= 命令面板 =================
@@ -293,11 +435,11 @@
     query = query.trim();
     let items;
     if (!query) {
-      items = actions.map((a, i) => ({ a, marks: [] }));
+      items = capabilities.map((a) => ({ a, marks: [] }));
     } else {
       const scored = [];
-      actions.forEach(a => {
-        const m = fuzzy(query, a.name);
+      capabilities.forEach(a => {
+        const m = fuzzy(query, a.title || a.name);
         if (m) scored.push({ a, marks: m.marks, score: m.score });
       });
       scored.sort((x, y) => y.score - x.score);
@@ -310,16 +452,21 @@
       return;
     }
     list.innerHTML = items.map((it, idx) => {
+      const capState = capabilityState(it.a);
+      const title = it.a.title || it.a.name;
       const hlSet = new Set(it.marks);
       let nameHtml = "";
-      for (let i = 0; i < it.a.name.length; i++) {
-        const ch = esc(it.a.name[i]);
+      for (let i = 0; i < title.length; i++) {
+        const ch = esc(title[i]);
         nameHtml += hlSet.has(i) ? `<span class="cp-hl">${ch}</span>` : ch;
       }
-      return `<div class="cp-item${idx === 0 ? " sel" : ""}" data-idx="${idx}">`
+      const meta = capState.enabled ? (it.a.hint || it.a.description || "") : capState.reason;
+      const risk = it.a.risk && it.a.risk !== "read" ? `<span class="cp-risk">${esc(it.a.risk)}</span>` : "";
+      return `<div class="cp-item${idx === 0 ? " sel" : ""}${capState.enabled ? "" : " disabled"}" data-idx="${idx}">`
         + `<span class="cp-ico">${svgIcon(it.a.icon || "command", 15)}</span>`
         + `<span class="cp-name">${nameHtml}</span>`
-        + (it.a.hint ? `<span class="cp-hint">${esc(it.a.hint)}</span>` : "")
+        + risk
+        + (meta ? `<span class="cp-hint">${esc(meta)}</span>` : "")
         + `</div>`;
     }).join("");
     list.querySelectorAll(".cp-item").forEach(el => {
@@ -342,6 +489,12 @@
   function cpChoose(idx) {
     const it = cpResults[idx];
     if (!it) return;
+    const capState = capabilityState(it.a);
+    if (!capState.enabled) {
+      if (window.setMsg) window.setMsg(capState.reason || "当前不可用", "warn");
+      cpRender($("#cp-input").value || "");
+      return;
+    }
     closeCmdPalette();
     try { it.a.run(); } catch (e) { console.error("命令执行失败", e); }
   }
