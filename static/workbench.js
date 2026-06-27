@@ -301,6 +301,7 @@
       title,
       name: title,
       kind: "command",
+      source: "builtin",
       surface: ["commandPalette"],
       requires: [],
       risk: "read",
@@ -656,12 +657,14 @@
 
   // ================= 命令面板 =================
   let cpResults = [], cpSel = 0;
+  const cpFilters = { risk: "all", kind: "all", source: "all" };
   function cpIsOpen() { return !$("#cmdpalette").classList.contains("hidden"); }
   function openCmdPalette() {
     if (cpIsOpen()) return;
     const inp = $("#cp-input");
     $("#cmdpalette").classList.remove("hidden");
     inp.value = "";
+    syncCpFilters();
     inp.focus();
     cpRender("");
   }
@@ -685,24 +688,97 @@
     return { marks, score };
   }
 
+  function cpFilterOptions(field) {
+    const values = new Set(capabilities.map(cap => cap[field] || (field === "risk" ? "read" : "builtin")));
+    if (field === "risk") {
+      const order = ["read", "write", "exec", "network"];
+      return Array.from(values).sort((a, b) => {
+        const ai = order.includes(a) ? order.indexOf(a) : order.length;
+        const bi = order.includes(b) ? order.indexOf(b) : order.length;
+        return ai === bi ? String(a).localeCompare(String(b)) : ai - bi;
+      });
+    }
+    return Array.from(values).sort();
+  }
+  function cpKindLabel(kind) {
+    return ({
+      command: "命令",
+      tool: "工具",
+      playbook: "Playbook",
+      skill: "Skill",
+      resource: "资源",
+    })[kind] || kind;
+  }
+  function cpSourceLabel(source) {
+    return ({
+      builtin: "内置",
+      workspace: "工作区",
+      plugin: "插件",
+      mcp: "MCP",
+    })[source] || source;
+  }
+  function setCpSelect(sel, options, value, labelFn) {
+    if (!sel) return;
+    sel.innerHTML = [{ value: "all", label: "全部" }]
+      .concat(options.map(v => ({ value: v, label: labelFn ? labelFn(v) : v })))
+      .map(opt => `<option value="${esc(opt.value)}"${opt.value === value ? " selected" : ""}>${esc(opt.label)}</option>`)
+      .join("");
+  }
+  function syncCpFilters() {
+    setCpSelect($("#cp-risk-filter"), cpFilterOptions("risk"), cpFilters.risk, r => {
+      const info = window.describeWorkbenchRisk ? window.describeWorkbenchRisk(r) : { label: r };
+      return info.label;
+    });
+    setCpSelect($("#cp-kind-filter"), cpFilterOptions("kind"), cpFilters.kind, cpKindLabel);
+    setCpSelect($("#cp-source-filter"), cpFilterOptions("source"), cpFilters.source, cpSourceLabel);
+    const clear = $("#cp-clear-filter");
+    if (clear) clear.classList.toggle("hidden",
+      cpFilters.risk === "all" && cpFilters.kind === "all" && cpFilters.source === "all");
+  }
+  function cpMatchesFilters(cap) {
+    const risk = cap.risk || "read";
+    const kind = cap.kind || "command";
+    const source = cap.source || "builtin";
+    if (cpFilters.risk !== "all" && risk !== cpFilters.risk) return false;
+    if (cpFilters.kind !== "all" && kind !== cpFilters.kind) return false;
+    if (cpFilters.source !== "all" && source !== cpFilters.source) return false;
+    return true;
+  }
+  function cpFilterSummary(items, total, query) {
+    const summary = $("#cp-summary");
+    if (!summary) return;
+    const bits = [];
+    if (query) bits.push(`搜索: ${query}`);
+    if (cpFilters.risk !== "all") {
+      const info = window.describeWorkbenchRisk ? window.describeWorkbenchRisk(cpFilters.risk) : { label: cpFilters.risk };
+      bits.push(`风险: ${info.label}`);
+    }
+    if (cpFilters.kind !== "all") bits.push(`类型: ${cpKindLabel(cpFilters.kind)}`);
+    if (cpFilters.source !== "all") bits.push(`来源: ${cpSourceLabel(cpFilters.source)}`);
+    summary.textContent = `${items.length}/${total} 个能力` + (bits.length ? ` · ${bits.join(" · ")}` : " · 无过滤");
+  }
+
   function cpRender(query) {
     query = query.trim();
+    syncCpFilters();
+    const filteredCaps = capabilities.filter(cpMatchesFilters);
     let items;
     if (!query) {
-      items = capabilities.map((a) => ({ a, marks: [] }));
+      items = filteredCaps.map((a) => ({ a, marks: [] }));
     } else {
       const scored = [];
-      capabilities.forEach(a => {
+      filteredCaps.forEach(a => {
         const m = fuzzy(query, a.title || a.name);
         if (m) scored.push({ a, marks: m.marks, score: m.score });
       });
       scored.sort((x, y) => y.score - x.score);
       items = scored;
     }
+    cpFilterSummary(items, capabilities.length, query);
     cpResults = items; cpSel = 0;
     const list = $("#cp-list");
     if (!items.length) {
-      list.innerHTML = `<div class="cp-empty">无匹配命令</div>`;
+      list.innerHTML = `<div class="cp-empty">${filteredCaps.length ? "无匹配命令" : "当前过滤没有匹配能力"}</div>`;
       return;
     }
     list.innerHTML = items.map((it, idx) => {
@@ -756,6 +832,19 @@
 
   function initCmdPalette() {
     $("#cp-input").addEventListener("input", (e) => cpRender(e.target.value));
+    const riskSel = $("#cp-risk-filter");
+    if (riskSel) riskSel.onchange = () => { cpFilters.risk = riskSel.value || "all"; cpRender($("#cp-input").value || ""); };
+    const kindSel = $("#cp-kind-filter");
+    if (kindSel) kindSel.onchange = () => { cpFilters.kind = kindSel.value || "all"; cpRender($("#cp-input").value || ""); };
+    const sourceSel = $("#cp-source-filter");
+    if (sourceSel) sourceSel.onchange = () => { cpFilters.source = sourceSel.value || "all"; cpRender($("#cp-input").value || ""); };
+    const clear = $("#cp-clear-filter");
+    if (clear) clear.onclick = () => {
+      cpFilters.risk = "all";
+      cpFilters.kind = "all";
+      cpFilters.source = "all";
+      cpRender($("#cp-input").value || "");
+    };
     $("#cp-input").addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown") { e.preventDefault(); cpSetSel(cpSel + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); cpSetSel(cpSel - 1); }

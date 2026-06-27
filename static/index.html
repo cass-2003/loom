@@ -452,6 +452,13 @@
         <input id="cp-input" type="text" spellcheck="false" autocomplete="off"
                placeholder="输入命令…（↑↓ 选择，Enter 执行，Esc 关闭）">
       </div>
+      <div class="cp-filterbar">
+        <label>风险 <select id="cp-risk-filter"></select></label>
+        <label>类型 <select id="cp-kind-filter"></select></label>
+        <label>来源 <select id="cp-source-filter"></select></label>
+        <button id="cp-clear-filter" class="task-mini hidden" data-icon="close" title="清除命令过滤"></button>
+      </div>
+      <div id="cp-summary" class="cp-summary"></div>
       <div id="cp-list"></div>
     </div>
   </div>
