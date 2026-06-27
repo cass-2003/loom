@@ -1534,6 +1534,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/set-root": "_api_set_root",
             "/api/create-workspace": "_api_create_workspace",
             "/api/recent/remove": "_api_recent_remove",
+            "/api/project-state/append": "_api_project_state_append",
         }
         if parsed.path in post_routes:
             handler = getattr(self, post_routes[parsed.path], None)
@@ -1996,6 +1997,56 @@ class Handler(BaseHTTPRequestHandler):
                 text, mtime = "", None
             out.append({"name": key, "file": fn, "content": text, "mtime": mtime})
         return self._json({"files": out})
+
+    @staticmethod
+    def _md_line(text, limit=2000):
+        text = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        text = text[:limit]
+        # 避免用户输入直接形成标题/列表结构，保持为引用块内容。
+        return "\n".join("> " + line for line in text.split("\n")) if text else "> （空）"
+
+    def _append_state_file(self, key, block):
+        fn = PROJECT_STATE_FILES.get(key)
+        if not fn:
+            return self._err("unknown project state file", 404)
+        base = (APP_DIR / "state").resolve()
+        fp = (base / fn).resolve()
+        if fp.parent != base:
+            return self._err("forbidden", 403)
+        try:
+            old = fp.read_text(encoding="utf-8-sig") if fp.is_file() else f"# {fn}\n"
+            if old and not old.endswith("\n"):
+                old += "\n"
+            atomic_write_bytes(fp, (old + "\n" + block.strip() + "\n").encode("utf-8"))
+        except OSError:
+            return self._err("保存失败", 500)
+        return None
+
+    def _api_project_state_append(self, body):
+        """POST /api/project-state/append → 安全追加项目记忆。
+
+        只支持追加到 LOG/PROGRESS，作为任务验证和决策沉淀入口；不提供任意覆盖能力。
+        """
+        kind = str(body.get("kind") or "").strip().lower()
+        target = str(body.get("target") or "").strip().lower()
+        title = str(body.get("title") or "").strip()[:160]
+        content = str(body.get("content") or "").strip()
+        if kind not in {"decision", "validation", "note"}:
+            return self._err("kind 必须是 decision / validation / note")
+        if target not in {"log", "progress"}:
+            return self._err("target 必须是 log 或 progress")
+        if not title and not content:
+            return self._err("缺少记录内容")
+        if len(content) > 5000:
+            return self._err("内容过长")
+        label = {"decision": "Decision", "validation": "Validation", "note": "Note"}[kind]
+        title = title or label
+        stamp = _now_iso().replace("T", " ")
+        block = f"### {stamp} · {label}: {title}\n\n{self._md_line(content)}"
+        err = self._append_state_file(target, block)
+        if err:
+            return err
+        return self._json({"ok": True, "target": target, "kind": kind})
 
     def _resolve_workspace_root(self, raw, *, create=False):
         """把用户输入的绝对/相对路径解析成可用工作区目录。"""

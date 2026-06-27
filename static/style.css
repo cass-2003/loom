@@ -1251,6 +1251,28 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   border-radius: 8px; white-space: pre-wrap; word-break: break-word;
   font: 12.5px/1.55 "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 }
+.project-modal {
+  position: fixed; inset: 0; z-index: 1300; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.48);
+}
+.project-modal-box {
+  width: min(560px, calc(100vw - 34px)); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 18px 58px rgba(0,0,0,.5);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.project-modal-title { color: var(--text); font-weight: 750; font-size: 14px; }
+.project-modal-input,
+.project-modal-text {
+  width: 100%; box-sizing: border-box; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border-soft); border-radius: 8px; outline: none; font: inherit;
+}
+.project-modal-input { padding: 8px 10px; }
+.project-modal-text {
+  min-height: 150px; resize: vertical; padding: 10px 11px; line-height: 1.55;
+}
+.project-modal-input:focus,
+.project-modal-text:focus { border-color: var(--accent); }
+.project-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px;

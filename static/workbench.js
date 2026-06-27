@@ -398,6 +398,18 @@
         if (window.setProjectDoc) window.setProjectDoc(name);
       },
     }));
+    A({ id: "project.appendDecision", name: "项目记忆: 追加决策记录", hint: "Decision", icon: "check",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("project");
+          if (window.appendProjectRecord) window.appendProjectRecord("decision");
+        } });
+    A({ id: "project.appendValidation", name: "项目记忆: 追加验证记录", hint: "Validation", icon: "play",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("project");
+          if (window.appendProjectRecord) window.appendProjectRecord("validation");
+        } });
   }
 
   // ================= 命令面板 =================
