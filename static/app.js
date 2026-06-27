@@ -2493,9 +2493,9 @@ document.querySelectorAll(".act").forEach(btn => {
 });
 setSidebarCollapsed(sidebarCollapsed);
 
-$("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
-$("#btn-new-file").onclick = () => fsCreate("", $("#tree"));
-$("#btn-new-dir").onclick = () => fsCreateDir("", $("#tree"));
+$("#btn-refresh").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("refreshTree");
+$("#btn-new-file").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFileRoot");
+$("#btn-new-dir").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFolderRoot");
 $("#status-file").onclick = () => revealCurrentFileInExplorer();
 
 // ---------- 杂项 ----------
@@ -2865,12 +2865,57 @@ async function chooseAndSwitchWorkspace() {
   }
 }
 
+function workspaceActionState(action) {
+  if (action === "open") return { enabled: true, reason: "" };
+  if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (action === "newFileRoot" && typeof fsCreate !== "function") {
+    return { enabled: false, reason: "新建文件能力尚未就绪" };
+  }
+  if (action === "newFolderRoot" && typeof fsCreateDir !== "function") {
+    return { enabled: false, reason: "新建文件夹能力尚未就绪" };
+  }
+  if (action === "refreshTree" && typeof initTree !== "function") {
+    return { enabled: false, reason: "文件树刷新能力尚未就绪" };
+  }
+  return { enabled: true, reason: "" };
+}
+
+async function runWorkspaceAction(action) {
+  const st = workspaceActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "open") { await chooseAndSwitchWorkspace(); return true; }
+  if (action === "newFileRoot") { await fsCreate("", $("#tree")); return true; }
+  if (action === "newFolderRoot") { await fsCreateDir("", $("#tree")); return true; }
+  if (action === "refreshTree") {
+    state.expanded.clear();
+    await initTree();
+    setMsg("文件树已刷新", "ok");
+    return true;
+  }
+  setMsg("未知工作区动作: " + action, "warn");
+  return false;
+}
+
+window.wbWorkspaceActions = {
+  actionState: workspaceActionState,
+  run: runWorkspaceAction,
+  summary: () => ({
+    hasWorkspace: !!currentRoot,
+    root: currentRoot,
+    roots: currentWorkspaceRoots.slice(),
+    workspaceId: currentWorkspaceId,
+  }),
+};
+
 function bindWelcomeButtons() {
   const topOpenBtn = $("#btn-open-folder");
-  if (topOpenBtn) topOpenBtn.onclick = chooseAndSwitchWorkspace;
+  if (topOpenBtn) topOpenBtn.onclick = () => wbWorkspaceActions.run("open");
 
   const openBtn = $("#welcome-open");
-  if (openBtn) openBtn.onclick = chooseAndSwitchWorkspace;
+  if (openBtn) openBtn.onclick = () => wbWorkspaceActions.run("open");
 
   const newBtn = $("#welcome-new");
   if (newBtn) newBtn.onclick = async () => {

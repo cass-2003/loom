@@ -459,10 +459,26 @@
     const A = registerAction;
     A({ id: "file.new", name: "新建文件", hint: "在根目录", icon: "filePlus",
         requires: ["workspace"], risk: "write",
-        run: () => { typeof fsCreate === "function" && fsCreate("", document.querySelector("#tree")); } });
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("newFileRoot");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("newFileRoot");
+        } });
     A({ id: "file.newFolder", name: "新建文件夹", hint: "在根目录", icon: "folderPlus",
         requires: ["workspace"], risk: "write",
-        run: () => { typeof fsCreateDir === "function" && fsCreateDir("", document.querySelector("#tree")); } });
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("newFolderRoot");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("newFolderRoot");
+        } });
     A({ id: "file.save", name: "保存文件", hint: "Ctrl+S", icon: "save",
         requires: ["editableFile"], risk: "write",
         run: () => { typeof save === "function" && save(); } });
@@ -470,9 +486,14 @@
         requires: ["workspace"],
         run: () => { typeof openQuickOpen === "function" && openQuickOpen(); } });
     A({ id: "workspace.open", name: "打开工作区", hint: "文件夹", icon: "folderOpen",
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("open");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          const btn = document.querySelector("#btn-open-folder");
-          if (btn) btn.click();
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("open");
         } });
     A({ id: "workspace.showEmpty", name: "显示工作区空状态", hint: "工作区", icon: "folder",
         requires: ["workspace"],
@@ -545,7 +566,15 @@
     // 刷新文件树
     A({ id: "workspace.refreshTree", name: "刷新文件树", hint: "", icon: "refresh",
         requires: ["workspace"],
-        run: () => { if (window.state) state.expanded.clear(); typeof initTree === "function" && initTree(); } });
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("refreshTree");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("refreshTree");
+        } });
     A({ id: "file.revealInExplorer", name: "文件: 在资源管理器中定位当前文件", hint: "Status Bar", icon: "folder",
         requires: ["workspace", "currentFile"],
         enabled: () => {
