@@ -1366,6 +1366,11 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .eco-note code { color: var(--text-dim); }
 .eco-summary { color: var(--muted); font-size: 11px; padding: 8px 2px 6px; }
 .eco-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 9px; }
+.eco-safety {
+  padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-soft));
+  border-radius: 9px; color: var(--text-dim); background: color-mix(in srgb, var(--accent) 8%, var(--bg3));
+  font-size: 12px; line-height: 1.45;
+}
 .eco-group-title {
   margin-top: 2px; color: var(--accent2); font-weight: 800; font-size: 11px;
   text-transform: uppercase; letter-spacing: .7px;
@@ -1382,9 +1387,10 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .eco-risk {
   padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border-soft);
 }
-.eco-risk.write, .eco-risk.exec, .eco-risk.network {
-  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 44%, transparent);
-}
+.eco-risk.read { color: var(--muted); }
+.eco-risk.write { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 44%, transparent); }
+.eco-risk.exec { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 46%, transparent); }
+.eco-risk.network { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 44%, transparent); }
 .eco-card h3 { margin: 7px 0 5px; color: var(--text); font-size: 13px; line-height: 1.35; }
 .eco-card p { margin: 0 0 8px; color: var(--text-dim); line-height: 1.45; }
 .eco-lines { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
@@ -1469,9 +1475,21 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .cp-item .cp-hint { color: var(--muted); font-size: 11.5px; flex-shrink: 0;
   padding: 1px 7px; border: 1px solid var(--border-soft); border-radius: 5px; }
 .cp-item .cp-risk {
-  color: var(--warn); font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-  flex-shrink: 0; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--warn) 42%, transparent);
-  border-radius: 999px; background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--muted); font-size: 10.5px; font-weight: 700;
+  flex-shrink: 0; padding: 1px 6px; border: 1px solid var(--border-soft);
+  border-radius: 999px; background: color-mix(in srgb, var(--bg3) 70%, transparent);
+}
+.cp-item .cp-risk.write {
+  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.cp-item .cp-risk.exec {
+  color: var(--danger); border-color: color-mix(in srgb, var(--danger) 46%, transparent);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+.cp-item .cp-risk.network {
+  color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 42%, transparent);
+  background: color-mix(in srgb, var(--cyan) 9%, transparent);
 }
 .cp-item .cp-hl { color: var(--accent); font-weight: 600; }
 .cp-item.sel { background: var(--sel); }

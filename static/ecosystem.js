@@ -6,6 +6,11 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  function riskInfo(risk) {
+    if (window.describeWorkbenchRisk) return window.describeWorkbenchRisk(risk);
+    return { key: risk || "read", label: risk || "read", description: "" };
+  }
+
   async function loadEcosystem() {
     const list = $("#eco-list");
     const summary = $("#eco-summary");
@@ -30,10 +35,11 @@
     const inputs = item.inputs && item.inputs.length
       ? `<div class="eco-lines"><b>输入</b>${item.inputs.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
     const desc = item.description || item.summary || "未提供说明";
+    const risk = riskInfo(item.risk);
     return `<article class="eco-card" data-path="${esc(item.path)}" data-source="${esc(item.source || "workspace")}">
       <div class="eco-card-head">
         <span class="eco-kind">${esc(item.kind)} · ${esc(item.source || "workspace")}</span>
-        <span class="eco-risk ${esc(item.risk || "read")}">${esc(item.risk || "read")}</span>
+        <span class="eco-risk ${esc(risk.key)}" title="${esc(risk.description)}">${esc(risk.label)}</span>
       </div>
       <h3>${esc(item.title)}</h3>
       <p>${esc(desc)}</p>
@@ -90,6 +96,7 @@
     if (!list || !summary) return;
     summary.textContent = `${cache.playbooks.length} playbooks · ${cache.skills.length} skills`;
     const parts = [];
+    parts.push(`<div class="eco-safety">安全边界：当前只支持查看定义、创建任务和复制验证命令；不会直接执行 Playbook / Skill 脚本。</div>`);
     if (cache.playbooks.length) {
       parts.push(`<div class="eco-group-title">Playbooks</div>`);
       parts.push(cache.playbooks.map(renderItem).join(""));

@@ -215,6 +215,23 @@
     gitChanges: "需要 Git 变更",
     terminal: "需要终端组件",
   };
+  const RISK_LABELS = {
+    read: "只读",
+    write: "写入",
+    exec: "执行",
+    network: "网络",
+  };
+  const RISK_DESCRIPTIONS = {
+    read: "只读取或展示信息，不写入工作区。",
+    write: "会写入文件、任务、记忆或本地状态。",
+    exec: "可能执行本机命令，必须有确认和日志。",
+    network: "可能访问网络或远端服务。",
+  };
+  window.describeWorkbenchRisk = (risk) => ({
+    key: risk || "read",
+    label: RISK_LABELS[risk || "read"] || String(risk || "read"),
+    description: RISK_DESCRIPTIONS[risk || "read"] || "自定义风险等级",
+  });
 
   function hasWorkspace() {
     return typeof window.hasOpenWorkspace === "function" ? window.hasOpenWorkspace() : !!window.currentRoot;
@@ -624,7 +641,8 @@
         nameHtml += hlSet.has(i) ? `<span class="cp-hl">${ch}</span>` : ch;
       }
       const meta = capState.enabled ? (it.a.hint || it.a.description || "") : capState.reason;
-      const risk = it.a.risk && it.a.risk !== "read" ? `<span class="cp-risk">${esc(it.a.risk)}</span>` : "";
+      const riskInfo = window.describeWorkbenchRisk ? window.describeWorkbenchRisk(it.a.risk) : { key: it.a.risk || "read", label: it.a.risk || "read", description: "" };
+      const risk = `<span class="cp-risk ${esc(riskInfo.key)}" title="${esc(riskInfo.description)}">${esc(riskInfo.label)}</span>`;
       return `<div class="cp-item${idx === 0 ? " sel" : ""}${capState.enabled ? "" : " disabled"}" data-idx="${idx}">`
         + `<span class="cp-ico">${svgIcon(it.a.icon || "command", 15)}</span>`
         + `<span class="cp-name">${nameHtml}</span>`
