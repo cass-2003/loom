@@ -235,6 +235,14 @@
             <span>记录目标、计划、执行日志和证据路径，后续可导出给 Agent / Playbook。</span>
           </div>
           <div id="task-list" class="task-list"></div>
+          <section class="session-panel">
+            <div class="session-head">
+              <span>Agent Sessions</span>
+              <button id="session-refresh" class="task-mini" data-icon="refresh" title="刷新会话"></button>
+            </div>
+            <div id="session-empty" class="session-empty">还没有会话。可以从任务卡创建会话，再把外部 Agent / CLI 的结果导入回来。</div>
+            <div id="session-list" class="session-list"></div>
+          </section>
         </div>
       </div>
 

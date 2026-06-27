@@ -42,6 +42,10 @@
     return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n")
       .split("\n").map(x => x.trim()).filter(Boolean);
   }
+  function compactText(text, limit) {
+    const s = String(text || "").trim();
+    return s.length > limit ? s.slice(0, limit - 1) + "…" : s;
+  }
 
   async function saveTasks(msg) {
     const res = await postJson("/api/workflow-tasks", { tasks });
@@ -84,6 +88,7 @@
         if (data.error) throw new Error(data.error);
         sessions = Array.isArray(data.sessions) ? data.sessions : [];
         sessionsLoaded = true;
+        renderSessions();
         return true;
       } catch (e) {
         if (window.setMsg) setMsg("会话加载失败: " + (e && e.message ? e.message : e), "err");
@@ -102,6 +107,7 @@
       return false;
     }
     sessions = Array.isArray(res.sessions) ? res.sessions : sessions;
+    renderSessions();
     if (msg && window.setMsg) setMsg(msg, "ok");
     return true;
   }
@@ -238,6 +244,70 @@
     if (window.reloadProjectMemory) window.reloadProjectMemory();
   }
 
+  function findTaskForSession(session) {
+    if (!session) return null;
+    return tasks.find(t => t.id === session.taskId) || null;
+  }
+
+  async function appendAgentResultToMemory(t, session, summary, evidence) {
+    const content = [
+      `Session: ${session ? session.id : "none"}`,
+      "",
+      summary,
+      "",
+      "Evidence:",
+      ...(evidence.length ? evidence.map(x => "- " + x) : ["- （暂无）"]),
+    ].join("\n");
+    const res = await postJson("/api/project-state/append", {
+      kind: "validation",
+      target: "progress",
+      title: `Agent result: ${t ? t.title : (session && session.title) || "Untitled"}`,
+      content,
+    });
+    if (res.error) {
+      if (window.setMsg) setMsg("写入项目记忆失败: " + res.error, "err");
+      return false;
+    }
+    if (window.reloadProjectMemory) window.reloadProjectMemory();
+    return true;
+  }
+
+  async function importAgentResult(sessionId, taskId) {
+    if (!tasksLoaded) await loadTasks();
+    if (!sessionsLoaded) await loadSessions();
+    const session = sessions.find(s => s.id === sessionId) || null;
+    const t = tasks.find(x => x.id === taskId) || findTaskForSession(session);
+    if (!session && !t) {
+      if (window.setMsg) setMsg("没有可导入的任务或会话", "warn");
+      return;
+    }
+    const summary = prompt("粘贴外部 Agent / CLI 的执行摘要：", "");
+    if (!summary || !summary.trim()) return;
+    const evidence = lines(prompt("证据路径 / 验证命令（每行一条，可留空）：", "") || "");
+    const now = new Date().toISOString().slice(0, 19);
+    const short = compactText(summary, 420);
+    if (session) {
+      session.status = evidence.length ? "verified" : "running";
+      session.outputs = Array.isArray(session.outputs) ? session.outputs : [];
+      session.outputs.push(short);
+      session.evidence = Array.isArray(session.evidence) ? session.evidence : [];
+      session.evidence.push(...evidence);
+      session.log = Array.isArray(session.log) ? session.log : [];
+      session.log.push(`Imported Agent result at ${now}`);
+    }
+    if (t) {
+      t.status = evidence.length ? "verified" : "running";
+      t.log = Array.isArray(t.log) ? t.log : [];
+      t.log.push(`Agent result imported${session ? " from " + session.id : ""}: ${short}`);
+      t.evidence = Array.isArray(t.evidence) ? t.evidence : [];
+      t.evidence.push(...evidence);
+    }
+    const memoryOk = t ? await appendAgentResultToMemory(t, session, summary.trim(), evidence) : true;
+    const taskOk = t ? await saveTasks() : true;
+    const sessionOk = session ? await saveSessions() : true;
+    if (memoryOk && taskOk && sessionOk && window.setMsg) setMsg("已导入 Agent 结果", "ok");
+  }
+
   async function createSessionFromTask(id) {
     const t = tasks.find(x => x.id === id);
     if (!t) return null;
@@ -336,6 +406,7 @@
           <button data-act="evidence">追加证据</button>
           <button data-act="session">创建会话</button>
           <button data-act="sessionBrief">复制会话 brief</button>
+          <button data-act="import">导入结果</button>
           <button data-act="memory">写入记忆</button>
         </div>
       </article>`;
@@ -351,8 +422,56 @@
         else if (act === "evidence") addTaskLine(id, "evidence", "追加证据路径 / 验证命令");
         else if (act === "session") createSessionFromTask(id);
         else if (act === "sessionBrief") copySessionBrief(id);
+        else if (act === "import") importAgentResult(null, id);
         else if (act === "memory") appendTaskToMemory(id);
         else setTaskStatus(id, act);
+      });
+    });
+  }
+
+  function renderSessions() {
+    const list = $("#session-list");
+    const empty = $("#session-empty");
+    if (!list || !empty) return;
+    empty.classList.toggle("hidden", sessions.length > 0);
+    list.innerHTML = sessions.map(s => {
+      const outputs = (s.outputs || []).slice(-2).map(x => `<li>${esc(x)}</li>`).join("");
+      const evidence = (s.evidence || []).slice(-3).map(x => `<li>${esc(x)}</li>`).join("");
+      return `<article class="session-card" data-id="${esc(s.id)}">
+        <div class="session-card-head">
+          <span class="task-state ${esc(s.status)}">${esc(STATUS[s.status] || s.status || "draft")}</span>
+          <span class="session-id">${esc(s.id)}</span>
+        </div>
+        <h3>${esc(s.title || s.taskTitle || "未命名会话")}</h3>
+        <div class="session-sub">${esc(s.taskTitle || s.taskId || "未绑定任务")}</div>
+        <div class="task-section"><b>Outputs</b><ul>${outputs || "<li>暂无</li>"}</ul></div>
+        <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
+        <div class="task-actions">
+          <button data-act="brief">复制 brief</button>
+          <button data-act="import">导入结果</button>
+        </div>
+      </article>`;
+    }).join("");
+    list.querySelectorAll(".session-card").forEach(card => {
+      const id = card.dataset.id;
+      card.addEventListener("click", e => {
+        const btn = e.target.closest("button[data-act]");
+        if (!btn) return;
+        const session = sessions.find(s => s.id === id);
+        if (!session) return;
+        if (btn.dataset.act === "brief") {
+          const text = session.brief || "";
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+              () => window.setMsg && setMsg("已复制 Session brief", "ok"),
+              () => prompt("复制下面的 Session brief：", text)
+            );
+          } else {
+            prompt("复制下面的 Session brief：", text);
+          }
+        } else if (btn.dataset.act === "import") {
+          importAgentResult(id, session.taskId);
+        }
       });
     });
   }
@@ -360,6 +479,8 @@
   function initTasksPanel() {
     const refresh = $("#task-refresh");
     if (refresh) refresh.onclick = loadTasks;
+    const sessionRefresh = $("#session-refresh");
+    if (sessionRefresh) sessionRefresh.onclick = loadSessions;
     const create = $("#task-new");
     if (create) create.onclick = promptTask;
     loadTasks();
@@ -378,6 +499,14 @@
   };
   window.copyActiveSessionBrief = () => {
     if (tasks[0]) copySessionBrief(tasks[0].id);
+  };
+  window.importAgentResultToActiveTask = () => {
+    if (tasks[0]) importAgentResult(null, tasks[0].id);
+  };
+  window.importAgentResultToActiveSession = async () => {
+    if (!sessionsLoaded) await loadSessions();
+    if (sessions[0]) importAgentResult(sessions[0].id, sessions[0].taskId);
+    else if (tasks[0]) importAgentResult(null, tasks[0].id);
   };
   window.focusWorkflowTasks = () => {
     if (!tasks.length) loadTasks();

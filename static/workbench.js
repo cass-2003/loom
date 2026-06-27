@@ -550,6 +550,12 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.copyActiveSessionBrief) window.copyActiveSessionBrief();
         } });
+    A({ id: "session.importResult", name: "Agent: 导入会话结果", hint: "Session", icon: "download",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.importAgentResultToActiveSession) window.importAgentResultToActiveSession();
+        } });
     A({ id: "ecosystem.refresh", name: "生态: 刷新 Skills / Playbooks", hint: ".workbench", icon: "blocks",
         run: () => {
           typeof switchView === "function" && switchView("ecosystem");

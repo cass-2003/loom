@@ -1981,12 +1981,22 @@ class Handler(BaseHTTPRequestHandler):
             "hasWorkspace": has_workspace(),
         })
 
+    def _workspace_state_dir(self) -> Path:
+        """当前工作区的轻量状态目录；无工作区时回退到应用内置状态。"""
+        roots = current_workspace_roots()
+        if roots:
+            root = roots[0].resolve()
+            base = (root / "state").resolve()
+            if base == root or root in base.parents:
+                return base
+        return (APP_DIR / "state").resolve()
+
     def _api_project_state(self, name):
-        """GET /api/project-state → 读取 Workbench 项目记忆文件。
+        """GET /api/project-state → 读取当前工作区项目记忆文件。
 
         只允许 `state/` 下固定白名单，避免把它变成任意本机文件读取接口。
         """
-        base = (APP_DIR / "state").resolve()
+        base = self._workspace_state_dir()
         if name:
             key = (name or "").strip().lower()
             fn = PROJECT_STATE_FILES.get(key)
@@ -2014,7 +2024,7 @@ class Handler(BaseHTTPRequestHandler):
         fn = PROJECT_STATE_FILES.get(key)
         if not fn:
             return None, None
-        base = (APP_DIR / "state").resolve()
+        base = self._workspace_state_dir()
         fp = (base / fn).resolve()
         if fp.parent != base:
             return None, None
@@ -2052,6 +2062,7 @@ class Handler(BaseHTTPRequestHandler):
         if not fn:
             return self._err("unknown project state file", 404)
         try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
             old = fp.read_text(encoding="utf-8-sig") if fp.is_file() else f"# {fn}\n"
             if old and not old.endswith("\n"):
                 old += "\n"
@@ -2106,10 +2117,10 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"ok": True, "size": len(data), "target": key})
 
     def _workflow_tasks_path(self) -> Path:
-        return (APP_DIR / "state" / "TASKS.json").resolve()
+        return (self._workspace_state_dir() / "TASKS.json").resolve()
 
     def _agent_sessions_path(self) -> Path:
-        return (APP_DIR / "state" / "SESSIONS.json").resolve()
+        return (self._workspace_state_dir() / "SESSIONS.json").resolve()
 
     @staticmethod
     def _text_list(value, *, item_limit=200, count_limit=20):
@@ -2128,7 +2139,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _load_workflow_tasks(self):
         fp = self._workflow_tasks_path()
-        if fp.parent != (APP_DIR / "state").resolve():
+        if fp.parent != self._workspace_state_dir():
             return []
         if not fp.is_file():
             return []
@@ -2143,7 +2154,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _save_workflow_tasks(self, tasks):
         fp = self._workflow_tasks_path()
-        if fp.parent != (APP_DIR / "state").resolve():
+        if fp.parent != self._workspace_state_dir():
             return self._err("forbidden", 403)
         payload = {
             "version": 1,
@@ -2211,7 +2222,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _load_agent_sessions(self):
         fp = self._agent_sessions_path()
-        if fp.parent != (APP_DIR / "state").resolve():
+        if fp.parent != self._workspace_state_dir():
             return []
         if not fp.is_file():
             return []
@@ -2226,7 +2237,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _save_agent_sessions(self, sessions):
         fp = self._agent_sessions_path()
-        if fp.parent != (APP_DIR / "state").resolve():
+        if fp.parent != self._workspace_state_dir():
             return self._err("forbidden", 403)
         payload = {
             "version": 1,
