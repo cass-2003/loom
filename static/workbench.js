@@ -437,6 +437,12 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
         } });
+    A({ id: "task.appendMemory", name: "任务: 写入项目记忆", hint: "Progress", icon: "notebook",
+        risk: "write",
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.appendActiveTaskToMemory) window.appendActiveTaskToMemory();
+        } });
   }
 
   // ================= 命令面板 =================

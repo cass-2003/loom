@@ -99,6 +99,10 @@
     ].join("\n");
   }
 
+  function taskMemoryTitle(t) {
+    return `Task ${STATUS[t.status] || t.status}: ${t.title}`;
+  }
+
   async function copyBrief(id) {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
@@ -109,6 +113,25 @@
     } catch {
       prompt("复制下面的 Agent brief：", brief);
     }
+  }
+
+  async function appendTaskToMemory(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    const res = await postJson("/api/project-state/append", {
+      kind: "validation",
+      target: "progress",
+      title: taskMemoryTitle(t),
+      content: taskBrief(t),
+    });
+    if (res.error) {
+      if (window.setMsg) setMsg("写入项目记忆失败: " + res.error, "err");
+      return;
+    }
+    t.log = Array.isArray(t.log) ? t.log : [];
+    t.log.push("已同步任务验证记录到 Project Memory / Progress");
+    await saveTasks("已写入项目记忆");
+    if (window.reloadProjectMemory) window.reloadProjectMemory();
   }
 
   function addTaskLine(id, field, label) {
@@ -154,6 +177,7 @@
           <button data-act="blocked">阻塞</button>
           <button data-act="log">追加日志</button>
           <button data-act="evidence">追加证据</button>
+          <button data-act="memory">写入记忆</button>
         </div>
       </article>`;
     }).join("");
@@ -166,6 +190,7 @@
         if (act === "brief") copyBrief(id);
         else if (act === "log") addTaskLine(id, "log", "追加日志");
         else if (act === "evidence") addTaskLine(id, "evidence", "追加证据路径 / 验证命令");
+        else if (act === "memory") appendTaskToMemory(id);
         else setTaskStatus(id, act);
       });
     });
@@ -182,6 +207,9 @@
   window.initTasksPanel = initTasksPanel;
   window.reloadWorkflowTasks = loadTasks;
   window.createWorkflowTask = promptTask;
+  window.appendActiveTaskToMemory = () => {
+    if (tasks[0]) appendTaskToMemory(tasks[0].id);
+  };
   window.focusWorkflowTasks = () => {
     if (!tasks.length) loadTasks();
   };
