@@ -800,9 +800,15 @@
           if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("importSessionResult");
         } });
     A({ id: "ecosystem.refresh", name: "生态: 刷新 Skills / Playbooks", hint: ".workbench", icon: "blocks",
+        enabled: () => {
+          const api = window.wbEcosystemActions;
+          if (!api || !api.actionState) return "生态面板尚未就绪";
+          const st = api.actionState("refresh");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("ecosystem");
-          if (window.reloadEcosystem) window.reloadEcosystem();
+          if (window.wbEcosystemActions && window.wbEcosystemActions.run) window.wbEcosystemActions.run("refresh");
         } });
   }
 

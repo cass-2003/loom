@@ -143,6 +143,72 @@
     return allItems().find(x => x.path === card.dataset.path && (x.source || "workspace") === card.dataset.source);
   }
 
+  function ecosystemActionState(action, item) {
+    if (action === "refresh") return { enabled: true, reason: "" };
+    if (action === "task" && !window.addWorkflowTask) {
+      return { enabled: false, reason: "任务面板尚未就绪" };
+    }
+    if (action === "copy" && item && !(item.verification || []).length) {
+      return { enabled: false, reason: "该定义没有验证命令" };
+    }
+    if (action === "open" && item && item.source !== "builtin" && !window.openFile) {
+      return { enabled: false, reason: "文件打开能力尚未就绪" };
+    }
+    return { enabled: true, reason: "" };
+  }
+
+  async function runEcosystemAction(action, item) {
+    const st = ecosystemActionState(action, item);
+    if (!st.enabled) {
+      if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "refresh") { await loadEcosystem(); return true; }
+    if (!item) {
+      if (window.setMsg) window.setMsg("未找到生态入口", "warn");
+      return false;
+    }
+    if (action === "open") {
+      if (item.source === "builtin") showDefinition(item);
+      else window.openFile(item.path);
+      return true;
+    }
+    if (action === "preview") { showExecutionPreview(item); return true; }
+    if (action === "copy-preview") {
+      await copyText(executionPreviewMarkdown(item), "已复制执行预览包", "复制执行预览包：");
+      return true;
+    }
+    if (action === "task") {
+      const plan = stepsFromContent(item);
+      const preview = previewPlan(item);
+      await window.addWorkflowTask({
+        title: item.title,
+        goal: item.summary || item.description || `Run ${item.title}`,
+        plan: (plan.length ? plan : []).concat([
+          "Review execution preview before running any command manually.",
+          ...preview.commands.map(x => `Command preview: ${x}`),
+          ...preview.verification.map(x => `Verify: ${x}`),
+        ]),
+        evidence: [],
+        log: [
+          `Created from ${item.kind}: ${item.path}`,
+          `Risk: ${preview.risk.key}`,
+          `Scope: ${preview.scope}`,
+          ...preview.requires.map(x => `Requires: ${x}`),
+          ...preview.evidence.map(x => `Evidence field: ${x}`),
+        ],
+        next: "Review the execution preview, then copy commands or run checks manually with evidence logging.",
+      });
+      return true;
+    }
+    if (action === "copy") {
+      const text = (item.verification || []).join("\n");
+      await copyText(text, "已复制验证命令", "复制验证命令：");
+      return true;
+    }
+    return false;
+  }
+
   function showDefinition(item) {
     const ov = document.createElement("div");
     ov.className = "eco-modal";
@@ -301,44 +367,7 @@
         const item = findItem(card);
         if (!item) return;
         const act = btn.dataset.act;
-        if (act === "open") {
-          if (item.source === "builtin") showDefinition(item);
-          else if (window.openFile) window.openFile(item.path);
-        } else if (act === "preview") {
-          showExecutionPreview(item);
-        } else if (act === "copy-preview") {
-          await copyText(executionPreviewMarkdown(item), "已复制执行预览包", "复制执行预览包：");
-        } else if (act === "task") {
-          const plan = stepsFromContent(item);
-          const preview = previewPlan(item);
-          if (window.addWorkflowTask) {
-            await window.addWorkflowTask({
-              title: item.title,
-              goal: item.summary || item.description || `Run ${item.title}`,
-              plan: (plan.length ? plan : []).concat([
-                "Review execution preview before running any command manually.",
-                ...preview.commands.map(x => `Command preview: ${x}`),
-                ...preview.verification.map(x => `Verify: ${x}`),
-              ]),
-              evidence: [],
-              log: [
-                `Created from ${item.kind}: ${item.path}`,
-                `Risk: ${preview.risk.key}`,
-                `Scope: ${preview.scope}`,
-                ...preview.requires.map(x => `Requires: ${x}`),
-                ...preview.evidence.map(x => `Evidence field: ${x}`),
-              ],
-              next: "Review the execution preview, then copy commands or run checks manually with evidence logging.",
-            });
-          }
-        } else if (act === "copy") {
-          const text = (item.verification || []).join("\n");
-          if (!text) {
-            if (window.setMsg) window.setMsg("该定义没有验证命令", "warn");
-            return;
-          }
-          await copyText(text, "已复制验证命令", "复制验证命令：");
-        }
+        await runEcosystemAction(act, item);
       });
     });
   }
@@ -360,6 +389,17 @@
   }
 
   window.initEcosystemPanel = initEcosystemPanel;
+  window.wbEcosystemActions = {
+    actionState: ecosystemActionState,
+    run: runEcosystemAction,
+    summary: () => ({
+      skills: cache.skills.length,
+      playbooks: cache.playbooks.length,
+      visible: visibleItems().length,
+      risk: filters.risk,
+      source: filters.source,
+    }),
+  };
   window.reloadEcosystem = loadEcosystem;
   window.focusEcosystem = () => {
     if (!cache.skills.length && !cache.playbooks.length) loadEcosystem();
