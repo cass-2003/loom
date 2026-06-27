@@ -2458,6 +2458,8 @@ document.addEventListener("keydown", (e) => {
 // ---------- 活动栏：视图切换 ----------
 let activeView = "files";
 let sidebarCollapsed = localStorage.getItem("wb-sidebar-collapsed") === "1";
+let wsRestoring = false;   // 恢复期间不写回，避免覆盖
+let wsSuspendSave = false; // 工作区切换时短暂禁止主组状态回写，避免旧 key 被空标签覆盖
 function setSidebarCollapsed(collapsed) {
   sidebarCollapsed = !!collapsed;
   document.body.classList.toggle("sidebar-collapsed", sidebarCollapsed);
@@ -2466,9 +2468,11 @@ function setSidebarCollapsed(collapsed) {
   if (side) side.setAttribute("aria-hidden", sidebarCollapsed ? "true" : "false");
   if (rz) rz.classList.toggle("hidden", sidebarCollapsed);
   localStorage.setItem("wb-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
+  if (!wsRestoring && !wsSuspendSave && typeof saveWorkspace === "function") saveWorkspace();
   try { window.dispatchEvent(new Event("resize")); } catch {}
 }
 function switchView(view) {
+  if (!view || !$("#view-" + view)) return;
   activeView = view;
   document.querySelectorAll(".act").forEach(b =>
     b.classList.toggle("active", b.dataset.view === view));
@@ -2479,6 +2483,7 @@ function switchView(view) {
   if (view === "project" && window.focusProjectMemory) window.focusProjectMemory();
   if (view === "tasks" && window.focusWorkflowTasks) window.focusWorkflowTasks();
   if (view === "ecosystem" && window.focusEcosystem) window.focusEcosystem();
+  if (!wsRestoring && !wsSuspendSave && typeof saveWorkspace === "function") saveWorkspace();
 }
 document.querySelectorAll(".act").forEach(btn => {
   btn.onclick = () => {
@@ -2522,7 +2527,6 @@ window.currentRoot = currentRoot;
 window.currentWorkspaceId = currentWorkspaceId;
 window.currentWorkspaceRoots = currentWorkspaceRoots;
 window.hasOpenWorkspace = () => !!currentRoot;
-let wsSuspendSave = false;  // 工作区切换时短暂禁止主组状态回写，避免旧 key 被空标签覆盖
 
 function wsKey() {
   if (!currentWorkspaceId) return null;
@@ -2801,8 +2805,7 @@ applyTheme(localStorage.getItem("wb-theme") || "dark");
 
 // ---------- 工作区记忆：保存/恢复打开的标签（按根路径分区）----------
 // 旧版用固定 key "wb-workspace"，切根时清空、重启时回到错误根。
-// 现按 currentRoot 分区：每个工作区独立记忆，切根不丢、跨会话恢复到上次工作区。
-let wsRestoring = false;   // 恢复期间不写回，避免覆盖
+// 现按 workspaceId 分区：每个工作区独立记忆，切根不丢、跨会话恢复到上次工作区。
 function saveWorkspace() {
   if (wsRestoring) return;
   if (wsSuspendSave) return;
@@ -2811,12 +2814,23 @@ function saveWorkspace() {
   try {
     const paths = state.tabs.map(t => t.path);
     localStorage.setItem(key, JSON.stringify({
+      version: 2,
       tabs: paths,
       active: state.activeTab,
+      ui: {
+        activeView,
+        sidebarCollapsed,
+      },
     }));
   } catch {}
 }
 window.saveWorkspace = saveWorkspace;
+
+function restoreWorkspaceUi(data) {
+  const ui = data && data.ui && typeof data.ui === "object" ? data.ui : {};
+  if (typeof ui.sidebarCollapsed === "boolean") setSidebarCollapsed(ui.sidebarCollapsed);
+  if (ui.activeView && $("#view-" + ui.activeView)) switchView(ui.activeView);
+}
 
 async function restoreWorkspace() {
   const key = wsKey();
@@ -2826,13 +2840,14 @@ async function restoreWorkspace() {
   if ((!data || !Array.isArray(data.tabs) || !data.tabs.length) && currentRoot) {
     try { data = JSON.parse(localStorage.getItem("wb-ws:" + currentRoot) || "null"); } catch { data = null; }
   }
-  if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
+  if (!data || (!Array.isArray(data.tabs) && !data.ui)) return;
   wsRestoring = true;
   try {
+    restoreWorkspaceUi(data);
     // 不能用 /api/files-flat 当存在性判据：它会被截断(>2000)、且故意剔除 node_modules/.git/dist
     // 等忽略目录——会误删这些目录下已打开的标签并永久遗忘。改为直接尝试打开，让 openFile 自身的
     // 404 处理丢弃真正不存在的文件(quiet 模式不弹错误提示)，存在的(含忽略目录内)正常恢复。
-    for (const p of data.tabs) {
+    for (const p of (Array.isArray(data.tabs) ? data.tabs : [])) {
       try { await openFile(p, false, { quiet: true }); } catch (_) {}   // 单个坏标签不阻断其余恢复
     }
   } finally {
