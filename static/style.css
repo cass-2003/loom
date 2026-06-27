@@ -1291,6 +1291,11 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
     radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 35%),
     color-mix(in srgb, var(--bg2) 84%, transparent);
 }
+.project-recovery.project-recovery-pulse {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+              0 0 24px color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .project-recovery-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   color: var(--text); font-size: 12px; font-weight: 750; margin-bottom: 8px;

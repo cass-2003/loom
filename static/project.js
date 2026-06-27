@@ -76,6 +76,9 @@
   }
   function projectActionState(action, name) {
     const key = name || active;
+    if (action === "focusRecovery") {
+      return { enabled: true, reason: "" };
+    }
     if ((action === "edit" || action === "append") && !hasWorkspace()) {
       return { enabled: false, reason: "请先打开工作区" };
     }
@@ -480,11 +483,23 @@
   window.wbProjectActions = {
     actionState: projectActionState,
     run: async (action, name) => {
-      if (!docs.length || (action === "copyRoadmap" && !roadmap)) await loadProjectState();
+      if (!docs.length || action === "focusRecovery" || (action === "copyRoadmap" && !roadmap)) await loadProjectState();
       const st = projectActionState(action, name);
       if (!st.enabled) {
         if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
         return false;
+      }
+      if (action === "focusRecovery") {
+        if (typeof switchView === "function") switchView("project");
+        renderRecovery();
+        const panel = $("#project-recovery");
+        if (panel) {
+          panel.scrollIntoView({ block: "nearest" });
+          panel.classList.add("project-recovery-pulse");
+          setTimeout(() => panel.classList.remove("project-recovery-pulse"), 900);
+        }
+        if (window.setMsg) setMsg("已打开项目恢复中心", "ok");
+        return true;
       }
       if (action === "open") return setProjectDoc(name);
       if (action === "edit") return openProjectStateFile(name);

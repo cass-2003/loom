@@ -771,6 +771,17 @@
           typeof switchView === "function" && switchView("project");
           if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("copyRoadmap");
         } });
+    A({ id: "project.focusRecovery", name: "项目记忆: 打开恢复中心", hint: "Recovery", icon: "notebook",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("focusRecovery");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("focusRecovery");
+        } });
     [
       ["requirements", "Requirements"],
       ["progress", "Progress"],
