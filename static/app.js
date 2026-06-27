@@ -723,26 +723,27 @@ function bindRowContextMenu(row, entry) {
     e.preventDefault();
     e.stopPropagation();
     setExplorerSelection(entry, row);
-    const container = containerOf(row);
-    const parentRel = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
     const isDir = entry.type === "dir";
     const gitHistoryState = explorerActionState("history");
+    const newFileState = explorerActionState("newFile");
+    const newFolderState = explorerActionState("newFolder");
+    const runExplorer = (action) => {
+      if (window.wbExplorer && wbExplorer.run) return wbExplorer.run(action);
+      return false;
+    };
     const items = [];
     if (isDir) {
-      const children = childrenOf(row);
       items.push({
         icon: "filePlus", label: "新建文件",
-        action: async () => {
-          await ensureExpanded(row, children);
-          fsCreate(entry.path, children);
-        },
+        disabled: !newFileState.enabled,
+        reason: newFileState.reason,
+        action: () => runExplorer("newFile"),
       });
       items.push({
         icon: "folderPlus", label: "新建文件夹",
-        action: async () => {
-          await ensureExpanded(row, children);
-          fsCreateDir(entry.path, children);
-        },
+        disabled: !newFolderState.enabled,
+        reason: newFolderState.reason,
+        action: () => runExplorer("newFolder"),
       });
       items.push({ sep: true });
     }
@@ -751,23 +752,23 @@ function bindRowContextMenu(row, entry) {
         icon: "history", label: "文件历史 (Git)",
         disabled: !gitHistoryState.enabled,
         reason: gitHistoryState.reason,
-        action: () => { if (window.showFileHistory) window.showFileHistory(entry.path); },
+        action: () => runExplorer("history"),
       });
       items.push({
         icon: "list", label: "Blame (逐行作者)",
         disabled: !gitHistoryState.enabled,
         reason: gitHistoryState.reason,
-        action: () => { if (window.showBlame) window.showBlame(entry.path); },
+        action: () => runExplorer("blame"),
       });
       items.push({ sep: true });
     }
     items.push({
       icon: "pencil", label: "重命名",
-      action: () => fsRename(entry.path, entry.name, isDir, container, parentRel),
+      action: () => runExplorer("rename"),
     });
     items.push({
       icon: "trash", label: "删除", danger: true,
-      action: () => fsDelete(entry.path, isDir, container, parentRel),
+      action: () => runExplorer("delete"),
     });
     showCtxMenu(e.clientX, e.clientY, items);
   });
