@@ -1579,6 +1579,8 @@ function toggleMenu(menu, others) {
 }
 $("#btn-toc").onclick = (e) => {
   e.stopPropagation();
+  const st = markdownOutlineActionState("menu");
+  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return; }
   toggleMenu($("#toc-menu"), [$("#export-menu")]);
 };
 $("#btn-md-export").onclick = (e) => {
@@ -1637,6 +1639,42 @@ function runMarkdownExportAction(action) {
 window.wbMarkdownExport = {
   actionState: markdownExportActionState,
   run: runMarkdownExportAction,
+};
+
+function markdownOutlineActionState(action) {
+  if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (!activeTabIsMarkdown()) return { enabled: false, reason: "请先打开 Markdown 文件" };
+  if (state.kind === "md") {
+    if (!vd.inst || !vd.ready || vd.curPath !== state.current) {
+      return { enabled: false, reason: "Markdown 编辑器尚未就绪" };
+    }
+    return { enabled: false, reason: "Vditor 模式使用编辑器左侧大纲" };
+  }
+  const toolbar = $("#md-toolbar");
+  if (!toolbar || toolbar.classList.contains("hidden")) {
+    return { enabled: false, reason: "当前 Markdown 大纲菜单不可用" };
+  }
+  if (action === "menu") return { enabled: true, reason: "" };
+  return { enabled: true, reason: "" };
+}
+
+function runMarkdownOutlineAction(action) {
+  const st = markdownOutlineActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "menu") {
+    const btn = $("#btn-toc");
+    if (btn) btn.click();
+    return true;
+  }
+  return false;
+}
+
+window.wbMarkdownOutline = {
+  actionState: markdownOutlineActionState,
+  run: runMarkdownOutlineAction,
 };
 
 // 收集页面里已加载的 highlight / markdown 相关样式，内联进导出的 HTML

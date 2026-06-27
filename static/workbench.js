@@ -511,9 +511,14 @@
         } });
     A({ id: "markdown.openToc", name: "Markdown: 打开大纲", hint: "Markdown", icon: "list",
         requires: ["markdown"],
+        enabled: () => {
+          const api = window.wbMarkdownOutline;
+          if (!api || !api.actionState) return "Markdown 大纲状态尚未就绪";
+          const st = api.actionState("menu");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          const btn = document.querySelector("#btn-toc");
-          if (btn) btn.click();
+          if (window.wbMarkdownOutline && window.wbMarkdownOutline.run) window.wbMarkdownOutline.run("menu");
         } });
     A({ id: "markdown.openExportMenu", name: "Markdown: 打开导出菜单", hint: "Markdown", icon: "download",
         requires: ["markdown"],
