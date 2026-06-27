@@ -7,7 +7,36 @@ const gpost = (url, obj) => gjson(url, {
 
 function gitCurPath() { return (window.state && window.state.current) || ""; }
 
-const gitState = { staged: 0, branch: null, ref: "" };
+const gitState = { repo: false, staged: 0, changed: 0, branch: null, ref: "", branchItems: [], branchFilterOpen: false };
+let gitRefreshSeq = 0;
+
+function setButtonDisabled(el, disabled, reason) {
+  if (!el) return;
+  if (el.dataset.enabledTitle === undefined) el.dataset.enabledTitle = el.title || "";
+  el.disabled = !!disabled;
+  el.setAttribute("aria-disabled", disabled ? "true" : "false");
+  el.title = disabled ? reason : el.dataset.enabledTitle;
+}
+
+function setGitControls(repo, d = {}) {
+  const staged = d.staged || [];
+  const unstaged = d.unstaged || [];
+  const changed = repo ? (d.changed || staged.length + unstaged.length) : 0;
+  gitState.repo = !!repo;
+  gitState.changed = changed;
+  const noRepo = "当前目录不在 Git 仓库内";
+  const noChanges = "没有可操作的更改";
+  setButtonDisabled(document.querySelector("#git-commit"), !repo || changed === 0, repo ? noChanges : noRepo);
+  setButtonDisabled(document.querySelector("#git-push"), !repo, noRepo);
+  setButtonDisabled(document.querySelector("#git-stash-save"), !repo || changed === 0, repo ? noChanges : noRepo);
+  setButtonDisabled(document.querySelector("#git-branch-filter"), !repo, noRepo);
+  setButtonDisabled(document.querySelector("#git-branch-ops"), !repo, noRepo);
+  document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
+    const act = btn.dataset.act;
+    const empty = act === "stage-all" ? unstaged.length === 0 : staged.length === 0;
+    setButtonDisabled(btn, !repo || empty, repo ? noChanges : noRepo);
+  });
+}
 
 const G_CODE_EXTS = new Set(["json","js","ts","jsx","tsx","py","go","rs","java",
   "c","cpp","h","css","scss","html","htm","xml","yaml","yml","toml","sh",
@@ -35,6 +64,7 @@ window.escapeHtml = escapeHtml;
 
 /* ============ 源代码管理侧栏 ============ */
 async function refreshGit() {
+  const token = ++gitRefreshSeq;
   const stagedSec = document.querySelector("#scm-staged");
   const stagedEl = document.querySelector("#git-staged");
   const stagedCount = document.querySelector("#git-staged-count");
@@ -45,14 +75,22 @@ async function refreshGit() {
   const stBranch = document.querySelector("#status-branch");
 
   const d = await gjson(`/api/git/status?path=${encodeURIComponent(gitCurPath())}`);
+  if (token !== gitRefreshSeq) return;
 
   if (d.repo === null || d.repo === undefined) {
+    setGitControls(false);
+    closeBranchFilterMenu();
+    const hasWorkspace = !!window.currentRoot;
     stagedSec.classList.add("hidden");
     changesCount.classList.add("hidden");
     commitLabel.textContent = "提交";
-    filesEl.innerHTML = `<div class="scm-empty">不在 Git 仓库内<button class="btn ghost" id="git-init" style="margin-top:10px">初始化仓库</button></div>`;
+    filesEl.innerHTML = hasWorkspace
+      ? `<div class="scm-empty">不在 Git 仓库内<button class="btn ghost" id="git-init" style="margin-top:10px">初始化仓库</button></div>`
+      : `<div class="scm-empty">未打开工作区，打开文件夹后可使用 Git</div>`;
     badge.classList.add("hidden");
     stBranch.textContent = "";
+    document.querySelector("#git-log").innerHTML = `<div class="scm-empty">${hasWorkspace ? "初始化仓库后显示提交图" : "未打开工作区"}</div>`;
+    document.querySelector("#scm-stash").classList.add("hidden");
     const ib = document.querySelector("#git-init");
     if (ib) ib.onclick = async () => {
       const r = await gpost("/api/git/init", { path: gitCurPath() });
@@ -70,6 +108,7 @@ async function refreshGit() {
 
   const staged = d.staged || [], unstaged = d.unstaged || [];
   gitState.staged = staged.length;
+  setGitControls(true, d);
   commitLabel.textContent = staged.length ? `提交 (${branch})` : `提交所有更改 (${branch})`;
 
   // 徽标 = 改动文件总数
@@ -101,18 +140,19 @@ async function refreshGit() {
   }
 
   // 侧栏提交图
-  populateBranches(branch);
-  renderSidebarGraph();
-  renderStashList();
+  populateBranches(branch, token);
+  renderSidebarGraph(token);
+  renderStashList(token);
 }
 
 /* ============ Stash（储藏）侧栏 ============ */
-async function renderStashList() {
+async function renderStashList(token) {
   const listEl = document.querySelector("#git-stash-list");
   const sec = document.querySelector("#scm-stash");
   const cnt = document.querySelector("#git-stash-count");
   if (!listEl) return;
   const d = await gjson(`/api/git/stash-list?path=${encodeURIComponent(gitCurPath())}`);
+  if (token && token !== gitRefreshSeq) return;
   const stashes = d.stashes || [];
   if (cnt) {
     if (stashes.length) { cnt.textContent = stashes.length; cnt.classList.remove("hidden"); }
@@ -193,7 +233,7 @@ function renderFileRow(f, group) {
 }
 
 /* ============ 提交图（侧栏紧凑图形，仿 Cursor 源代码管理「图形」区） ============ */
-const ROW_H = 26, LANE_W = 13, PAD_X = 11, NODE_R = 4;
+const ROW_H = 28, LANE_W = 15, PAD_X = 13, NODE_R = 4.5;
 const LANE_COLORS = ["#2f81f7", "#3fb950", "#d29922", "#a371f7",
   "#ec6a5e", "#56b6c2", "#e879f9", "#fb923c"];
 
@@ -228,75 +268,183 @@ function computeLanes(commits) {
   return { nodeLane, rowOf, maxLane };
 }
 
-function edgePath(x1, y1, x2, y2, color) {
-  const d = x1 === x2
-    ? `M${x1} ${y1} L${x2} ${y2}`
-    : `M${x1} ${y1} C ${x1} ${y1 + ROW_H * 0.5} ${x2} ${y2 - ROW_H * 0.5} ${x2} ${y2}`;
-  return `<path d="${d}" stroke="${color}" stroke-width="1.6" fill="none"/>`;
+function edgePath(x1, y1, x2, y2, color, crossLane = false) {
+  const stroke = crossLane ? 2.05 : 2.2;
+  const opacity = crossLane ? .88 : .94;
+  if (x1 === x2) {
+    return `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" opacity="${opacity}"/>`;
+  }
+  const radius = 6;
+  const joinY = Math.max(y1 + 10, y2 - Math.max(10, ROW_H * 0.42));
+  const dir = x2 > x1 ? 1 : -1;
+  const d = [
+    `M${x1} ${y1}`,
+    `L${x1} ${joinY - radius}`,
+    `Q${x1} ${joinY} ${x1 + dir * radius} ${joinY}`,
+    `L${x2 - dir * radius} ${joinY}`,
+    `Q${x2} ${joinY} ${x2} ${joinY + radius}`,
+    `L${x2} ${y2}`
+  ].join(" ");
+  return `<path d="${d}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round" opacity="${opacity}"/>`;
 }
 
 function buildGraphSvg(commits, lay) {
   const { nodeLane, rowOf, maxLane } = lay;
   const laneX = l => PAD_X + l * LANE_W;
   const rowY = i => i * ROW_H + ROW_H / 2;
-  const w = PAD_X * 2 + maxLane * LANE_W;
+  const w = PAD_X * 2 + maxLane * LANE_W + 8;
   const h = commits.length * ROW_H;
   const hasHead = commits.some(c => (c.refs || []).some(r => r.kind === "head"));
-  let paths = "", nodes = "";
+  let backPaths = "", mergePaths = "", nodes = "";
   commits.forEach((c, i) => {
     const x1 = laneX(nodeLane[c.hash]), y1 = rowY(i);
+    const childLane = nodeLane[c.hash];
+    const childColor = LANE_COLORS[childLane % LANE_COLORS.length];
     (c.parents || []).forEach(p => {
-      const color = LANE_COLORS[(p in rowOf ? nodeLane[p] : nodeLane[c.hash]) % LANE_COLORS.length];
-      if (p in rowOf) paths += edgePath(x1, y1, laneX(nodeLane[p]), rowY(rowOf[p]), color);
-      else paths += edgePath(x1, y1, x1, h, color);   // 父提交在加载范围外 → 画到底部
+      if (p in rowOf) {
+        const parentLane = nodeLane[p];
+        const seg = edgePath(x1, y1, laneX(parentLane), rowY(rowOf[p]), childColor, parentLane !== childLane);
+        if (parentLane === childLane) backPaths += seg;
+        else mergePaths += seg;
+      } else backPaths += edgePath(x1, y1, x1, h, childColor);   // 父提交在加载范围外 → 画到底部
     });
-    const col = LANE_COLORS[nodeLane[c.hash] % LANE_COLORS.length];
+    const col = childColor;
     // 空心环只标真正的 HEAD（带 head 引用）；查看非当前分支时无 HEAD，则标该分支提示(第0行)
     const isHead = (c.refs || []).some(r => r.kind === "head") || (!hasHead && i === 0);
     nodes += isHead
-      ? `<circle cx="${x1}" cy="${y1}" r="${NODE_R + 1}" fill="var(--bg2)" stroke="${col}" stroke-width="2.5"/>`
-      : `<circle cx="${x1}" cy="${y1}" r="${NODE_R}" fill="${col}"/>`;
+      ? `<circle cx="${x1}" cy="${y1}" r="${NODE_R + 2}" fill="var(--bg2)" stroke="${col}" stroke-width="2.8"/>`
+      : `<circle cx="${x1}" cy="${y1}" r="${NODE_R + .5}" fill="${col}" stroke="rgba(255,255,255,.18)" stroke-width=".8"/>`;
   });
-  return { svg: `<svg class="ggraph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${paths}${nodes}</svg>`, w };
+  return { svg: `<svg class="ggraph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${mergePaths}${backPaths}${nodes}</svg>`, w };
 }
 
 let branchesLoaded = "";   // 已填充的分支列表签名，避免重复重建 <select>
-async function populateBranches(current) {
+async function populateBranches(current, token) {
   const sel = document.querySelector("#git-branch-sel");
   if (!sel) return;
   const d = await gjson(`/api/git/branches?path=${encodeURIComponent(gitCurPath())}`);
+  if (token && token !== gitRefreshSeq) return;
   const branches = d.branches || [];
   const sig = (d.current || "") + "|" + branches.join(",");
   if (sig === branchesLoaded) return;   // 列表没变，保留当前选择
   branchesLoaded = sig;
-  if (!gitState.ref) gitState.ref = d.current || "";
+  if (!gitState.ref) gitState.ref = "__all__";
+  gitState.branchItems = [
+    { value: "__all__", label: "全部历史记录", kind: "all", current: false },
+    { value: d.current || "", label: d.current || "当前分支", kind: "head", current: true },
+    ...branches
+      .filter(b => b && b !== d.current)
+      .map(b => ({ value: b, label: b, kind: "branch", current: false }))
+  ].filter((item, idx, arr) => item.value || item.kind === "all" ? arr.findIndex(x => x.value === item.value && x.kind === item.kind) === idx : false);
   let html = `<option value="__all__">所有分支</option>`;
   for (const b of branches) {
     html += `<option value="${escapeHtml(b)}">${escapeHtml(b)}${b === d.current ? " ✓" : ""}</option>`;
   }
   sel.innerHTML = html;
-  sel.value = gitState.ref || d.current || "__all__";
+  sel.value = gitState.ref || "__all__";
+  renderBranchFilterButton();
 }
 
-async function renderSidebarGraph() {
+function branchLabelForValue(value) {
+  const item = (gitState.branchItems || []).find(x => x.value === value);
+  return item ? item.label : (value === "__all__" ? "全部" : (value || "全部"));
+}
+
+function renderBranchFilterButton() {
+  const btn = document.querySelector("#git-branch-filter");
+  if (!btn) return;
+  const label = btn.querySelector(".gbf-label");
+  if (label) label.textContent = branchLabelForValue(gitState.ref || "__all__");
+  btn.classList.toggle("active", !!gitState.branchFilterOpen);
+}
+
+function closeBranchFilterMenu() {
+  gitState.branchFilterOpen = false;
+  document.querySelectorAll(".branch-filter-pop").forEach(p => p.remove());
+  renderBranchFilterButton();
+}
+
+function renderBranchFilterMenu(anchor) {
+  closeBranchFilterMenu();
+  gitState.branchFilterOpen = true;
+  renderBranchFilterButton();
+  const pop = document.createElement("div");
+  pop.className = "branch-filter-pop";
+  const items = gitState.branchItems || [];
+  let html = `<div class="bfp-head">选择要查看的历史记录</div>`;
+  html += `<div class="bfp-list">`;
+  for (const item of items) {
+    const checked = (gitState.ref || "__all__") === item.value;
+    const icon = item.kind === "all" ? "list" : "branch";
+    html += `<button class="bfp-item${checked ? " checked" : ""}" data-value="${escapeHtml(item.value)}">`
+      + `<span class="bfp-mark">${checked ? svgIcon("check", 13) : ""}</span>`
+      + `<span class="bfp-ico">${svgIcon(icon, 13)}</span>`
+      + `<span class="bfp-text">${escapeHtml(item.label)}</span>`
+      + `${item.current ? `<span class="bfp-kind">当前</span>` : ""}`
+      + `</button>`;
+  }
+  html += `</div>`;
+  pop.innerHTML = html;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  let left = r.right - 300;
+  if (left < 8) left = 8;
+  let top = r.bottom + 6;
+  if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  pop.querySelectorAll(".bfp-item").forEach(btn => {
+    btn.onclick = () => {
+      gitState.ref = btn.dataset.value || "__all__";
+      const sel = document.querySelector("#git-branch-sel");
+      if (sel) sel.value = gitState.ref;
+      closeBranchFilterMenu();
+      renderSidebarGraph();
+    };
+  });
+  setTimeout(() => {
+    const off = (ev) => {
+      if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
+        closeBranchFilterMenu();
+        document.removeEventListener("mousedown", off);
+      }
+    };
+    document.addEventListener("mousedown", off);
+  }, 0);
+}
+
+function formatRefChip(ref) {
+  const label = ref.kind === "head" ? `HEAD · ${ref.name}` : ref.name;
+  const icon = ref.kind === "tag" ? "tag" : "branch";
+  return `<span class="ggraph-ref ${ref.kind}">${svgIcon(icon, 11)}<span>${escapeHtml(label)}</span></span>`;
+}
+
+async function renderSidebarGraph(token) {
   const logEl = document.querySelector("#git-log");
   if (!logEl) return;
-  const ref = gitState.ref && gitState.ref !== "__all__" ? gitState.ref : (gitState.ref || "");
+  const ref = gitState.ref && gitState.ref !== "__all__" ? gitState.ref : "__all__";
   const d = await gjson(`/api/git/log?path=${encodeURIComponent(gitCurPath())}&ref=${encodeURIComponent(ref)}`);
+  if (token && token !== gitRefreshSeq) return;
   const commits = d.commits || [];
   if (!commits.length) { logEl.innerHTML = `<div class="scm-empty">暂无提交</div>`; return; }
   const lay = computeLanes(commits);
+  const laneX = l => PAD_X + l * LANE_W;
   const { svg, w } = buildGraphSvg(commits, lay);
 
   let rows = "";
   commits.forEach(c => {
-    const refsHTML = (c.refs || []).map(r =>
-      `<span class="ggraph-ref ${r.kind}">${escapeHtml(r.name)}</span>`).join("");
-    rows += `<div class="ggraph-row" data-hash="${c.hash}" style="height:${ROW_H}px">`
-      + `<span class="ggraph-msg">${escapeHtml(c.subject)}</span>${refsHTML}</div>`;
+    const lane = lay.nodeLane[c.hash] || 0;
+    const laneOffset = laneX(lane) + 14;
+    const laneColor = LANE_COLORS[lane % LANE_COLORS.length];
+    const refsHTML = (c.refs || []).map(formatRefChip).join("");
+    rows += `<div class="ggraph-row" data-hash="${c.hash}" data-lane="${lane}" data-lane-offset="${laneOffset}" `
+      + `style="height:${ROW_H}px; --lane-offset:${laneOffset}px; --lane-color:${laneColor}">`
+      + `<div class="ggraph-main">`
+      + `<div class="ggraph-top"><span class="ggraph-msg">${escapeHtml(c.subject)}</span>${refsHTML ? `<span class="ggraph-refs">${refsHTML}</span>` : ""}</div>`
+      + `</div></div>`;
   });
   logEl.innerHTML =
-    `<div class="ggraph-col" style="width:${w}px">${svg}</div><div class="ggraph-rows">${rows}</div>`;
+    `<div class="ggraph-stage"><div class="ggraph-col" style="width:${w}px">${svg}</div><div class="ggraph-rows">${rows}</div></div>`;
 
   logEl.querySelectorAll(".ggraph-row").forEach(row => {
     attachCommitHover(row);
@@ -332,6 +480,8 @@ async function toggleCommitFiles(row) {
   row.classList.add("expanded");
   const panel = document.createElement("div");
   panel.className = "ggraph-files";
+  const laneOffset = parseInt(row.dataset.laneOffset || "0", 10);
+  if (laneOffset) panel.style.marginLeft = Math.max(18, laneOffset + 6) + "px";
   panel.innerHTML = `<div class="ggraph-files-loading">加载中…</div>`;
   row.after(panel);
 
@@ -465,6 +615,10 @@ function initGit() {
   msg.addEventListener("input", autosize);
 
   document.querySelector("#git-commit").onclick = async () => {
+    if (!gitState.repo || gitState.changed === 0) {
+      setGitOut(gitState.repo ? "没有可提交的更改" : "当前目录不在 Git 仓库内", false);
+      return;
+    }
     const m = msg.value.trim();
     if (!m) { setGitOut("请填写提交信息", false); msg.focus(); return; }
     setGitOut("提交中…");
@@ -477,6 +631,7 @@ function initGit() {
     refreshGit();
   };
   document.querySelector("#git-push").onclick = async () => {
+    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
     setGitOut("推送中…");
     const r = await gpost("/api/git/push", { path: gitCurPath() });
     setGitOut(r.output || "", r.ok);
@@ -492,6 +647,7 @@ function initGit() {
   document.querySelectorAll(".scm-gact").forEach(btn => {
     btn.onclick = async (e) => {
       e.stopPropagation();
+      if (btn.disabled || !gitState.repo) return;
       const act = btn.dataset.act;
       const d = await gjson(`/api/git/status?path=${encodeURIComponent(gitCurPath())}`);
       const list = act === "stage-all" ? (d.unstaged || []) : (d.staged || []);
@@ -512,11 +668,22 @@ function initGit() {
   // 分支选择 → 切换图形显示的分支
   const sel = document.querySelector("#git-branch-sel");
   if (sel) sel.onchange = () => { gitState.ref = sel.value; renderSidebarGraph(); };
+  const filterBtn = document.querySelector("#git-branch-filter");
+  if (filterBtn) filterBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
+    if (gitState.branchFilterOpen) closeBranchFilterMenu();
+    else renderBranchFilterMenu(filterBtn);
+  };
 
   // 储藏（保存当前更改）
   const stashSave = document.querySelector("#git-stash-save");
   if (stashSave) stashSave.onclick = async (e) => {
     e.stopPropagation();
+    if (!gitState.repo || gitState.changed === 0) {
+      setGitOut(gitState.repo ? "没有可储藏的更改" : "当前目录不在 Git 仓库内", false);
+      return;
+    }
     const msg = prompt("储藏说明（可留空）：", "");
     if (msg === null) return;
     setGitOut("储藏中…");
@@ -529,6 +696,7 @@ function initGit() {
   const branchOps = document.querySelector("#git-branch-ops");
   if (branchOps) branchOps.onclick = (e) => {
     e.stopPropagation();
+    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
     showBranchOps(branchOps);
   };
 }

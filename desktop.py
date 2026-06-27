@@ -119,6 +119,23 @@ class WindowApi:
             return str(p)
         return None
 
+    def open_folders(self):
+        """选择多个目录构成同一工作区。pywebview 只能单选时退化为 1 项列表。"""
+        if not self._win:
+            return []
+        res = self._win.create_file_dialog(webview.FOLDER_DIALOG, allow_multiple=True)
+        if not res:
+            return []
+        out = []
+        for raw in (res if isinstance(res, (list, tuple)) else [res]):
+            try:
+                p = Path(raw).resolve()
+            except (OSError, ValueError):
+                continue
+            if p.is_dir():
+                out.append(str(p))
+        return out
+
 
 def _fatal(msg):
     """致命错误提示。--windowed 无控制台，用 MessageBox 让用户看到，而非静默崩溃。"""
@@ -132,8 +149,8 @@ def _fatal(msg):
         pass
 
 
-def resolve_root():
-    """工作根目录（IDE 式）：命令行首个非选项参数 > 上次活动工作区(config.lastRoot) > 空工作区。
+def resolve_workspace_roots():
+    """工作区根目录（IDE 式）：命令行首个非选项参数 > 上次活动工作区(config.currentWorkspace) > 旧版 lastRoot > 空工作区。
 
     空工作区返回 None，前端渲染欢迎页让用户选「打开文件夹 / 最近列表」，
     不再粗暴默认到 exe 所在目录（那不是用户工作目录）。
@@ -142,15 +159,28 @@ def resolve_root():
         if not a.startswith("-"):
             p = Path(a).resolve()
             if p.is_dir():
-                return p
-    last = server.load_config().get("lastRoot")
+                return [p]
+    cfg = server.load_config()
+    cur = cfg.get("currentWorkspace") if isinstance(cfg.get("currentWorkspace"), dict) else None
+    if cur and isinstance(cur.get("roots"), list):
+        roots = []
+        for raw in cur.get("roots", []):
+            try:
+                p = Path(raw).resolve()
+            except (OSError, ValueError):
+                continue
+            if p.is_dir():
+                roots.append(p)
+        if roots:
+            return roots
+    last = cfg.get("lastRoot")
     if last and Path(last).is_dir():
-        return Path(last).resolve()
-    return None
+        return [Path(last).resolve()]
+    return []
 
 
 def main():
-    server.ROOT = resolve_root()
+    server.set_workspace_roots(resolve_workspace_roots())
     host = "127.0.0.1"
 
     # 直接绑定端口 0 让 OS 分配再读回实际端口——消除"先探测再绑定"之间的 TOCTOU/撞端口，

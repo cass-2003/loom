@@ -6,7 +6,7 @@
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "Workbench"
 #define MyAppExeName "Workbench.exe"
-#define SrcDir "J:\workbench"
+#define SrcDir RemoveBackslashUnlessRoot(ExtractFileDir(ExtractFileDir(SourcePath)))
 
 [Setup]
 ; Stable AppId so future versions upgrade in place (do not change once shipped)
@@ -47,11 +47,11 @@ Source: "{#SrcDir}\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Launch with the user's Documents as the working root (frozen exe roots at its own
-; folder otherwise, which would be the near-empty install dir).
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: """{userdocs}"""; WorkingDir: "{userdocs}"; IconFilename: "{app}\icon.ico"
+; Desktop entry follows Workbench's IDE-style workspace restore: explicit CLI root
+; > previous workspace > welcome screen. Do not force Documents as a fake root.
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{userdocs}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: """{userdocs}"""; WorkingDir: "{userdocs}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{userdocs}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: """{userdocs}"""; WorkingDir: "{userdocs}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{userdocs}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent

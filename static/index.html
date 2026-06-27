@@ -16,7 +16,7 @@
   <!-- 顶栏 -->
   <header id="topbar">
     <div class="brand pywebview-drag-region"><span class="brand-dot"></span>Workbench</div>
-    <button id="btn-open-folder" class="btn ghost icon-only desktop-only" title="打开文件夹"><span class="i" data-icon="folderOpen"></span></button>
+    <button id="btn-open-folder" class="btn ghost icon-only" title="打开文件夹"><span class="i" data-icon="folderOpen"></span></button>
     <div class="crumb" id="crumb"></div>
     <div class="drag-space pywebview-drag-region"></div>
     <div class="top-actions">
@@ -38,8 +38,8 @@
       <button id="btn-help" class="btn ghost icon-only" title="快捷键帮助 (?)"><span class="i" data-icon="help"></span></button>
       <button id="btn-settings" class="btn ghost icon-only" title="设置"><span class="i" data-icon="gear"></span></button>
       <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色"></button>
-      <button id="btn-view-edit" class="btn ghost" title="切换视图">分屏</button>
-      <button id="btn-save" class="btn" title="保存 (Ctrl+S)"><span class="i" data-icon="save"></span>保存</button>
+      <button id="btn-view-edit" class="btn ghost" title="仅 Markdown 源码视图可切换" disabled>分屏</button>
+      <button id="btn-save" class="btn" title="当前视图不可保存" disabled><span class="i" data-icon="save"></span>保存</button>
     </div>
     <div id="winctrls" class="winctrls desktop-only">
       <button id="win-min" class="winbtn" title="最小化"><span class="i" data-icon="minus"></span></button>
@@ -137,7 +137,11 @@
               <span class="scm-twist" data-icon="chevron"></span>
               <span class="scm-title">图形</span>
               <span class="scm-head-extra">
-                <select id="git-branch-sel" class="git-branch-sel" title="选择要查看的分支"></select>
+                <button id="git-branch-filter" class="git-branch-filter" title="筛选要查看的分支/标签">
+                  <span class="gbf-label">全部</span>
+                  <span class="gbf-caret" data-icon="chevron"></span>
+                </button>
+                <select id="git-branch-sel" class="git-branch-sel hidden" title="选择要查看的分支"></select>
                 <button id="git-branch-ops" class="icon-btn" data-icon="branch" title="分支操作（新建/检出/删除）"></button>
               </span>
             </div>
@@ -245,6 +249,13 @@
       </div>
       <!-- Vditor 所见即所得编辑器（仅 .md/.markdown，默认隐藏） -->
       <div id="vditor" class="hidden"></div>
+      <div id="workspace-empty" class="workspace-empty hidden">
+        <div class="workspace-empty-card">
+          <div class="workspace-empty-icon" data-icon="folderOpen"></div>
+          <h2>工作区已打开</h2>
+          <p>从左侧资源管理器选择文件，或使用 <kbd>Ctrl</kbd>+<kbd>P</kbd> 快速打开。</p>
+        </div>
+      </div>
       <!-- 多格式查看器挂载点（PDF/表格/Word/压缩包/EPUB/字体 等，默认隐藏） -->
       <div id="viewer-host" class="hidden"></div>
       <div id="diff-view" class="hidden">

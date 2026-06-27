@@ -14,8 +14,8 @@
   const SIZE_KEY = "wb-split-size", ORIENT_KEY = "wb-split-orient";
   // 按根路径分区（同 app.js 的 wsKey），切根时旧副组标签不串到新根
   const WS_KEY = () => {
-    const r = window.currentRoot;
-    return r ? ("wb-split:" + r) : null;
+    const id = window.currentWorkspaceId;
+    return id ? ("wb-split:" + id) : null;
   };
 
   const side = { tabs: [], active: null, dirty: false };
@@ -408,6 +408,9 @@
     const key = WS_KEY();
     if (!key) return;
     try { data = JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { data = null; }
+    if ((!data || !Array.isArray(data.tabs) || !data.tabs.length) && window.currentRoot) {
+      try { data = JSON.parse(localStorage.getItem("wb-split:" + window.currentRoot) || "null"); } catch (_) { data = null; }
+    }
     if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
     restoring = true;
     orient = data.orient === "v" ? "v" : "h";

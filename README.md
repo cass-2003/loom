@@ -5,7 +5,7 @@
 ## 启动
 
 ```bash
-# 默认以脚本所在盘符根为根目录, 端口 8123
+# 默认恢复上次工作区；没有历史工作区时显示欢迎页
 python server.py
 
 # 指定根目录和端口
@@ -13,7 +13,7 @@ python server.py D:\notes --port 8200
 ```
 
 Windows 可直接双击 `start.bat`，或把任意文件夹**拖到 `start.bat` 上**以该文件夹为根启动。
-启动后浏览器打开 `http://127.0.0.1:8123/`。
+启动后浏览器打开 `http://127.0.0.1:8765/`（或你指定的端口）。
 
 ## 打包为 exe（免装 Python）
 
@@ -24,8 +24,25 @@ pip install pyinstaller          # 仅构建期需要
 powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 
-产物 `dist\Workbench.exe`（约 10MB，内含 Python 运行时 + `static/` 全部资源含离线 vendor 库）。
-双击运行：以 **exe 所在文件夹**为工作根，自动打开浏览器；也可命令行指定 `Workbench.exe D:\notes --port 8200`（`--no-browser` 禁止自动开浏览器）。
+产物 `dist\Workbench.exe`（约 77MB，内含 Python 运行时、pywebview、终端 PTY 组件与 `static/` 全部离线资源）。
+双击运行会打开原生无边框 Workbench 窗口：优先恢复上次工作区；没有历史工作区时显示欢迎页，让你选择一个或多个文件夹。也可命令行指定工作区根目录：`Workbench.exe D:\notes`。
+
+## 打包安装包
+
+生成 Windows 安装包（`Setup.exe`）时，优先使用仓库自带的一键脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build_installer.ps1
+```
+
+这个脚本会先构建 `dist\Workbench.exe`，再自动查找 Inno Setup 的 `ISCC.exe` 并生成安装包。
+默认产物位置：
+
+```text
+installer\Output\Workbench-Setup-0.1.0.exe
+```
+
+如果本机还没安装 Inno Setup 6，需要先安装；脚本不再要求你手动把 `ISCC.exe` 加进 `PATH`。
 
 ## 功能
 

@@ -35,16 +35,22 @@
       el.addEventListener("dblclick", toggleMax);
     });
 
-    // 打开文件夹 → 走统一的 /api/set-root（与浏览器版同路径，config.json 同步更新）
-    const of = $("#btn-open-folder");
-    if (of) {
-      of.onclick = async () => {
-        try {
-          const p = await api.open_folder();
-          if (p && window.switchWorkspace) await window.switchWorkspace(p);
-        } catch (e) { console.error(e); }
-      };
-    }
+    // app.js 统一绑定“打开文件夹”；桌面版只提供原生选择器钩子，避免脚本加载顺序互相覆盖。
+    window.workbenchDesktopOpenWorkspace = async () => {
+      try {
+        const roots = api.open_folders ? await api.open_folders() : null;
+        if (roots && roots.length && window.switchWorkspace) {
+          await window.switchWorkspace(roots);
+          return true;
+        }
+        const p = api.open_folder ? await api.open_folder() : null;
+        if (p && window.switchWorkspace) {
+          await window.switchWorkspace(p);
+          return true;
+        }
+      } catch (e) { console.error(e); }
+      return true;  // 桌面 API 已经处理过选择动作；用户取消时不要再触发浏览器 fallback。
+    };
 
     setupResizeZones(api);
   }

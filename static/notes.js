@@ -194,4 +194,5 @@
   }
 
   window.initNotes = initNotes;
+  window.reloadNotes = load;
 })();

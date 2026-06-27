@@ -8,6 +8,7 @@
 """
 import argparse
 import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -53,6 +54,7 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"}
 MAX_TEXT_BYTES = 5 * 1024 * 1024  # 5MB 以上不当文本读
 
 ROOT = Path("/")  # 运行时覆盖
+WORKSPACE_ROOTS = []  # 当前工作区包含的根目录（主根在第 0 项）
 # 空工作区标记：启动时若没有合法的 lastRoot，ROOT 保持为哨兵目录，
 # 前端通过 /api/config 的 hasWorkspace=false 渲染欢迎页而非文件树。
 NO_WORKSPACE = None
@@ -73,20 +75,31 @@ def _config_path() -> Path:
     return _config_dir() / "config.json"
 
 
+def _notes_global_path() -> Path:
+    """全局便签存储：与工作区无关，切换目录也保持同一份 Todo/便签。"""
+    return _config_dir() / "notes.json"
+
+
 def load_config() -> dict:
     """读取全局配置。损坏/缺失返回空骨架，绝不抛异常（启动路径依赖它）。"""
-    empty = {"lastRoot": None, "recent": []}
+    empty = {"lastRoot": None, "recent": [], "currentWorkspace": None, "recentWorkspaces": []}
     fp = _config_path()
     if not fp.is_file():
         return empty
     try:
-        data = json.loads(fp.read_text(encoding="utf-8"))
+        # 兼容外部工具/PowerShell 可能写出的 UTF-8 BOM 配置文件，避免最近列表/上次工作区失忆。
+        data = json.loads(fp.read_text(encoding="utf-8-sig"))
         if not isinstance(data, dict):
             return empty
         if not isinstance(data.get("recent"), list):
             data["recent"] = []
         if not isinstance(data.get("lastRoot"), str):
             data["lastRoot"] = None
+        if data.get("currentWorkspace") is not None and not isinstance(data.get("currentWorkspace"), dict):
+            data["currentWorkspace"] = None
+        if not isinstance(data.get("recentWorkspaces"), list):
+            data["recentWorkspaces"] = []
+        _upgrade_workspace_config(data)
         return data
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return empty
@@ -113,20 +126,180 @@ def _touch_recent(cfg: dict, root: Path):
     cfg["recent"] = cfg["recent"][:10]
 
 
+def _norm_root_str(raw) -> str | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        p = Path(raw).resolve()
+    except (OSError, ValueError):
+        return None
+    if not p.is_dir():
+        return None
+    return str(p)
+
+
+def _workspace_label(roots: list[str]) -> str:
+    if not roots:
+        return "空工作区"
+    first = Path(roots[0]).name or roots[0]
+    return first if len(roots) == 1 else f"{first} +{len(roots) - 1}"
+
+
+def _workspace_id(roots: list[str]) -> str | None:
+    roots = [r for r in roots if isinstance(r, str) and r]
+    if not roots:
+        return None
+    joined = "\n".join(roots).encode("utf-8")
+    return "ws:" + hashlib.sha1(joined).hexdigest()[:16]
+
+
+def _workspace_payload(roots: list[str], *, last_used=None) -> dict | None:
+    roots = [r for r in roots if isinstance(r, str) and r]
+    if not roots:
+        return None
+    return {
+        "id": _workspace_id(roots),
+        "name": _workspace_label(roots),
+        "path": roots[0],
+        "roots": roots,
+        "lastUsed": last_used or _now_iso(),
+    }
+
+
+def _upgrade_workspace_config(cfg: dict):
+    """把旧版单根 recent/lastRoot 配置升级为多根工作区配置（兼容读取，不强制立即重写）。"""
+    cur = cfg.get("currentWorkspace")
+    if isinstance(cur, dict):
+      roots = [_norm_root_str(r) for r in cur.get("roots", [])]
+      roots = [r for r in roots if r]
+      cfg["currentWorkspace"] = _workspace_payload(roots, last_used=cur.get("lastUsed")) if roots else None
+    else:
+      last = _norm_root_str(cfg.get("lastRoot"))
+      cfg["currentWorkspace"] = _workspace_payload([last], last_used=_now_iso()) if last else None
+
+    upgraded = []
+    seen = set()
+    src = cfg.get("recentWorkspaces") if cfg.get("recentWorkspaces") else cfg.get("recent", [])
+    for item in src:
+        if isinstance(item, dict) and isinstance(item.get("roots"), list):
+            roots = [_norm_root_str(r) for r in item.get("roots", [])]
+            roots = [r for r in roots if r]
+            payload = _workspace_payload(roots, last_used=item.get("lastUsed"))
+        else:
+            path = _norm_root_str(item.get("path") if isinstance(item, dict) else item)
+            payload = _workspace_payload([path], last_used=(item.get("lastUsed") if isinstance(item, dict) else None)) if path else None
+        if not payload or payload["id"] in seen:
+            continue
+        seen.add(payload["id"])
+        upgraded.append(payload)
+    cfg["recentWorkspaces"] = upgraded[:10]
+
+
+def _touch_recent_workspace(cfg: dict, roots: list[Path]):
+    root_strs = [str(r) for r in roots]
+    payload = _workspace_payload(root_strs)
+    if not payload:
+        cfg["currentWorkspace"] = None
+        cfg["lastRoot"] = None
+        return
+    cfg["currentWorkspace"] = payload
+    cfg["lastRoot"] = root_strs[0]
+    cfg["recent"] = [{"path": root_strs[0], "name": payload["name"], "lastUsed": payload["lastUsed"]}]
+    recent = [w for w in cfg.get("recentWorkspaces", []) if w.get("id") != payload["id"]]
+    recent.insert(0, payload)
+    cfg["recentWorkspaces"] = recent[:10]
+
+
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+
+
+def current_workspace_roots() -> list[Path]:
+    if WORKSPACE_ROOTS:
+        return WORKSPACE_ROOTS[:]
+    return [ROOT] if ROOT is not None else []
+
+
+def has_workspace() -> bool:
+    return len(current_workspace_roots()) > 0
+
+
+def set_workspace_roots(roots: list[Path]):
+    global ROOT, WORKSPACE_ROOTS
+    uniq = []
+    seen = set()
+    for root in roots or []:
+        if root is None:
+            continue
+        try:
+            rp = Path(root).resolve()
+        except (OSError, ValueError):
+            continue
+        if not rp.is_dir():
+            continue
+        key = str(rp)
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(rp)
+    WORKSPACE_ROOTS = uniq
+    ROOT = uniq[0] if uniq else None
+
+
+def _split_workspace_path(rel: str) -> tuple[int, str]:
+    rel = unquote(rel or "").lstrip("/\\")
+    m = re.match(r"^@(\d+)(?:/(.*))?$", rel)
+    if not m:
+        return 0, rel
+    return int(m.group(1)), (m.group(2) or "")
+
+
+def _workspace_root_for_path(p: Path) -> tuple[int, Path] | tuple[None, None]:
+    try:
+        rp = p.resolve()
+    except (OSError, ValueError):
+        return None, None
+    best = None
+    for idx, root in enumerate(current_workspace_roots()):
+        if rp == root or root in rp.parents:
+            score = len(str(root))
+            if best is None or score > best[0]:
+                best = (score, idx, root)
+    if best is None:
+        return None, None
+    return best[1], best[2]
+
+
+def workspace_relpath(p: Path) -> str:
+    idx, root = _workspace_root_for_path(p)
+    if root is None:
+        raise ValueError("path outside workspace")
+    rel = str(p.resolve().relative_to(root)).replace("\\", "/")
+    if idx == 0:
+        return rel
+    return f"@{idx}" + (f"/{rel}" if rel else "")
+
+
+def resolve_workspace_detail(rel: str) -> tuple[Path, Path, int, str]:
+    """把工作区路径解析为 (根目录, 绝对路径, 根索引, 根内相对路径)。"""
+    roots = current_workspace_roots()
+    if not roots:
+        raise PermissionError("no workspace")
+    idx, inner = _split_workspace_path(rel)
+    if idx < 0 or idx >= len(roots):
+        raise PermissionError("invalid workspace root")
+    root = roots[idx]
+    target = (root / inner).resolve()
+    if target != root and root not in target.parents:
+        raise PermissionError("path escapes root")
+    return root, target, idx, inner
 
 
 def safe_resolve(rel: str) -> Path:
     """把相对路径解析到 ROOT 内, 阻止越界 (.. 穿越)。
     空工作区(ROOT is None)时直接拒——前端应通过 /api/config 感知 hasWorkspace=false
     并渲染欢迎页，不应调任何文件 API；这里挡住防越权/防 None 拼接报错。"""
-    if ROOT is None:
-        raise PermissionError("no workspace")
-    rel = unquote(rel or "").lstrip("/\\")
-    target = (ROOT / rel).resolve()
-    if target != ROOT and ROOT not in target.parents:
-        raise PermissionError("path escapes root")
+    _, target, _, _ = resolve_workspace_detail(rel)
     return target
 
 
@@ -214,12 +387,14 @@ def atomic_write_bytes(fp: Path, data: bytes):
 
 
 def within_root_real(p) -> bool:
-    """p 的真实路径(解析符号链接/Windows junction 后)是否仍在 ROOT 内。
-    os.walk 会跟进 junction(被当普通目录)，据此剪掉指向 ROOT 外的目录/文件。"""
+    """p 的真实路径(解析符号链接/Windows junction 后)是否仍在任一工作区根内。"""
     try:
         rp = os.path.realpath(str(p))
-        root = os.path.realpath(str(ROOT))
-        return rp == root or rp.startswith(root + os.sep)
+        for root in current_workspace_roots():
+            rr = os.path.realpath(str(root))
+            if rp == rr or rp.startswith(rr + os.sep):
+                return True
+        return False
     except OSError:
         return False
 
@@ -1079,13 +1254,16 @@ def parse_makefile_targets(text: str):
 
 
 def find_repo(start: Path):
-    """从 start 向上找包含 .git 的目录, 只在 ROOT 范围内。找不到返回 None。"""
+    """从 start 向上找包含 .git 的目录，只在所属工作区根范围内。找不到返回 None。"""
     d = start if start.is_dir() else start.parent
+    _, base_root = _workspace_root_for_path(d)
+    if base_root is None:
+        return None
     for c in [d, *d.parents]:
-        within = c == ROOT or ROOT in c.parents
+        within = c == base_root or base_root in c.parents
         if within and (c / ".git").exists():
             return c
-        if c == ROOT:
+        if c == base_root:
             break
     return None
 
@@ -1237,8 +1415,14 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/static/"):
             return self._serve_static(path[len("/static/"):])
         if path == "/api/root":
-            return self._json({"root": str(ROOT) if ROOT is not None else None,
-                               "hasWorkspace": ROOT is not None})
+            roots = [str(r) for r in current_workspace_roots()]
+            cur = _workspace_payload(roots) if roots else None
+            return self._json({
+                "root": str(ROOT) if ROOT is not None else None,
+                "hasWorkspace": has_workspace(),
+                "workspaceRoots": roots,
+                "workspaceId": cur.get("id") if isinstance(cur, dict) else None,
+            })
         if path == "/api/config":
             return self._api_config()
         if path == "/api/tree":
@@ -1340,12 +1524,13 @@ class Handler(BaseHTTPRequestHandler):
             "/api/term/resize": "_api_term_resize",
             "/api/term/close": "_api_term_close",
             "/api/set-root": "_api_set_root",
+            "/api/create-workspace": "_api_create_workspace",
             "/api/recent/remove": "_api_recent_remove",
         }
         if parsed.path in post_routes:
             handler = getattr(self, post_routes[parsed.path], None)
             if handler is None:
-                return self._err("not implemented", 404)
+                return self._err("server route missing", 500)
             body = self._read_json_body()
             if body is None:
                 return
@@ -1365,8 +1550,23 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- api ----------
     def _api_tree(self, rel):
+        if not has_workspace():
+            return self._err("no workspace", 403)
+        roots = current_workspace_roots()
+        if not (rel or "").strip():
+            if len(roots) > 1:
+                entries = []
+                for idx, root in enumerate(roots):
+                    entries.append({
+                        "name": root.name or str(root),
+                        "path": f"@{idx}",
+                        "type": "dir",
+                        "workspaceRoot": True,
+                        "absPath": str(root),
+                    })
+                return self._json({"path": "", "entries": entries})
         try:
-            d = safe_resolve(rel)
+            root, d, idx, inner = resolve_workspace_detail(rel)
         except PermissionError:
             return self._err("forbidden", 403)
         if not d.is_dir():
@@ -1376,7 +1576,7 @@ class Handler(BaseHTTPRequestHandler):
             for entry in sorted(d.iterdir(), key=lambda e: e.name.lower()):
                 if entry.name.startswith("$") or entry.name == "System Volume Information":
                     continue
-                rel_path = str(entry.relative_to(ROOT)).replace("\\", "/")
+                rel_path = workspace_relpath(entry)
                 if entry.is_dir():
                     dirs.append({"name": entry.name, "path": rel_path, "type": "dir"})
                 else:
@@ -1391,7 +1591,10 @@ class Handler(BaseHTTPRequestHandler):
                     })
         except PermissionError:
             return self._err("permission denied", 403)
-        rel_norm = str(d.relative_to(ROOT)).replace("\\", "/") if d != ROOT else ""
+        if inner:
+            rel_norm = f"@{idx}/{inner}" if idx else inner
+        else:
+            rel_norm = f"@{idx}" if idx else ""
         return self._json({"path": rel_norm, "entries": dirs + files})
 
     def _api_file(self, rel):
@@ -1457,25 +1660,25 @@ class Handler(BaseHTTPRequestHandler):
         out = []
         skip = self._FLAT_SKIP_DIRS
         limit = self._FLAT_LIMIT
-        for dirpath, dirnames, filenames in os.walk(ROOT):
-            # 原地裁剪要进入的子目录（忽略隐藏的 $ 卷目录、黑名单目录、以及指向 ROOT 外的 junction）
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in skip and not d.startswith("$")
-                and within_root_real(Path(dirpath) / d)
-            ]
-            dirnames.sort(key=str.lower)
-            for name in sorted(filenames, key=str.lower):
-                fp = Path(dirpath) / name
-                try:
-                    rel = str(fp.relative_to(ROOT)).replace("\\", "/")
-                except ValueError:
-                    continue
-                if not within_root_real(fp):   # 跳过指向 ROOT 外的符号链接/junction 文件
-                    continue
-                out.append(rel)
-                if len(out) >= limit:
-                    return self._json({"files": out, "truncated": True})
+        for root in current_workspace_roots():
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [
+                    d for d in dirnames
+                    if d not in skip and not d.startswith("$")
+                    and within_root_real(Path(dirpath) / d)
+                ]
+                dirnames.sort(key=str.lower)
+                for name in sorted(filenames, key=str.lower):
+                    fp = Path(dirpath) / name
+                    if not within_root_real(fp):
+                        continue
+                    try:
+                        rel = workspace_relpath(fp)
+                    except ValueError:
+                        continue
+                    out.append(rel)
+                    if len(out) >= limit:
+                        return self._json({"files": out, "truncated": True})
         return self._json({"files": out, "truncated": False})
 
     # 全文搜索：忽略的目录 / 限额
@@ -1514,61 +1717,60 @@ class Handler(BaseHTTPRequestHandler):
         per_file = self._SEARCH_PER_FILE_LIMIT
         max_bytes = self._SEARCH_MAX_BYTES
 
-        for dirpath, dirnames, filenames in os.walk(ROOT):
-            dirnames[:] = [d for d in dirnames
-                           if d not in skip and not d.startswith("$")
-                           and within_root_real(Path(dirpath) / d)]
-            dirnames.sort(key=str.lower)
-            for name in sorted(filenames, key=str.lower):
-                fp = Path(dirpath) / name
-                if not within_root_real(fp):   # 不读取 ROOT 外的 junction/符号链接目标
-                    continue
-                try:
-                    st = fp.stat()
-                except OSError:
-                    continue
-                if st.st_size > max_bytes:
-                    continue
-                try:
-                    raw = fp.read_bytes()
-                except OSError:
-                    continue
-                if b"\x00" in raw:  # 含 NUL → 视为二进制，跳过
-                    continue
-                try:
-                    text = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
-                try:
-                    rel = str(fp.relative_to(ROOT)).replace("\\", "/")
-                except ValueError:
-                    continue
-                file_hits = 0
-                # 与编辑器一致：仅按 \n 分行(规整 CRLF/CR)；不能用 splitlines()——它还会在
-                # \x0b\x0c\x85/U+2028/U+2029 等处断行，导致行号与前端 split("\n") 错位、点击跳错行
-                lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-                for lineno, line in enumerate(lines, 1):
-                    m = matcher(line)
-                    if not m:
+        for root in current_workspace_roots():
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames
+                               if d not in skip and not d.startswith("$")
+                               and within_root_real(Path(dirpath) / d)]
+                dirnames.sort(key=str.lower)
+                for name in sorted(filenames, key=str.lower):
+                    fp = Path(dirpath) / name
+                    if not within_root_real(fp):
                         continue
-                    if use_regex:
-                        col = m.start()
-                        mlen = max(1, m.end() - m.start())
-                    else:
-                        col = m[0]
-                        mlen = m[1] - m[0]
-                    results.append({
-                        "path": rel, "line": lineno, "col": col,
-                        "len": mlen,
-                        "text": line[:1000],
-                    })
-                    file_hits += 1
-                    if len(results) >= total_limit:
-                        truncated = True
-                        return self._json({"results": results, "truncated": True})
-                    if file_hits >= per_file:
-                        truncated = True
-                        break
+                    try:
+                        st = fp.stat()
+                    except OSError:
+                        continue
+                    if st.st_size > max_bytes:
+                        continue
+                    try:
+                        raw = fp.read_bytes()
+                    except OSError:
+                        continue
+                    if b"\x00" in raw:
+                        continue
+                    try:
+                        text = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        continue
+                    try:
+                        rel = workspace_relpath(fp)
+                    except ValueError:
+                        continue
+                    file_hits = 0
+                    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                    for lineno, line in enumerate(lines, 1):
+                        m = matcher(line)
+                        if not m:
+                            continue
+                        if use_regex:
+                            col = m.start()
+                            mlen = max(1, m.end() - m.start())
+                        else:
+                            col = m[0]
+                            mlen = m[1] - m[0]
+                        results.append({
+                            "path": rel, "line": lineno, "col": col,
+                            "len": mlen,
+                            "text": line[:1000],
+                        })
+                        file_hits += 1
+                        if len(results) >= total_limit:
+                            truncated = True
+                            return self._json({"results": results, "truncated": True})
+                        if file_hits >= per_file:
+                            truncated = True
+                            break
         return self._json({"results": results, "truncated": truncated})
 
     def _api_save(self, body):
@@ -1602,7 +1804,7 @@ class Handler(BaseHTTPRequestHandler):
             and not re.search(r'[:*?"<>|]', name)
 
     def _rel_of(self, p):
-        return str(p.relative_to(ROOT)).replace("\\", "/")
+        return workspace_relpath(p)
 
     def _api_fs_create(self, body):
         parent_rel = body.get("path", "") or ""
@@ -1678,7 +1880,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- 便签 / Todo ----------
     def _notes_path(self) -> Path:
-        return ROOT / ".workbench" / "notes.json"
+        return _notes_global_path()
 
     def _api_notes_get(self):
         fp = self._notes_path()
@@ -1695,6 +1897,22 @@ class Handler(BaseHTTPRequestHandler):
                         data["note"] = note
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
+        elif ROOT is not None:
+            # 兼容旧版工作区本地存储：全局 notes.json 还不存在时，回退读取当前工作区旧文件，
+            # 让用户切到新版本后至少能看到原有内容；后续一旦保存就会落到全局文件。
+            legacy = ROOT / ".workbench" / "notes.json"
+            if legacy.is_file():
+                try:
+                    loaded = json.loads(legacy.read_text(encoding="utf-8"))
+                    if isinstance(loaded, dict):
+                        todos = loaded.get("todos")
+                        note = loaded.get("note")
+                        if isinstance(todos, list):
+                            data["todos"] = todos
+                        if isinstance(note, str):
+                            data["note"] = note
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                    pass
         return self._json(data)
 
     def _api_notes_save(self, body):
@@ -1731,59 +1949,128 @@ class Handler(BaseHTTPRequestHandler):
         recent 列表里失效路径在前端置灰，这里不主动剔除（避免读盘开销 + 保留用户记忆）。
         """
         cfg = load_config()
+        roots = [str(r) for r in current_workspace_roots()]
+        cur = _workspace_payload(roots) if roots else None
         return self._json({
-            "lastRoot": cfg.get("lastRoot"),
-            "recent": cfg.get("recent", []),
+            "lastRoot": roots[0] if roots else cfg.get("lastRoot"),
+            "recent": cfg.get("recentWorkspaces", cfg.get("recent", [])),
             "currentRoot": str(ROOT) if ROOT is not None else None,
-            "hasWorkspace": ROOT is not None,
+            "currentWorkspace": cur,
+            "workspaceRoots": roots,
+            "workspaceId": cur.get("id") if isinstance(cur, dict) else None,
+            "hasWorkspace": has_workspace(),
         })
 
+    def _resolve_workspace_root(self, raw, *, create=False):
+        """把用户输入的绝对/相对路径解析成可用工作区目录。"""
+        if not isinstance(raw, str) or not raw.strip():
+            return None, self._err("缺少 path")
+        try:
+            p = Path(raw).resolve()
+        except (OSError, ValueError):
+            return None, self._err("路径非法")
+        if create:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return None, self._err("创建目录失败", 500)
+        # realpath 再解析一次 junction/符号链接，避免工作根指向敏感位置的链接目标
+        try:
+            rp = Path(os.path.realpath(str(p)))
+        except OSError:
+            return None, self._err("路径无法解析")
+        if not rp.is_dir():
+            return None, self._err("不是有效目录")
+        return rp, None
+
+    def _resolve_workspace_roots(self, body, *, create=False):
+        if isinstance(body.get("roots"), list):
+            raw_roots = body.get("roots")
+        else:
+            raw = body.get("path")
+            raw_roots = [raw] if raw is not None else []
+        roots = []
+        seen = set()
+        for raw in raw_roots:
+            rp, err = self._resolve_workspace_root(raw, create=create)
+            if err:
+                return None, err
+            key = str(rp)
+            if key in seen:
+                continue
+            seen.add(key)
+            roots.append(rp)
+        if not roots:
+            return None, self._err("至少需要一个目录")
+        return roots, None
+
+    def _activate_workspace(self, roots: list[Path]) -> dict:
+        """切换当前工作区并持久化 recent/lastRoot。"""
+        set_workspace_roots(roots)
+        with _CFG_LOCK:
+            cfg = load_config()
+            _touch_recent_workspace(cfg, current_workspace_roots())
+            save_config(cfg)
+        return cfg
+
     def _api_set_root(self, body):
-        """POST /api/set-root {path} → 切换工作根目录并持久化。
+        """POST /api/set-root {path}|{roots[]} → 切换工作区并持久化。
 
         统一入口：浏览器版与桌面版都走这里改 ROOT（桌面版 open_folder 也改调此 API，
         不再直接改 server.ROOT）。校验目录存在 + 真实路径（解析符号链接/junction），
         防止把工作根设到一个指向敏感位置的 junction。
         """
-        global ROOT
-        raw = body.get("path")
-        if not isinstance(raw, str) or not raw.strip():
-            return self._err("缺少 path")
-        try:
-            p = Path(raw).resolve()
-        except (OSError, ValueError):
-            return self._err("路径非法")
-        # realpath 再解析一次 junction/符号链接，避免工作根指向 ROOT 外的敏感目录
-        try:
-            rp = Path(os.path.realpath(str(p)))
-        except OSError:
-            return self._err("路径无法解析")
-        if not rp.is_dir():
-            return self._err("不是有效目录")
-        ROOT = rp
-        with _CFG_LOCK:
-            cfg = load_config()
-            _touch_recent(cfg, rp)
-            save_config(cfg)
+        roots, err = self._resolve_workspace_roots(body, create=False)
+        if err:
+            return err
+        cfg = self._activate_workspace(roots)
+        cur = cfg.get("currentWorkspace") or {}
         return self._json({
             "ok": True,
             "root": str(ROOT),
-            "recent": cfg.get("recent", []),
+            "workspace": cur,
+            "workspaceRoots": cur.get("roots", []),
+            "workspaceId": cur.get("id"),
+            "recent": cfg.get("recentWorkspaces", cfg.get("recent", [])),
+        })
+
+    def _api_create_workspace(self, body):
+        """POST /api/create-workspace {path}|{roots[]} → 创建目录并切换为工作区。"""
+        roots, err = self._resolve_workspace_roots(body, create=True)
+        if err:
+            return err
+        cfg = self._activate_workspace(roots)
+        cur = cfg.get("currentWorkspace") or {}
+        return self._json({
+            "ok": True,
+            "root": str(ROOT),
+            "workspace": cur,
+            "workspaceRoots": cur.get("roots", []),
+            "workspaceId": cur.get("id"),
+            "recent": cfg.get("recentWorkspaces", cfg.get("recent", [])),
         })
 
     def _api_recent_remove(self, body):
         """POST /api/recent/remove {path} → 从最近列表移除一项（不改变当前 ROOT）。"""
-        raw = body.get("path")
+        raw = body.get("id") or body.get("path")
         if not isinstance(raw, str):
-            return self._err("缺少 path")
+            return self._err("缺少 id/path")
         with _CFG_LOCK:
             cfg = load_config()
-            cfg["recent"] = [r for r in cfg.get("recent", []) if r.get("path") != raw]
-            # 若移除的恰好是 lastRoot，清空 lastRoot 以免下次启动又指向它
-            if cfg.get("lastRoot") == raw:
+            cfg["recentWorkspaces"] = [
+                r for r in cfg.get("recentWorkspaces", [])
+                if r.get("id") != raw and r.get("path") != raw
+            ]
+            cfg["recent"] = [
+                r for r in cfg.get("recent", [])
+                if r.get("path") != raw
+            ]
+            cur = cfg.get("currentWorkspace") if isinstance(cfg.get("currentWorkspace"), dict) else None
+            if cur and (cur.get("id") == raw or cur.get("path") == raw):
+                cfg["currentWorkspace"] = None
                 cfg["lastRoot"] = None
             save_config(cfg)
-        return self._json({"ok": True, "recent": cfg.get("recent", [])})
+        return self._json({"ok": True, "recent": cfg.get("recentWorkspaces", cfg.get("recent", []))})
 
     # ---------- 粘贴图片存盘 ----------
     _IMG_EXT_BY_MIME = {
@@ -1893,6 +2180,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_run_task(self, body):
         """POST /api/run-task {name, kind} —— 跑 npm/make 任务（在 ROOT）。"""
+        if ROOT is None:
+            return self._err("未打开工作区")
         name = (body.get("name") or "").strip()
         kind = (body.get("kind") or "").strip()
         if not name:
@@ -1915,6 +2204,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_tasks(self, rel):
         """GET /api/tasks —— 读 ROOT/package.json scripts 与 Makefile 目标。"""
+        if ROOT is None:
+            return self._json({"npm": [], "make": []})
         npm, make = [], []
         pkg = ROOT / "package.json"
         if pkg.is_file():
@@ -2056,7 +2347,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             target = safe_resolve(rel)
         except PermissionError:
-            self._err("forbidden", 403)
+            self._json({"repo": None, "branch": None, "files": [],
+                        "message": "当前目录不在 git 仓库内"})
             return None
         if not target.exists():
             target = ROOT
@@ -2079,7 +2371,7 @@ class Handler(BaseHTTPRequestHandler):
 
         def entry(status, fname):
             try:
-                root_rel = str((repo / fname).resolve().relative_to(ROOT)).replace("\\", "/")
+                root_rel = workspace_relpath((repo / fname).resolve())
             except ValueError:
                 root_rel = None
             return {"status": status, "repoPath": fname, "path": root_rel}
@@ -2106,7 +2398,10 @@ class Handler(BaseHTTPRequestHandler):
                 staged.append(entry(x, fname))
             if y != " ":                    # 工作区有改动 → 未暂存
                 unstaged.append(entry(y, fname))
-        repo_rel = str(repo.relative_to(ROOT)).replace("\\", "/") if repo != ROOT else ""
+        try:
+            repo_rel = workspace_relpath(repo)
+        except ValueError:
+            repo_rel = ""
         # 唯一文件数（一个文件可能同时在两组）作为徽标计数
         changed = len({e["repoPath"] for e in staged + unstaged})
         return self._json({"repo": repo_rel, "branch": branch,
@@ -2515,7 +2810,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global ROOT
     ap = argparse.ArgumentParser()
     ap.add_argument("root", nargs="?", default=None, help="工作根目录")
     ap.add_argument("--port", type=int, default=8765)
@@ -2523,18 +2817,29 @@ def main():
     ap.add_argument("--no-browser", action="store_true", help="启动时不自动打开浏览器")
     args = ap.parse_args()
 
-    # 工作根决策（IDE 式）：命令行显式路径 > 上次活动工作区(config.lastRoot) > 空工作区。
-    # 空工作区时 ROOT=None，前端渲染欢迎页让用户选「打开文件夹 / 最近列表」，
-    # 不再粗暴默认到盘符根或 exe 所在目录（那既不是用户工作目录又会撑爆文件树）。
+    # 工作区决策（IDE 式）：命令行显式路径 > 上次活动工作区(config.currentWorkspace) > 旧版 lastRoot > 空工作区。
     if args.root:
-        ROOT = Path(args.root).resolve()
+        set_workspace_roots([Path(args.root).resolve()])
     else:
         cfg = load_config()
-        last = cfg.get("lastRoot")
-        if last and Path(last).is_dir():
-            ROOT = Path(last).resolve()
+        cur = cfg.get("currentWorkspace") if isinstance(cfg.get("currentWorkspace"), dict) else None
+        roots = []
+        if cur and isinstance(cur.get("roots"), list):
+            for raw in cur.get("roots", []):
+                try:
+                    p = Path(raw).resolve()
+                except (OSError, ValueError):
+                    continue
+                if p.is_dir():
+                    roots.append(p)
+        if roots:
+            set_workspace_roots(roots)
         else:
-            ROOT = None
+            last = cfg.get("lastRoot")
+            if last and Path(last).is_dir():
+                set_workspace_roots([Path(last).resolve()])
+            else:
+                set_workspace_roots([])
     if ROOT is not None and not ROOT.is_dir():
         print(f"根目录不存在: {ROOT}", file=sys.stderr)
         sys.exit(1)

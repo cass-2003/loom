@@ -4,6 +4,7 @@
   let searchTimer = null;
   let searchSeq = 0;          // 请求令牌（防竞态）
   const collapsed = new Set(); // 折叠的文件分组
+  let workspaceOpen = typeof window.hasOpenWorkspace === "function" ? window.hasOpenWorkspace() : true;
 
   function el(id) { return document.getElementById(id); }
   function esc(s) {
@@ -18,6 +19,10 @@
 
   async function runSearch() {
     const input = el("search-input");
+    if (!workspaceOpen) {
+      renderWorkspaceDisabled();
+      return;
+    }
     const q = input.value;
     const summary = el("search-summary");
     const list = el("search-results");
@@ -130,8 +135,39 @@
   }
 
   function scheduleSearch() {
+    if (!workspaceOpen) {
+      renderWorkspaceDisabled();
+      return;
+    }
     clearTimeout(searchTimer);
     searchTimer = setTimeout(runSearch, 250);
+  }
+
+  function renderWorkspaceDisabled() {
+    clearTimeout(searchTimer);
+    searchSeq++;
+    const summary = el("search-summary");
+    const list = el("search-results");
+    if (summary) summary.textContent = "请先打开工作区再搜索";
+    if (list) list.innerHTML = "";
+  }
+
+  function updateSearchAvailability() {
+    const input = el("search-input");
+    const caseBtn = el("search-case");
+    const regexBtn = el("search-regex");
+    const disabled = !workspaceOpen;
+    if (input) {
+      input.disabled = disabled;
+      input.title = disabled ? "请先打开工作区" : "搜索全文";
+      if (disabled) input.value = "";
+    }
+    [caseBtn, regexBtn].forEach(btn => {
+      if (!btn) return;
+      btn.disabled = disabled;
+      btn.title = disabled ? "请先打开工作区" : btn.title;
+    });
+    if (disabled) renderWorkspaceDisabled();
   }
 
   function initSearch() {
@@ -154,12 +190,17 @@
       regexBtn.classList.toggle("active", sState.regex);
       runSearch();
     });
+    updateSearchAvailability();
+    window.addEventListener("wb:workspace-state", (e) => {
+      workspaceOpen = !!(e.detail && e.detail.hasWorkspace);
+      updateSearchAvailability();
+    });
   }
 
   window.initSearch = initSearch;
   // 切到搜索视图时自动聚焦输入框
   window.focusSearchInput = function () {
     const input = el("search-input");
-    if (input) setTimeout(() => input.focus(), 0);
+    if (input && !input.disabled) setTimeout(() => input.focus(), 0);
   };
 })();

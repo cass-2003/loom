@@ -94,7 +94,7 @@ function vditorMermaidTheme() {
 }
 // 代码块高亮主题（codeMirrorTheme 用于 ``` 块的代码主题）
 function vditorCodeTheme() {
-  return isLightTheme() ? "github" : "github-dark";
+  return isLightTheme() ? "Github" : "One Dark";
 }
 
 // 自定义图片上传：走我们的 JSON 接口，返回 null 阻止 Vditor 默认 multipart
@@ -137,7 +137,7 @@ function ensureVditor(initialValue, onReady) {
   vd.pendingMount = onReady || null;
   vd.inst = new Vditor("vditor", {
     cdn: "/static/vendor/vditor",
-    mode: "ir",                       // 默认即时渲染
+    mode: "wysiwyg",                  // 跟 vscode-office 一样默认进入完整所见即所得
     value: initialValue || "",
     cache: { enable: false },
     theme: vditorTheme(),
@@ -150,18 +150,21 @@ function ensureVditor(initialValue, onReady) {
     outline: { enable: true, position: "left" },
     preview: {
       hljs: { style: vditorCodeTheme(), lineNumber: false },
+      markdown: { toc: true, mark: true, footnotes: true, autoSpace: true },
       math: { engine: "KaTeX" },
     },
     toolbar: [
-      "headings", "bold", "italic", "strike", "|",
-      "list", "ordered-list", "check", "|",
+      "outline", "headings", "bold", "italic", "strike", "link", "|",
+      "upload", "|",
+      "editor-theme", "editor-theme-toggle", "|",
+      "list", "ordered-list", "check", "table", "|",
       "quote", "line", "code", "inline-code", "|",
-      "table", "link", "upload", "|",
       "undo", "redo", "|",
-      "outline", "edit-mode", "preview", "|",
-      "fullscreen",
+      "find", "edit-mode", "code-theme", "help",
     ],
-    upload: { handler: vditorUploadHandler },
+    tab: "\t",
+    placeholder: "开始书写 Markdown...",
+    upload: { accept: "image/*", handler: vditorUploadHandler },
     input() {
       // 标记当前 md 标签为脏（复用现有 dirty 机制）
       if (!vd.ready) return;
@@ -174,6 +177,9 @@ function ensureVditor(initialValue, onReady) {
       if (vd.pending != null) { vd.inst.setValue(vd.pending); vd.pending = null; }
       const m = vd.pendingMount; vd.pendingMount = null;   // 跑"最新"挂载，而非首建时的陈旧闭包
       if (m) m();
+      if (typeof vd.inst.restoreDocumentSession === "function") {
+        try { vd.inst.restoreDocumentSession(true); } catch (_) {}
+      }
     },
   });
 }
@@ -447,12 +453,22 @@ function handlePathDeleted(path, isDir) {
 function closeCurrent() {
   revokeImage();
   hideAllViews();
-  $("#welcome").classList.remove("hidden");
+  if (currentRoot) {
+    const empty = $("#workspace-empty");
+    if (empty) { empty.classList.remove("hidden"); hydrateIcons(empty); }
+  } else {
+    $("#welcome").classList.remove("hidden");
+  }
   $("#editor").value = "";
   state.current = null; state.kind = null; state.activeTab = null;
   state.dirty = false; document.body.classList.remove("dirty");
+  renderTabs();
   $("#status-file").textContent = "未打开文件";
-  $("#crumb").textContent = "";
+  $("#crumb").textContent = currentWorkspaceRoots.length > 1
+    ? `工作区: ${currentWorkspaceRoots.length} 个目录`
+    : (currentRoot ? "根目录: " + currentRoot : "");
+  document.querySelectorAll("#tree .node-row.active").forEach(row => row.classList.remove("active"));
+  updateTopActionState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
 }
@@ -901,6 +917,7 @@ function activateTab(path) {
     if (vbtn) { vbtn.textContent = "所见即所得"; vbtn.disabled = true; }
     const mount = () => { vd.curPath = path; vditorSetValue(content); };
     ensureVditor(content, mount);   // 就绪→立即挂载；未就绪→记为 pendingMount，after() 跑最新那个
+    document.body.classList.add("markdown-active");
   } else {
     $("#editor").value = tab.draft != null ? tab.draft : "";
     gutterLineCount = -1; curGLine = -1;  // 强制重建行号
@@ -1095,12 +1112,56 @@ function setCurrent(path, kind) {
   state.current = path; state.kind = kind;
   $("#status-file").textContent = path;
   $("#crumb").textContent = path;
+  updateTopActionState();
   if (window.updateStatusBar) updateStatusBar();
   if (window.updateRunButton) updateRunButton();
 }
 
+function updateTopActionState() {
+  const saveBtn = $("#btn-save");
+  if (saveBtn) {
+    const canSave = state.kind === "text" || state.kind === "md";
+    saveBtn.disabled = !canSave;
+    saveBtn.title = canSave ? "保存 (Ctrl+S)" : "当前视图不可保存";
+  }
+  const viewBtn = $("#btn-view-edit");
+  if (viewBtn && !document.body.classList.contains("markdown-active")) {
+    const canToggle = state.kind === "text" && activeTabIsMarkdown();
+    viewBtn.disabled = !canToggle;
+    viewBtn.title = canToggle ? "切换 Markdown 源码 / 预览 / 分屏" : "仅 Markdown 源码视图可切换";
+  }
+}
+window.updateTopActionState = updateTopActionState;
+
+function updateWorkspaceActionState() {
+  const hasWs = !!currentRoot;
+  const reason = "请先打开工作区";
+  [
+    ["#btn-new-file", "新建文件（根目录）"],
+    ["#btn-new-dir", "新建文件夹（根目录）"],
+    ["#btn-refresh", "刷新"],
+  ].forEach(([sel, title]) => {
+    const btn = $(sel);
+    if (!btn) return;
+    btn.disabled = !hasWs;
+    btn.title = hasWs ? title : reason;
+    btn.setAttribute("aria-disabled", hasWs ? "false" : "true");
+  });
+  window.dispatchEvent(new CustomEvent("wb:workspace-state", {
+    detail: {
+      hasWorkspace: hasWs,
+      root: currentRoot,
+      roots: currentWorkspaceRoots.slice(),
+      workspaceId: currentWorkspaceId,
+    },
+  }));
+}
+window.updateWorkspaceActionState = updateWorkspaceActionState;
+
 function hideAllViews() {
+  document.body.classList.remove("markdown-active");
   $("#welcome").classList.add("hidden");
+  const empty = $("#workspace-empty"); if (empty) empty.classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
   const vdEl = $("#vditor"); if (vdEl) vdEl.classList.add("hidden");
   // 多格式查看器：切走时卸载并隐藏挂载点
@@ -1956,6 +2017,17 @@ document.addEventListener("keydown", (e) => {
 
 // ---------- 活动栏：视图切换 ----------
 let activeView = "files";
+let sidebarCollapsed = localStorage.getItem("wb-sidebar-collapsed") === "1";
+function setSidebarCollapsed(collapsed) {
+  sidebarCollapsed = !!collapsed;
+  document.body.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+  const side = $("#sidebar");
+  const rz = $("#sidebar-resizer");
+  if (side) side.setAttribute("aria-hidden", sidebarCollapsed ? "true" : "false");
+  if (rz) rz.classList.toggle("hidden", sidebarCollapsed);
+  localStorage.setItem("wb-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
+  try { window.dispatchEvent(new Event("resize")); } catch {}
+}
 function switchView(view) {
   activeView = view;
   document.querySelectorAll(".act").forEach(b =>
@@ -1966,8 +2038,17 @@ function switchView(view) {
   if (view === "search" && window.focusSearchInput) window.focusSearchInput();
 }
 document.querySelectorAll(".act").forEach(btn => {
-  btn.onclick = () => switchView(btn.dataset.view);
+  btn.onclick = () => {
+    const view = btn.dataset.view;
+    if (view === activeView && !sidebarCollapsed) {
+      setSidebarCollapsed(true);
+      return;
+    }
+    if (sidebarCollapsed) setSidebarCollapsed(false);
+    switchView(view);
+  };
 });
+setSidebarCollapsed(sidebarCollapsed);
 
 $("#btn-refresh").onclick = () => { state.expanded.clear(); initTree(); };
 $("#btn-new-file").onclick = () => fsCreate("", $("#tree"));
@@ -1990,28 +2071,42 @@ function fmtSize(n) {
 // ---------- 工作区（根目录）管理 ----------
 // IDE 式：启动先查 /api/config，有工作区则进文件树，否则渲染欢迎页。
 // 工作区会话状态（打开的标签等）按根路径分区存 localStorage，切根不丢。
-let currentRoot = null;   // 当前工作根（字符串），用于工作区记忆分区 key
+let currentRoot = null;   // 当前工作区主根（字符串）
+let currentWorkspaceId = null;
+let currentWorkspaceRoots = [];
 window.currentRoot = currentRoot;
+window.currentWorkspaceId = currentWorkspaceId;
+window.currentWorkspaceRoots = currentWorkspaceRoots;
+window.hasOpenWorkspace = () => !!currentRoot;
+let wsSuspendSave = false;  // 工作区切换时短暂禁止主组状态回写，避免旧 key 被空标签覆盖
 
 function wsKey() {
-  // 按根路径分区，避免切根时旧标签被清空、重启时回到错误根
-  if (!currentRoot) return null;
-  // 用路径做 key 即可（localStorage key 本身就是隔离命名空间）；不 hash 以便调试
-  return "wb-ws:" + currentRoot;
+  if (!currentWorkspaceId) return null;
+  return "wb-ws:" + currentWorkspaceId;
 }
 
 async function initTree() {
   const cfg = await fetch("/api/config").then(x => x.json());
   currentRoot = cfg.currentRoot;
+  currentWorkspaceId = cfg.workspaceId || null;
+  currentWorkspaceRoots = Array.isArray(cfg.workspaceRoots) ? cfg.workspaceRoots : (currentRoot ? [currentRoot] : []);
   window.currentRoot = currentRoot;
+  window.currentWorkspaceId = currentWorkspaceId;
+  window.currentWorkspaceRoots = currentWorkspaceRoots;
+  window.hasOpenWorkspace = () => !!currentRoot;
   if (cfg.hasWorkspace && currentRoot) {
-    $("#crumb").textContent = "根目录: " + currentRoot;
+    $("#crumb").textContent = currentWorkspaceRoots.length > 1
+      ? `工作区: ${currentWorkspaceRoots.length} 个目录`
+      : "根目录: " + currentRoot;
     await loadTree("", $("#tree"));
     hydrateIcons($("#tree"));
+    if (!state.tabs.length && !state.activeTab) showEmptyWorkspace(currentRoot);
   } else {
     // 无工作区：显示欢迎页，隐藏标签栏/编辑区
     showWelcome(cfg);
   }
+  updateWorkspaceActionState();
+  if (window.refreshGit) window.refreshGit();
 }
 
 // 渲染欢迎页（无工作区时）。cfg 来自 /api/config，含 recent 列表
@@ -2019,8 +2114,19 @@ function showWelcome(cfg) {
   $("#crumb").textContent = "未打开工作区";
   $("#tabbar").classList.add("hidden");
   $("#editor-wrap").classList.add("hidden");
+  const empty = $("#workspace-empty"); if (empty) empty.classList.add("hidden");
+  const vdEl = $("#vditor"); if (vdEl) vdEl.classList.add("hidden");
+  const vh = $("#viewer-host"); if (vh) vh.classList.add("hidden");
+  $("#diff-view").classList.add("hidden");
+  $("#image-view").classList.add("hidden");
+  $("#binary-view").classList.add("hidden");
+  const fh = $("#filehist-view"); if (fh) fh.classList.add("hidden");
+  const bl = $("#blame-view"); if (bl) bl.classList.add("hidden");
   const w = $("#welcome");
   w.classList.remove("hidden");
+  state.current = null; state.kind = null; state.activeTab = null;
+  updateTopActionState();
+  updateWorkspaceActionState();
   // 隐藏可能残留的查看器
   if (state.viewer && typeof state.viewer.unmount === "function") {
     try { state.viewer.unmount(); } catch {}
@@ -2041,16 +2147,16 @@ function showWelcome(cfg) {
         <span class="wr-icon"><span class="i" data-icon="folder"></span></span>
         <span class="wr-text">
           <div class="wr-name">${escapeHtml(r.name)}</div>
-          <div class="wr-path">${escapeHtml(r.path)}</div>
+          <div class="wr-path">${escapeHtml((r.roots && r.roots.join("  ·  ")) || r.path)}</div>
         </span>
         <button class="wr-remove" title="从列表移除"><span class="i" data-icon="close"></span></button>`;
       li.addEventListener("click", (e) => {
         if (e.target.closest(".wr-remove")) return;
-        switchWorkspace(r.path);
+        switchWorkspace(r.roots && r.roots.length ? r.roots : r.path);
       });
       li.querySelector(".wr-remove").addEventListener("click", (e) => {
         e.stopPropagation();
-        removeRecent(r.path);
+        removeRecent(r.id || r.path);
       });
       list.appendChild(li);
     }
@@ -2061,21 +2167,76 @@ function showWelcome(cfg) {
 }
 
 // 切换工作区：调 /api/set-root，成功后整体重载
-async function switchWorkspace(path) {
-  if (!path) return;
+async function switchWorkspace(pathOrRoots) {
+  if (!pathOrRoots) return;
   // 有未保存改动先确认
   const anyDirty = state.dirty || state.tabs.some(t => t.dirty)
     || (window.split && typeof window.split.hasUnsaved === "function" && window.split.hasUnsaved());
   if (anyDirty && !confirm("有未保存的修改，切换工作目录将丢弃它们。确定继续？")) return;
-  const r = await fsPost("/api/set-root", { path });
+  const body = Array.isArray(pathOrRoots) ? { roots: pathOrRoots } : { path: pathOrRoots };
+  const r = await fsPost("/api/set-root", body);
   if (r.error) { setMsg(r.error, "err"); return; }
-  await reloadRoot(r.root, r.recent);
+  await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
 }
 window.switchWorkspace = switchWorkspace;
 
+function showEmptyWorkspace(root) {
+  hideAllViews();
+  $("#welcome").classList.add("hidden");
+  const empty = $("#workspace-empty");
+  if (empty) { empty.classList.remove("hidden"); hydrateIcons(empty); }
+  $("#tabbar").classList.add("hidden");
+  $("#crumb").textContent = currentWorkspaceRoots.length > 1
+    ? `工作区: ${currentWorkspaceRoots.length} 个目录`
+    : (root ? ("根目录: " + root) : "未打开工作区");
+  $("#status-file").textContent = "未打开文件";
+  state.current = null; state.kind = null; state.activeTab = null;
+  updateTopActionState();
+  updateWorkspaceActionState();
+}
+
+async function expandTreeToPath(path) {
+  if (!path) return;
+  if (path.startsWith("@")) {
+    const rootSeg = path.split("/")[0];
+    const rootRow = findRow(rootSeg);
+    if (rootRow && rootRow.dataset.type === "dir") {
+      const children = childrenOf(rootRow);
+      if (children && children.classList.contains("hidden")) {
+        rootRow.click();
+        await waitFor(() => children.dataset.loaded === "1");
+        hydrateIcons(children);
+      }
+    }
+  }
+  const parts = path.split("/");
+  if (parts.length <= 1) return;
+  let cur = "";
+  for (let i = 0; i < parts.length - 1; i++) {
+    cur = cur ? (cur + "/" + parts[i]) : parts[i];
+    const row = findRow(cur);
+    if (!row || row.dataset.type !== "dir") break;
+    const children = childrenOf(row);
+    if (!children) break;
+    if (!children.dataset.loaded) {
+      await loadTree(cur, children);
+      children.dataset.loaded = "1";
+      hydrateIcons(children);
+    }
+    if (children.classList.contains("hidden")) {
+      children.classList.remove("hidden");
+      const twist = row.querySelector(":scope > .twist");
+      const ico = row.querySelector(":scope > .ico");
+      if (twist) twist.classList.add("open");
+      if (ico) ico.innerHTML = svgIcon("folderOpen", 16);
+    }
+    state.expanded.add(cur);
+  }
+}
+
 // 从最近列表移除一项
 async function removeRecent(path) {
-  const r = await fsPost("/api/recent/remove", { path });
+  const r = await fsPost("/api/recent/remove", path && path.startsWith("ws:") ? { id: path } : { path });
   if (r.error) { setMsg(r.error, "err"); return; }
   // 就地刷新欢迎页的最近列表（不整页重载）
   const cfg = await fetch("/api/config").then(x => x.json());
@@ -2083,34 +2244,51 @@ async function removeRecent(path) {
 }
 window.removeRecent = removeRecent;
 
-// 切换工作根目录后整体重载（set-root 成功 / 桌面版 open_folder 用）
-// newRoot: 新根路径字符串；recent: 可选，新最近列表（避免再查一次）
-async function reloadRoot(newRoot, recent) {
+// 切换工作区后整体重载（set-root 成功 / 桌面版 open_folder 用）
+async function reloadRoot(workspace, recent) {
+  const newRoot = workspace && workspace.path ? workspace.path : null;
   // 1) 先把当前工作区状态存到旧 key（切根前留档）
   saveWorkspace();
-  // 2) 关闭所有标签 + 清空编辑区
-  state.tabs = [];
-  state.activeTab = null;
-  state.current = null;
-  state.dirty = false;
-  state.expanded = new Set();
-  if (typeof renderTabs === "function") renderTabs();
-  if (typeof closeCurrent === "function") closeCurrent();
-  if (window.split && window.split.reset) window.split.reset();  // 切根目录时拆掉分屏副组
-  // 3) 切到新根
-  currentRoot = newRoot;
-  window.currentRoot = currentRoot;
-  $("#crumb").textContent = "根目录: " + newRoot;
-  // 4) 隐藏欢迎页、显示编辑区骨架
-  $("#welcome").classList.add("hidden");
-  // 5) 加载新文件树
-  await loadTree("", $("#tree"));
-  hydrateIcons($("#tree"));
-  // 6) 从新根分区恢复工作区
-  await restoreWorkspace();
-  if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
-  if (window.refreshGit) window.refreshGit();
-  setMsg("已切换工作目录: " + newRoot, "ok");
+  wsSuspendSave = true;
+  try {
+    // 2) 关闭所有标签 + 清空编辑区
+    state.tabs = [];
+    state.activeTab = null;
+    state.current = null;
+    state.dirty = false;
+    state.expanded = new Set();
+    if (typeof renderTabs === "function") renderTabs();
+    if (typeof closeCurrent === "function") closeCurrent();
+    if (window.split && window.split.reset) window.split.reset();  // 切根目录时拆掉分屏副组
+    // 3) 切到新根
+    currentRoot = newRoot;
+    currentWorkspaceId = workspace && workspace.id ? workspace.id : null;
+    currentWorkspaceRoots = workspace && Array.isArray(workspace.roots) ? workspace.roots : (newRoot ? [newRoot] : []);
+    window.currentRoot = currentRoot;
+    window.currentWorkspaceId = currentWorkspaceId;
+    window.currentWorkspaceRoots = currentWorkspaceRoots;
+    window.hasOpenWorkspace = () => !!currentRoot;
+    $("#crumb").textContent = currentWorkspaceRoots.length > 1
+      ? `工作区: ${currentWorkspaceRoots.length} 个目录`
+      : "根目录: " + newRoot;
+    // 4) 隐藏欢迎页、显示编辑区骨架
+    $("#welcome").classList.add("hidden");
+    // 5) 加载新文件树
+    await loadTree("", $("#tree"));
+    hydrateIcons($("#tree"));
+    // 6) 从新根分区恢复工作区
+    await restoreWorkspace();
+    if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
+    for (const tab of state.tabs) {
+      try { await expandTreeToPath(tab.path); } catch (_) {}
+    }
+    if (!state.tabs.length) showEmptyWorkspace(newRoot);
+    if (window.refreshGit) window.refreshGit();
+    if (window.reloadTasks) window.reloadTasks();
+    setMsg("已切换工作区: " + (workspace && workspace.name ? workspace.name : newRoot), "ok");
+  } finally {
+    wsSuspendSave = false;
+  }
 }
 window.reloadRoot = reloadRoot;
 
@@ -2175,6 +2353,7 @@ applyTheme(localStorage.getItem("wb-theme") || "dark");
 let wsRestoring = false;   // 恢复期间不写回，避免覆盖
 function saveWorkspace() {
   if (wsRestoring) return;
+  if (wsSuspendSave) return;
   const key = wsKey();
   if (!key) return;   // 无工作区不记忆
   try {
@@ -2192,6 +2371,9 @@ async function restoreWorkspace() {
   if (!key) return;
   let data;
   try { data = JSON.parse(localStorage.getItem(key) || "null"); } catch { data = null; }
+  if ((!data || !Array.isArray(data.tabs) || !data.tabs.length) && currentRoot) {
+    try { data = JSON.parse(localStorage.getItem("wb-ws:" + currentRoot) || "null"); } catch { data = null; }
+  }
   if (!data || !Array.isArray(data.tabs) || !data.tabs.length) return;
   wsRestoring = true;
   try {
@@ -2210,37 +2392,48 @@ async function restoreWorkspace() {
 }
 
 // 欢迎页按钮绑定（一次性；HTML 里静态按钮，showWelcome 只刷新最近列表）
+async function chooseAndSwitchWorkspace() {
+  if (window.workbenchDesktopOpenWorkspace) {
+    const handled = await window.workbenchDesktopOpenWorkspace();
+    if (handled) return;
+  }
+  // 桌面版：多选文件夹组成一个工作区；不支持多选时退化为单目录
+  if (window.pywebview && window.pywebview.api && (window.pywebview.api.open_folders || window.pywebview.api.open_folder)) {
+    try {
+      const api = window.pywebview.api;
+      const roots = api.open_folders ? await api.open_folders() : null;
+      if (roots && roots.length) { await switchWorkspace(roots); return; }
+      const p = api.open_folder ? await api.open_folder() : null;
+      if (p) await switchWorkspace(p);
+    } catch (e) { console.error(e); }
+    return;
+  }
+  // 浏览器版：多目录用分号分隔
+  const p = prompt("输入工作区文件夹路径（多个目录用分号 ; 分隔）：", currentRoot || "");
+  if (p && p.trim()) {
+    const roots = p.split(";").map(x => x.trim()).filter(Boolean);
+    await switchWorkspace(roots.length > 1 ? roots : roots[0]);
+  }
+}
+
 function bindWelcomeButtons() {
+  const topOpenBtn = $("#btn-open-folder");
+  if (topOpenBtn) topOpenBtn.onclick = chooseAndSwitchWorkspace;
+
   const openBtn = $("#welcome-open");
-  if (openBtn) openBtn.onclick = async () => {
-    // 桌面版：调原生文件夹选择框 → switchWorkspace
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.open_folder) {
-      try {
-        const p = await window.pywebview.api.open_folder();
-        if (p) await switchWorkspace(p);
-      } catch (e) { console.error(e); }
-      return;
-    }
-    // 浏览器版：无原生选择框，弹输入框让用户粘贴路径
-    const p = prompt("输入工作区文件夹路径：", currentRoot || "");
-    if (p && p.trim()) await switchWorkspace(p.trim());
-  };
+  if (openBtn) openBtn.onclick = chooseAndSwitchWorkspace;
+
   const newBtn = $("#welcome-new");
   if (newBtn) newBtn.onclick = async () => {
     const p = prompt("输入新文件夹路径（将创建并打开）：", "");
     if (!p || !p.trim()) return;
     const path = p.trim();
-    // 先建目录再 set-root；建目录走 /api/fs/create 的目录创建语义不通用（它要求在 ROOT 内），
-    // 这里直接用 /api/set-root 的副作用：它要求目录已存在。所以先调一个轻量 mkdir。
-    // 复用 exec 不合适（要 CSRF + 白名单）；最简方案：让 set-root 报错后提示用户先在外部建好。
-    // 更好：加一个 /api/fs/mkdir-p 接口。但为最小改动，这里用 prompt 引导。
-    const r = await fsPost("/api/set-root", { path });
+    const r = await fsPost("/api/create-workspace", { path });
     if (r.error) {
-      // 目录不存在 → 提示用户。避免在此自动创建任意路径目录（安全：不擅自创建用户输入的路径）
-      setMsg("目录不存在，请先创建该文件夹后再打开", "err");
+      setMsg(r.error, "err");
       return;
     }
-    await reloadRoot(r.root, r.recent);
+    await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
   };
 }
 
@@ -2252,9 +2445,12 @@ initNotes();
 refreshGit();  // 首次加载更新 Git 徽标/状态栏
 if (window.initWorkbench) initWorkbench();  // 命令面板/设置/快捷键/状态栏
 bindWelcomeButtons();
+updateTopActionState();
+updateWorkspaceActionState();
 (async () => {
   await initTree();
   await restoreWorkspace();
   // 主组恢复完毕后再恢复分屏副组（顺序固定，避免抢写工作区记忆）
   if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
+  if (currentRoot && !state.tabs.length && !state.activeTab) showEmptyWorkspace(currentRoot);
 })();

@@ -9,7 +9,7 @@
 #   powershell -ExecutionPolicy Bypass -File build_exe.ps1
 #
 # 产物：dist\Workbench.exe —— 双击即开一个原生窗口（无浏览器外壳）。
-#   后端 HTTP 服务跑在后台线程并自动挑空闲端口；以 exe 所在文件夹为工作根。
+#   后端 HTTP 服务跑在后台线程并自动挑空闲端口；默认恢复上次工作区，无历史时显示欢迎页。
 #   入口 desktop.py 用 pywebview 起窗口；server.py 仍可单独 `python server.py` 跑浏览器版。
 
 Set-Location $PSScriptRoot
@@ -34,8 +34,8 @@ if ($pyExit -eq 0 -and (Test-Path dist\Workbench.exe)) {
     $mb = [math]::Round((Get-Item dist\Workbench.exe).Length / 1MB, 1)
     Write-Host ""
     Write-Host "[OK] 构建完成: dist\Workbench.exe ($mb MB)  @ $((Get-Item dist\Workbench.exe).LastWriteTime)" -ForegroundColor Green
-    Write-Host "     双击运行 → 弹出原生窗口（无浏览器外壳），以 exe 所在文件夹为工作根"
-    Write-Host "     指定工作根: Workbench.exe D:\notes"
+    Write-Host "     双击运行 → 弹出原生窗口；默认恢复上次工作区，无历史时显示欢迎页"
+    Write-Host "     指定工作区: Workbench.exe D:\notes"
 } else {
     Write-Host "[FAIL] 构建失败 (PyInstaller exit=$pyExit)，未生成新 exe。" -ForegroundColor Red
     Write-Host "       最常见原因: 仍有 Workbench 实例占用文件锁未释放, 确认进程已退出后重试。" -ForegroundColor Red
