@@ -537,6 +537,16 @@
         run: () => {
           if (window.wbChromeActions && window.wbChromeActions.run) window.wbChromeActions.run("help");
         } });
+    A({ id: "view.toggleSidebar", name: "视图: 折叠 / 展开侧栏", hint: "Activity Bar", icon: "sidebarRight",
+        enabled: () => {
+          const api = window.wbChromeActions;
+          if (!api || !api.actionState) return "界面动作尚未就绪";
+          const st = api.actionState("sidebar.toggle");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbChromeActions && window.wbChromeActions.run) window.wbChromeActions.run("sidebar.toggle");
+        } });
     // 视图切换
     [["资源管理器", "files", "folder"], ["源代码管理", "git", "git"],
      ["搜索", "search", "search"], ["便签 / Todo", "notes", "checkSquare"],
@@ -1137,6 +1147,11 @@
       if (typeof window.toggleTheme !== "function") return { enabled: false, reason: "主题切换尚未就绪" };
       return { enabled: true, reason: "" };
     }
+    if (action === "sidebar.toggle") {
+      const api = window.wbSidebarActions;
+      if (!api || !api.actionState) return { enabled: false, reason: "侧栏动作尚未就绪" };
+      return api.actionState("toggle");
+    }
     return { enabled: false, reason: "未知界面动作" };
   }
 
@@ -1149,6 +1164,11 @@
     if (action === "settings") { window.openSettings(); return true; }
     if (action === "help") { openHelp(); return true; }
     if (action === "theme") { window.toggleTheme(); return true; }
+    if (action === "sidebar.toggle") {
+      if (window.wbSidebarActions && window.wbSidebarActions.run) {
+        return window.wbSidebarActions.run("toggle");
+      }
+    }
     return false;
   }
 
@@ -1159,6 +1179,7 @@
       theme: document.documentElement.getAttribute("data-theme") || "dark",
       settingsReady: !!$("#settings-overlay"),
       helpReady: !!$("#help-overlay"),
+      sidebarCollapsed: document.body.classList.contains("sidebar-collapsed"),
     }),
   };
 

@@ -2579,12 +2579,53 @@ function setSidebarCollapsed(collapsed) {
   document.body.classList.toggle("sidebar-collapsed", sidebarCollapsed);
   const side = $("#sidebar");
   const rz = $("#sidebar-resizer");
+  const toggle = $("#act-sidebar-toggle");
   if (side) side.setAttribute("aria-hidden", sidebarCollapsed ? "true" : "false");
   if (rz) rz.classList.toggle("hidden", sidebarCollapsed);
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", sidebarCollapsed ? "true" : "false");
+    toggle.title = sidebarCollapsed ? "展开侧栏" : "折叠侧栏";
+  }
   localStorage.setItem("wb-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
   if (!wsRestoring && !wsSuspendSave && typeof saveWorkspace === "function") saveWorkspace();
   try { window.dispatchEvent(new Event("resize")); } catch {}
 }
+function sidebarActionState(action) {
+  if (action === "toggle") return { enabled: true, reason: "" };
+  if (action === "collapse") {
+    return sidebarCollapsed
+      ? { enabled: false, reason: "侧栏已折叠" }
+      : { enabled: true, reason: "" };
+  }
+  if (action === "expand") {
+    return sidebarCollapsed
+      ? { enabled: true, reason: "" }
+      : { enabled: false, reason: "侧栏已展开" };
+  }
+  return { enabled: false, reason: "未知侧栏动作" };
+}
+function runSidebarAction(action) {
+  const st = sidebarActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "toggle") {
+    setSidebarCollapsed(!sidebarCollapsed);
+    setMsg(sidebarCollapsed ? "已折叠侧栏" : "已展开侧栏", "ok");
+    return true;
+  }
+  if (action === "collapse" || action === "expand") {
+    setSidebarCollapsed(action === "collapse");
+    setMsg(action === "collapse" ? "已折叠侧栏" : "已展开侧栏", "ok");
+    return true;
+  }
+  return false;
+}
+window.wbSidebarActions = {
+  actionState: sidebarActionState,
+  run: runSidebarAction,
+};
 function switchView(view) {
   if (!view || !$("#view-" + view)) return;
   activeView = view;
@@ -2599,7 +2640,7 @@ function switchView(view) {
   if (view === "ecosystem" && window.focusEcosystem) window.focusEcosystem();
   if (!wsRestoring && !wsSuspendSave && typeof saveWorkspace === "function") saveWorkspace();
 }
-document.querySelectorAll(".act").forEach(btn => {
+document.querySelectorAll("#activitybar .act[data-view]").forEach(btn => {
   btn.onclick = () => {
     const view = btn.dataset.view;
     if (view === activeView && !sidebarCollapsed) {
@@ -2610,6 +2651,11 @@ document.querySelectorAll(".act").forEach(btn => {
     switchView(view);
   };
 });
+const sidebarToggle = $("#act-sidebar-toggle");
+if (sidebarToggle) sidebarToggle.onclick = () => {
+  if (window.wbChromeActions && wbChromeActions.run) wbChromeActions.run("sidebar.toggle");
+  else runSidebarAction("toggle");
+};
 setSidebarCollapsed(sidebarCollapsed);
 
 $("#btn-refresh").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("refreshTree");
