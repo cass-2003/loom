@@ -30,6 +30,16 @@ function setButtonDisabled(el, disabled, reason) {
   el.title = disabled ? reason : el.dataset.enabledTitle;
 }
 
+function setStatusBranchState(stateInfo) {
+  const el = document.querySelector("#status-branch");
+  if (!el) return;
+  const enabled = !!(stateInfo && stateInfo.enabled);
+  el.classList.toggle("status-clickable", enabled);
+  el.classList.toggle("disabled", !enabled);
+  el.setAttribute("aria-disabled", enabled ? "false" : "true");
+  el.title = enabled ? "筛选 Git 历史分支" : ((stateInfo && stateInfo.reason) || "Git 分支不可用");
+}
+
 function gitActionState(action) {
   if (!gitState.repo) return { enabled: false, reason: "当前目录不在 Git 仓库内" };
   if (action === "push" && !gitState.hasHead) {
@@ -76,6 +86,18 @@ function runGitBranchOps(anchor) {
   return true;
 }
 
+function runGitBranchFilter(anchor) {
+  const st = gitActionState("branchFilter");
+  if (!st.enabled) {
+    setGitOut(st.reason || "当前不可用", false);
+    return false;
+  }
+  const target = anchor || document.querySelector("#git-branch-filter") || document.querySelector("#status-branch");
+  if (gitState.branchFilterOpen) closeBranchFilterMenu();
+  else renderBranchFilterMenu(target);
+  return true;
+}
+
 async function runGitAction(action) {
   const st = gitActionState(action);
   if (!st.enabled) {
@@ -87,6 +109,9 @@ async function runGitAction(action) {
   }
   if (action === "branchOps") {
     return runGitBranchOps();
+  }
+  if (action === "branchFilter") {
+    return runGitBranchFilter();
   }
   if (action === "stash") {
     return runGitStashSave();
@@ -121,6 +146,7 @@ function setGitControls(repo, d = {}) {
   setButtonDisabled(document.querySelector("#git-stash-save"), !stashState.enabled, stashState.reason || noChanges);
   setButtonDisabled(document.querySelector("#git-branch-filter"), !filterState.enabled, filterState.reason || noHistory);
   setButtonDisabled(document.querySelector("#git-branch-ops"), !branchState.enabled, branchState.reason || noHistory);
+  setStatusBranchState(filterState);
   document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
     const act = btn.dataset.act;
     const empty = act === "stage-all" ? unstaged.length === 0 : staged.length === 0;
@@ -179,6 +205,7 @@ async function refreshGit() {
       : `<div class="scm-empty">未打开工作区，打开文件夹后可使用 Git</div>`;
     badge.classList.add("hidden");
     stBranch.textContent = "";
+    setStatusBranchState({ enabled: false, reason: hasWorkspace ? "当前目录不在 Git 仓库内" : "请先打开工作区" });
     document.querySelector("#git-log").innerHTML = `<div class="scm-empty">${hasWorkspace ? "初始化仓库后显示提交图" : "未打开工作区"}</div>`;
     document.querySelector("#scm-stash").classList.add("hidden");
     const ib = document.querySelector("#git-init");
@@ -804,10 +831,12 @@ function initGit() {
   const filterBtn = document.querySelector("#git-branch-filter");
   if (filterBtn) filterBtn.onclick = (e) => {
     e.stopPropagation();
-    if (!gitState.repo) { setGitOut("当前目录不在 Git 仓库内", false); return; }
-    if (!gitState.hasHead) { setGitOut("仓库还没有提交历史，首次提交后才能筛选分支历史", false); return; }
-    if (gitState.branchFilterOpen) closeBranchFilterMenu();
-    else renderBranchFilterMenu(filterBtn);
+    runGitBranchFilter(filterBtn);
+  };
+  const statusBranch = document.querySelector("#status-branch");
+  if (statusBranch) statusBranch.onclick = (e) => {
+    e.stopPropagation();
+    runGitBranchFilter(statusBranch);
   };
 
   // 储藏（保存当前更改）

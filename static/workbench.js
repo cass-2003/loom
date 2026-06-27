@@ -672,6 +672,18 @@
           typeof switchView === "function" && switchView("git");
           if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("branchOps");
         } });
+    A({ id: "git.branchFilter", name: "Git: 筛选历史分支", hint: "Status Bar", icon: "filter",
+        requires: ["workspace", "gitRepo"],
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("branchFilter");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          typeof switchView === "function" && switchView("git");
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("branchFilter");
+        } });
     A({ id: "git.stash", name: "Git: 储藏当前更改", hint: "Stash", icon: "download",
         requires: ["workspace", "gitRepo"], risk: "write",
         enabled: () => {

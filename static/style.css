@@ -1031,6 +1031,11 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   font-size: 12px; color: var(--muted); flex-shrink: 0;
 }
 #status-branch { display: inline-flex; align-items: center; gap: 5px; }
+#status-branch.status-clickable {
+  cursor: pointer; color: var(--text-dim); border-radius: 5px; padding: 2px 6px; margin-left: -6px;
+}
+#status-branch.status-clickable:hover { color: var(--text); background: var(--panel); }
+#status-branch.disabled { opacity: .55; cursor: default; }
 #status-file { max-width: min(42vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-msg.ok { color: var(--accent2); }
 #status-msg.err { color: var(--danger); }
