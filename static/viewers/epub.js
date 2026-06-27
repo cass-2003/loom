@@ -266,6 +266,9 @@
       })
       .catch(function (err) {
         loadState = "error";
+        if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+          window.wbViewer.reportError(host, err);
+        }
         updateToolbarState();
         msg.textContent = "电子书加载失败：" + (err && err.message || err);
       });

@@ -127,6 +127,9 @@
         try {
           face = new FontFace(family, "url(" + JSON.stringify(url) + ")");
         } catch (e) {
+          if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+            window.wbViewer.reportError(host, e);
+          }
           status.className = "fontv-status err";
           status.textContent = "无法创建字体：" + (e && e.message ? e.message : e);
           return;
@@ -174,6 +177,9 @@
           root.appendChild(chars);
         }).catch(function (err) {
           if (!state || !host.contains(root)) return;
+          if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+            window.wbViewer.reportError(host, err);
+          }
           status.className = "fontv-status err";
           status.textContent = "字体加载失败：" + (err && err.message ? err.message : err);
         });

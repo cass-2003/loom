@@ -940,8 +940,17 @@ function currentViewerContext() {
   };
 }
 
+function reportViewerError(host, err) {
+  if (!host || host !== state.viewerHost) return false;
+  const msg = err && err.message ? err.message : String(err || "查看器加载失败");
+  viewerContext.error = msg;
+  applyViewerActionState();
+  return true;
+}
+
 window.wbViewer = {
   context: currentViewerContext,
+  reportError: reportViewerError,
   actionState: viewerActionState,
   run: async (action) => {
     const st = viewerActionState(action);

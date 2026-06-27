@@ -90,6 +90,9 @@
   }
 
   function showError(stage, title, detail) {
+    if (mountState && mountState.host && window.wbViewer && typeof window.wbViewer.reportError === "function") {
+      window.wbViewer.reportError(mountState.host, new Error(title + (detail ? ": " + detail : "")));
+    }
     stage.innerHTML =
       '<div style="color:#e0e0e0;font:13px/1.7 system-ui,sans-serif;max-width:560px;text-align:center;">' +
       '<div style="font-size:34px;margin-bottom:10px;opacity:.55;">🖼️</div>' +

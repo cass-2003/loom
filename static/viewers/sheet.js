@@ -180,6 +180,9 @@
       })
       .catch(function (err) {
         if (!_state || _state.host !== host) return;
+        if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+          window.wbViewer.reportError(host, err);
+        }
         body.innerHTML = "";
         var e = document.createElement("div");
         e.className = "wb-sheet-error";

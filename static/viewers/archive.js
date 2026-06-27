@@ -412,6 +412,9 @@
       state.root = root;
 
       if (!window.JSZip) {
+        if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+          window.wbViewer.reportError(host, new Error("JSZip 未加载"));
+        }
         showMsg(root, "JSZip 未加载", "压缩包查看器依赖 window.JSZip", true);
         return;
       }
@@ -525,6 +528,9 @@
         updateActionState();
       }).catch(function (err) {
         if (state.root !== root) return;
+        if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+          window.wbViewer.reportError(host, err);
+        }
         showMsg(root, "无法打开压缩包",
           (err && err.message ? err.message : String(err)) +
           "（仅支持 ZIP 容器格式；.7z/.rar/.tar.gz 暂不支持）", true);

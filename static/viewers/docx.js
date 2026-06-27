@@ -163,6 +163,9 @@
         })
         .catch(function (err) {
           if (myToken !== _renderToken) return;
+          if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+            window.wbViewer.reportError(host, err);
+          }
           showMessage(
             host,
             "无法渲染该 Word 文档：" + (err && err.message ? err.message : err),
