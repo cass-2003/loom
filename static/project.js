@@ -157,6 +157,44 @@
     }
     return null;
   }
+  function recentValidationTaskSeed(record) {
+    const snap = workspaceSummary();
+    const roots = snap && snap.roots && snap.roots.length ? snap.roots : [];
+    const activeFile = snap && snap.activeFile ? snap.activeFile : "none";
+    return {
+      title: `验证恢复: ${record.title}`,
+      goal: record.next || record.goal || "从最近 Project Memory 验证记录恢复下一轮工作，并形成新的验证闭环。",
+      plan: [
+        "打开 Project Memory / Progress 查看最近验证证据",
+        "确认上一轮遗留的 Next Goal 或风险",
+        "实施一个单一范围的修复或恢复性增强",
+        "运行语法检查、针对性 smoke、diff 检查和安装包构建",
+        "把验证证据写回 Project Memory 并准备原子提交",
+      ],
+      evidence: record.evidence ? [record.evidence] : [],
+      log: [
+        "Created from Project Memory recent validation card",
+        `Validation record: ${record.title}`,
+        `Workspace: ${window.currentWorkspaceId || window.currentRoot || "unknown"}`,
+        `Active file: ${activeFile}`,
+        ...roots.map((r, i) => `Root[${i}]: ${r}`),
+      ],
+      next: record.next || "Continue from the latest validation evidence.",
+    };
+  }
+  async function createTaskFromRecentValidation(record) {
+    if (!record) {
+      if (window.setMsg) setMsg("暂无可创建任务的验证记录", "warn");
+      return false;
+    }
+    if (!window.addWorkflowTask) {
+      if (window.setMsg) setMsg("任务面板尚未就绪", "warn");
+      return false;
+    }
+    const task = await window.addWorkflowTask(recentValidationTaskSeed(record));
+    if (task && window.setMsg) setMsg("已从最近验证创建任务", "ok");
+    return !!task;
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
@@ -187,10 +225,12 @@
       : "<b>最近记录</b><span>暂无可恢复记录。可以追加验证或决策记录。</span>";
     const recentValidation = extractRecentValidation();
     if (validation) {
+      const taskReady = !!window.addWorkflowTask;
       validation.innerHTML = recentValidation
         ? `<b>最近验证</b><button data-target="progress">${esc(recentValidation.title)}</button>`
           + `<span>${esc(recentValidation.evidence || recentValidation.goal || "暂无验证摘要")}</span>`
           + (recentValidation.next ? `<em>${esc(recentValidation.next)}</em>` : "")
+          + `<button class="project-validation-task" data-act="validation-task"${taskReady ? "" : " disabled title=\"任务面板尚未就绪\""}>从验证创建任务</button>`
         : "<b>最近验证</b><span>暂无验证记录。运行检查后可追加验证记录。</span>";
     }
     if (road.ready) {
@@ -206,6 +246,8 @@
       validation.querySelectorAll("button[data-target]").forEach(b => {
         b.onclick = () => setProjectDoc(b.dataset.target);
       });
+      const taskBtn = validation.querySelector("[data-act='validation-task']");
+      if (taskBtn) taskBtn.onclick = () => createTaskFromRecentValidation(recentValidation);
     }
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;

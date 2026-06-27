@@ -1334,6 +1334,14 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .project-validation button:hover { color: var(--text); text-decoration: underline; }
 .project-validation span { display: block; max-height: 3.1em; overflow: hidden; }
 .project-validation em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; }
+.project-validation-task {
+  margin-top: 6px !important; color: var(--muted) !important; font-weight: 650 !important;
+}
+.project-validation-task:hover { color: var(--accent2) !important; }
+.project-validation-task:disabled {
+  color: var(--muted) !important; opacity: .55; cursor: not-allowed;
+  text-decoration: none !important;
+}
 .project-roadmap-brief {
   margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-soft);
 }
