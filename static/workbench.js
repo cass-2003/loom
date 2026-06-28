@@ -822,7 +822,16 @@
         } });
     A({ id: "git.refresh", name: "Git: 刷新状态", hint: "SCM", icon: "refresh",
         requires: ["workspace"],
-        run: () => { typeof switchView === "function" && switchView("git"); typeof refreshGit === "function" && refreshGit(); } });
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("refresh");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          typeof switchView === "function" && switchView("git");
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("refresh");
+        } });
     A({ id: "git.push", name: "Git: 推送", hint: "SCM", icon: "upload",
         requires: ["workspace", "gitRepo"], risk: "network",
         enabled: () => {

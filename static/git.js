@@ -87,6 +87,7 @@ function applyGitActionState() {
   const stashState = gitActionState("stash");
   const filterState = gitActionState("branchFilter");
   const branchState = gitActionState("branchOps");
+  const refreshState = gitActionState("refresh");
   const stageAllState = gitActionState("stageAll");
   const unstageAllState = gitActionState("unstageAll");
   setButtonDisabled(document.querySelector("#git-commit"), !commitState.enabled, commitState.reason || "提交当前更改");
@@ -94,6 +95,7 @@ function applyGitActionState() {
   setButtonDisabled(document.querySelector("#git-stash-save"), !stashState.enabled, stashState.reason || "储藏当前更改");
   setButtonDisabled(document.querySelector("#git-branch-filter"), !filterState.enabled, filterState.reason || "筛选 Git 历史分支");
   setButtonDisabled(document.querySelector("#git-branch-ops"), !branchState.enabled, branchState.reason || "分支操作");
+  setButtonDisabled(document.querySelector("#git-refresh"), !refreshState.enabled, refreshState.reason || "刷新");
   setStatusBranchState(filterState);
   document.querySelectorAll(".scm-gact[data-act]").forEach(btn => {
     if (btn.id === "git-stash-save") return;
@@ -315,6 +317,7 @@ window.escapeHtml = escapeHtml;
 /* ============ 源代码管理侧栏 ============ */
 async function refreshGit() {
   const token = ++gitRefreshSeq;
+  applyGitActionState();
   const stagedSec = document.querySelector("#scm-staged");
   const stagedEl = document.querySelector("#git-staged");
   const stagedCount = document.querySelector("#git-staged-count");
