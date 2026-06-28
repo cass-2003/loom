@@ -206,6 +206,7 @@ function ensureVditor(initialValue, onReady) {
       if (typeof vd.inst.restoreDocumentSession === "function") {
         try { vd.inst.restoreDocumentSession(true); } catch (_) {}
       }
+      applyMarkdownToolbarState();
     },
   });
 }
@@ -1333,6 +1334,7 @@ function activateTab(path) {
     const mount = () => { vd.curPath = path; vditorSetValue(content); };
     ensureVditor(content, mount);   // 就绪→立即挂载；未就绪→记为 pendingMount，after() 跑最新那个
     document.body.classList.add("markdown-active");
+    applyMarkdownToolbarState();
   } else {
     $("#editor").value = tab.draft != null ? tab.draft : "";
     gutterLineCount = -1; curGLine = -1;  // 强制重建行号
@@ -1744,6 +1746,14 @@ function toggleMenu(menu, others) {
   menu.classList.toggle("hidden", !willOpen);
 }
 
+function openLegacyTocMenu() {
+  toggleMenu($("#toc-menu"), [$("#export-menu")]);
+}
+
+function openLegacyExportMenu() {
+  toggleMenu($("#export-menu"), [$("#toc-menu")]);
+}
+
 function setActionDisabled(el, disabled, reason) {
   if (!el) return;
   if (el.dataset.enabledTitle === undefined) el.dataset.enabledTitle = el.title || "";
@@ -1779,15 +1789,11 @@ function applyMarkdownToolbarState() {
 
 $("#btn-toc").onclick = (e) => {
   e.stopPropagation();
-  const st = markdownOutlineActionState("menu");
-  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return; }
-  toggleMenu($("#toc-menu"), [$("#export-menu")]);
+  runMarkdownOutlineAction("menu");
 };
 $("#btn-md-export").onclick = (e) => {
   e.stopPropagation();
-  const st = markdownExportActionState("menu");
-  if (!st.enabled) { setMsg(st.reason || "当前不可用", "warn"); return; }
-  toggleMenu($("#export-menu"), [$("#toc-menu")]);
+  runMarkdownExportAction("menu");
 };
 // 点击别处关闭浮层菜单
 document.addEventListener("mousedown", (e) => {
@@ -1833,7 +1839,7 @@ function runMarkdownExportAction(action) {
   if (action === "html") { exportHtml(); return true; }
   if (action === "print") { printMarkdown(); return true; }
   if (action === "menu") {
-    toggleMenu($("#export-menu"), [$("#toc-menu")]);
+    openLegacyExportMenu();
     return true;
   }
   return false;
@@ -1885,8 +1891,7 @@ function runMarkdownOutlineAction(action) {
   }
   if (action === "menu") {
     if (state.kind === "md") return focusVditorOutline();
-    const btn = $("#btn-toc");
-    if (btn) btn.click();
+    openLegacyTocMenu();
     return true;
   }
   return false;
