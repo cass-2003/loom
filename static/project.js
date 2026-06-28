@@ -60,6 +60,7 @@
         active = btn.dataset.name;
         renderTabs();
         renderDoc();
+        refreshProjectActions();
       };
     });
   }
@@ -90,6 +91,23 @@
       if (!DOCS.some(d => d.name === key)) return { enabled: false, reason: "未知的项目记忆文档" };
     }
     return { enabled: true, reason: "" };
+  }
+  function setProjectButtonState(el, state, enabledTitle) {
+    if (!el) return;
+    el.disabled = !state.enabled;
+    el.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+    el.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+  }
+  function refreshProjectActions() {
+    setProjectButtonState(
+      $("#project-open-source"),
+      projectActionState("edit", active),
+      active === "roadmap" ? "查看只读路线" : "打开当前记忆文件"
+    );
+    setProjectButtonState($("#project-add-decision"), projectActionState("append", "decision"), "追加决策记录");
+    setProjectButtonState($("#project-add-validation"), projectActionState("append", "validation"), "追加验证记录");
+    const copyRoadmap = $("#project-latest [data-act='copy-roadmap']");
+    if (copyRoadmap) setProjectButtonState(copyRoadmap, projectActionState("copyRoadmap"), "复制路线");
   }
   function roadmapSummary() {
     const item = docByName("roadmap");
@@ -316,7 +334,10 @@
     }
     renderTaskContinuity();
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
-    if (copyRoadmap) copyRoadmap.onclick = copyRoadmapBrief;
+    if (copyRoadmap) {
+      copyRoadmap.onclick = copyRoadmapBrief;
+      setProjectButtonState(copyRoadmap, projectActionState("copyRoadmap"), "复制路线");
+    }
     if (openLatest) {
       openLatest.disabled = !top;
       openLatest.title = top ? "打开最近记录来源" : "暂无最近记录";
@@ -346,10 +367,14 @@
       meta.textContent = `${item.file}${item.readonly ? " · 只读路线" : ""} · ${stamp}`;
     }
     if (openSource) {
-      openSource.disabled = false;
-      openSource.title = item.readonly ? "路线为只读资料，可在此处查看或复制" : "打开当前记忆文件";
+      setProjectButtonState(
+        openSource,
+        projectActionState("edit", active),
+        item.readonly ? "路线为只读资料，可在此处查看或复制" : "打开当前记忆文件"
+      );
     }
     renderRecovery();
+    refreshProjectActions();
     doc.textContent = item.content || "（空）";
   }
 
@@ -476,6 +501,7 @@
     const validation = $("#project-add-validation");
     if (validation) validation.onclick = () => appendProjectRecord("validation");
     renderTabs();
+    refreshProjectActions();
     loadProjectState();
   }
 
@@ -517,5 +543,8 @@
   window.focusProjectMemory = () => {
     if (!docs.length) loadProjectState();
     else renderRecovery();
+    refreshProjectActions();
   };
+  window.refreshProjectActions = refreshProjectActions;
+  window.addEventListener("wb:workspace-state", () => refreshProjectActions());
 })();
