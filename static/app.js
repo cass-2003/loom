@@ -267,6 +267,8 @@ function renderNode(entry) {
   row.className = "node-row";
   row.dataset.path = entry.path;
   row.dataset.type = entry.type;
+  row.setAttribute("role", "treeitem");
+  row.setAttribute("tabindex", "0");
 
   const [iconName, iconCls] = fileIcon(entry);
   const twist = document.createElement("span");
@@ -307,6 +309,11 @@ function renderNode(entry) {
     row.append(twist, ico, name);
     node.append(row);
   }
+  row.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.preventDefault();
+    row.click();
+  });
   bindRowContextMenu(row, entry);
   return node;
 }
@@ -738,11 +745,32 @@ function waitFor(cond, tries = 50) {
 
 // ---------- 上下文菜单 ----------
 let ctxMenuEl = null;
+let ctxMenuReturnFocus = null;
 function closeCtxMenu() {
+  const returnFocus = ctxMenuReturnFocus;
   if (ctxMenuEl) { ctxMenuEl.remove(); ctxMenuEl = null; }
+  ctxMenuReturnFocus = null;
+  if (returnFocus && document.contains(returnFocus) && typeof returnFocus.focus === "function") {
+    try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
+  }
 }
-function showCtxMenu(x, y, items) {
+function menuEnabledItems(menu) {
+  return Array.from(menu.querySelectorAll(".ctx-item[aria-disabled='false']"));
+}
+function focusMenuItem(menu, next) {
+  const enabled = menuEnabledItems(menu);
+  if (!enabled.length) return;
+  const active = document.activeElement;
+  let idx = enabled.indexOf(active);
+  if (next === "first") idx = 0;
+  else if (next === "last") idx = enabled.length - 1;
+  else if (next > 0) idx = idx < 0 ? 0 : (idx + 1) % enabled.length;
+  else if (next < 0) idx = idx < 0 ? enabled.length - 1 : (idx - 1 + enabled.length) % enabled.length;
+  enabled[idx].focus();
+}
+function showCtxMenu(x, y, items, returnFocusEl) {
   closeCtxMenu();
+  ctxMenuReturnFocus = returnFocusEl || document.activeElement || null;
   const menu = document.createElement("div");
   menu.id = "ctx-menu";
   menu.setAttribute("role", "menu");
@@ -773,9 +801,30 @@ function showCtxMenu(x, y, items) {
     };
     el.onclick = activate;
     el.onkeydown = (ev) => {
-      if (ev.key !== "Enter" && ev.key !== " ") return;
-      ev.preventDefault();
-      activate();
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        activate();
+        return;
+      }
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        focusMenuItem(menu, 1);
+        return;
+      }
+      if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        focusMenuItem(menu, -1);
+        return;
+      }
+      if (ev.key === "Home") {
+        ev.preventDefault();
+        focusMenuItem(menu, "first");
+        return;
+      }
+      if (ev.key === "End") {
+        ev.preventDefault();
+        focusMenuItem(menu, "last");
+      }
     };
     menu.appendChild(el);
   }
@@ -787,6 +836,7 @@ function showCtxMenu(x, y, items) {
   menu.style.left = Math.max(4, x) + "px";
   menu.style.top = Math.max(4, y) + "px";
   ctxMenuEl = menu;
+  setTimeout(() => focusMenuItem(menu, "first"), 0);
 }
 // 点击空白 / 滚动 / Esc 关闭
 document.addEventListener("mousedown", (e) => {
@@ -800,14 +850,8 @@ function escHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// 给某个 .node-row 绑定右键菜单
-function bindRowContextMenu(row, entry) {
-  row.addEventListener("click", () => setExplorerSelection(entry, row), { capture: true });
-  row.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setExplorerSelection(entry, row);
-    const isDir = entry.type === "dir";
+function explorerContextItems(entry) {
+  const isDir = entry.type === "dir";
     const gitHistoryState = explorerActionState("history");
     const gitBlameState = explorerActionState("blame");
     const newFileState = explorerActionState("newFile");
@@ -867,7 +911,27 @@ function bindRowContextMenu(row, entry) {
       reason: deleteState.reason,
       action: () => runExplorer("delete"),
     });
-    showCtxMenu(e.clientX, e.clientY, items);
+  return items;
+}
+
+// 给某个 .node-row 绑定右键菜单
+function bindRowContextMenu(row, entry) {
+  row.addEventListener("click", () => setExplorerSelection(entry, row), { capture: true });
+  const openMenu = (x, y) => {
+    setExplorerSelection(entry, row);
+    showCtxMenu(x, y, explorerContextItems(entry), row);
+  };
+  row.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenu(e.clientX, e.clientY);
+  });
+  row.addEventListener("keydown", (e) => {
+    if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = row.getBoundingClientRect();
+    openMenu(Math.min(r.left + 28, window.innerWidth - 12), Math.min(r.top + 18, window.innerHeight - 12));
   });
 }
 // 确保文件夹已展开（懒加载完成）
