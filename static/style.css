@@ -1468,6 +1468,9 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .project-task-continuity > span.project-continuity-session {
   margin-top: 3px; color: var(--accent2);
 }
+.project-task-continuity > span.project-continuity-layout {
+  margin-top: 3px; color: var(--text-dim);
+}
 .project-task-continuity > em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; }
 .project-ecosystem-continuity {
   border-color: color-mix(in srgb, var(--warn) 24%, var(--border-soft));

@@ -317,6 +317,16 @@
     const sessionLogLine = latestSession && latestSession.latestLog
       ? `会话日志 · ${latestSession.latestLog}`
       : "";
+    const layout = latestSession && latestSession.layout;
+    const sessionLayoutLine = layout
+      ? [
+        layout.workspace ? `工作区 ${layout.workspace}` : "",
+        layout.file ? `文件 ${layout.file}` : "",
+        layout.group ? `焦点 ${layout.group}` : "",
+        layout.tabs ? `标签 ${layout.tabs}` : "",
+        layout.sideOrient ? `分屏 ${layout.sideOrient}` : "",
+      ].filter(Boolean).join(" · ")
+      : "";
     const copyState = taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪");
     const sessionCopyState = taskActionState("copySessionRecovery", "Session 恢复包尚未就绪");
     host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
@@ -330,6 +340,7 @@
       + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`
       + (logLine ? `<span class="project-continuity-log">${esc(logLine)}</span>` : "")
       + `<em>${esc(sessionLine)}</em>`
+      + (sessionLayoutLine ? `<span class="project-continuity-layout">${esc(sessionLayoutLine)}</span>` : "")
       + (sessionOutputLine ? `<span class="project-continuity-session">${esc(sessionOutputLine)}</span>` : "")
       + (sessionEvidenceLine ? `<span class="project-continuity-session">${esc(sessionEvidenceLine)}</span>` : "")
       + (sessionLogLine ? `<span class="project-continuity-log">${esc(sessionLogLine)}</span>` : "")

@@ -373,6 +373,7 @@
         title: latestSession.title || latestSession.taskTitle || "未命名会话",
         status: latestSession.status || "draft",
         taskId: latestSession.taskId || "",
+        layout: sessionLayoutSummary(latestSession),
         outputs: Array.isArray(latestSession.outputs) ? latestSession.outputs.length : 0,
         latestOutput: Array.isArray(latestSession.outputs) && latestSession.outputs.length
           ? latestSession.outputs[latestSession.outputs.length - 1]
