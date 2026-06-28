@@ -25,8 +25,9 @@
   // images、lib/vscode.js）都按此目录解析。
   var VIEWER_BASE = "/static/vendor/pdfjs/viewer.html";
 
-  // 记住当前挂载的 iframe，供无参 unmount() 释放。
+  // 记住当前挂载会话，供无参 unmount() 释放并让旧 iframe 回调失效。
   var currentIframe = null;
+  var currentSession = null;
 
   function buildSrc(path) {
     // file 用同源相对地址，交给 pdf.js 通用查看器的 ?file= 自动打开逻辑。
@@ -37,12 +38,130 @@
   }
 
   function releaseCurrent() {
+    if (currentSession && currentSession.timer) {
+      clearInterval(currentSession.timer);
+    }
+    if (currentSession && currentSession.timeout) {
+      clearTimeout(currentSession.timeout);
+    }
+    currentSession = null;
     if (currentIframe) {
       try {
         currentIframe.src = "about:blank";
       } catch (e) {}
       currentIframe = null;
     }
+  }
+
+  function isCurrentSession(session, host) {
+    return !!(session && currentSession === session && session.host === host && document.body.contains(host));
+  }
+
+  function setLoading(host, text) {
+    var overlay = host.querySelector(".viewer-pdf-loading");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "viewer-pdf-loading";
+      overlay.setAttribute("role", "status");
+      overlay.setAttribute("aria-live", "polite");
+      host.appendChild(overlay);
+    }
+    overlay.textContent = text || "PDF 正在加载…";
+  }
+
+  function clearLoading(host) {
+    var overlay = host.querySelector(".viewer-pdf-loading");
+    if (overlay) overlay.remove();
+  }
+
+  function reportLoading(host) {
+    if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+      window.wbViewer.reportLoading(host, "PDF 正在加载，暂不能创建验证任务");
+    }
+  }
+
+  function reportReady(host) {
+    if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+      window.wbViewer.reportReady(host);
+    }
+  }
+
+  function reportError(host, err) {
+    if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
+      window.wbViewer.reportError(host, err);
+    }
+  }
+
+  function markReady(session) {
+    if (!isCurrentSession(session, session.host) || session.ready) return;
+    session.ready = true;
+    if (session.timer) clearInterval(session.timer);
+    if (session.timeout) clearTimeout(session.timeout);
+    clearLoading(session.host);
+    reportReady(session.host);
+  }
+
+  function markFailed(session, message) {
+    if (!isCurrentSession(session, session.host) || session.failed) return;
+    session.failed = true;
+    if (session.timer) clearInterval(session.timer);
+    if (session.timeout) clearTimeout(session.timeout);
+    clearLoading(session.host);
+    reportError(session.host, new Error(message || "PDF 加载失败"));
+  }
+
+  function maybeMarkReady(session) {
+    if (!isCurrentSession(session, session.host) || session.failed || session.ready) return;
+    if (session.preflightOk && session.frameLoaded) markReady(session);
+  }
+
+  function looksLikePdf(bytes) {
+    if (!bytes || bytes.length < 5) return false;
+    var limit = Math.min(bytes.length - 4, 1024);
+    for (var i = 0; i < limit; i++) {
+      if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2d) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function preflightPdf(session, path) {
+    if (!path) {
+      markFailed(session, "缺少 PDF 文件路径");
+      return;
+    }
+    fetch(window.rawUrl(path)).then(function (res) {
+      if (!res.ok) throw new Error("PDF 文件读取失败: HTTP " + res.status);
+      if (!res.body || typeof res.body.getReader !== "function") {
+        return res.arrayBuffer().then(function (buf) {
+          return new Uint8Array(buf).slice(0, 1024);
+        });
+      }
+      var reader = res.body.getReader();
+      return reader.read().then(function (chunk) {
+        try { reader.cancel(); } catch (e) {}
+        return chunk && chunk.value ? chunk.value : new Uint8Array();
+      });
+    }).then(function (bytes) {
+      if (!isCurrentSession(session, session.host)) return;
+      if (!looksLikePdf(bytes)) {
+        markFailed(session, "文件内容不是有效的 PDF");
+        return;
+      }
+      session.preflightOk = true;
+      if (!session.frameLoaded) setLoading(session.host, "PDF 文件已校验，等待查看器加载…");
+      maybeMarkReady(session);
+    }).catch(function (err) {
+      if (!isCurrentSession(session, session.host)) return;
+      markFailed(session, err && err.message ? err.message : "PDF 文件读取失败");
+    });
+  }
+
+  function startTimeout(session) {
+    session.timeout = setTimeout(function () {
+      markFailed(session, "PDF 加载超时或查看器框架不可访问");
+    }, 45000);
   }
 
   window.registerViewer({
@@ -80,9 +199,36 @@
         host.style.position = "relative";
       }
 
+      setLoading(host, "PDF 正在加载…");
+      reportLoading(host);
+      var session = {
+        host: host,
+        iframe: iframe,
+        ready: false,
+        failed: false,
+        frameLoaded: false,
+        preflightOk: false,
+        timer: null,
+        timeout: null,
+      };
+      currentSession = session;
+
+      iframe.addEventListener("load", function () {
+        if (!isCurrentSession(session, host)) return;
+        if (session.failed) return;
+        session.frameLoaded = true;
+        if (!session.preflightOk) setLoading(host, "PDF 查看器已打开，校验文件…");
+        maybeMarkReady(session);
+      });
+      iframe.addEventListener("error", function () {
+        markFailed(session, "PDF 查看器框架加载失败");
+      });
+
       iframe.src = buildSrc(info && info.path);
       host.appendChild(iframe);
       currentIframe = iframe;
+      startTimeout(session);
+      preflightPdf(session, info && info.path);
     },
     unmount: function () {
       // app.js 调用时不传参，且随后会清空 #viewer-host；这里主动停掉 pdf.js。

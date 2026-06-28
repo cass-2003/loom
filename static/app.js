@@ -44,6 +44,7 @@ const viewerContext = {
   viewer: null,
   info: null,
   error: "",
+  loading: "",
 };
 
 // Workspace state is read by early UI helpers during startup, so keep it out of
@@ -984,6 +985,7 @@ function unmountViewer() {
   viewerContext.viewer = null;
   viewerContext.info = null;
   viewerContext.error = "";
+  viewerContext.loading = "";
   const hostWrap = $("#viewer-host");
   if (hostWrap) hostWrap.innerHTML = "";   // 清掉旧的内部容器
   state.viewerHost = null;
@@ -996,6 +998,7 @@ function viewerActionState(action) {
     if (!(viewerContext.viewer && viewerContext.info && tab && tab.kind === "viewer")) {
       return { enabled: false, reason: "需要打开查看器文件" };
     }
+    if (viewerContext.loading) return { enabled: false, reason: viewerContext.loading };
     if (viewerContext.error) return { enabled: false, reason: "查看器加载失败，不能创建验证任务" };
     if (!window.addWorkflowTask) return { enabled: false, reason: "任务面板尚未就绪" };
   }
@@ -1007,12 +1010,29 @@ function currentViewerContext() {
     viewer: viewerContext.viewer,
     info: viewerContext.info ? Object.assign({}, viewerContext.info) : null,
     error: viewerContext.error || "",
+    loading: viewerContext.loading || "",
   };
+}
+
+function reportViewerLoading(host, reason) {
+  if (!host || host !== state.viewerHost) return false;
+  viewerContext.loading = reason || "查看器正在加载";
+  viewerContext.error = "";
+  applyViewerActionState();
+  return true;
+}
+
+function reportViewerReady(host) {
+  if (!host || host !== state.viewerHost) return false;
+  viewerContext.loading = "";
+  applyViewerActionState();
+  return true;
 }
 
 function reportViewerError(host, err) {
   if (!host || host !== state.viewerHost) return false;
   const msg = err && err.message ? err.message : String(err || "查看器加载失败");
+  viewerContext.loading = "";
   viewerContext.error = msg;
   applyViewerActionState();
   return true;
@@ -1020,6 +1040,8 @@ function reportViewerError(host, err) {
 
 window.wbViewer = {
   context: currentViewerContext,
+  reportLoading: reportViewerLoading,
+  reportReady: reportViewerReady,
   reportError: reportViewerError,
   actionState: viewerActionState,
   run: async (action) => {
@@ -1070,6 +1092,7 @@ function mountViewer(viewer, info) {
   viewerContext.viewer = viewer;
   viewerContext.info = info || {};
   viewerContext.error = "";
+  viewerContext.loading = "";
   try {
     viewer.mount(host, info);
   } catch (e) {

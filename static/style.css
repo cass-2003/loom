@@ -658,6 +658,11 @@ body.markdown-active #btn-view-edit {
   flex-direction: column; }
 #viewer-host .viewer-error { margin: auto; padding: 20px; color: var(--text-dim);
   text-align: center; }
+.viewer-pdf-loading {
+  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); color: var(--text-dim);
+  font-size: 12px; pointer-events: none;
+}
 .viewer-actionbar {
   flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   min-height: 34px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft);
