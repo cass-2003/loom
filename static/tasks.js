@@ -291,8 +291,8 @@
     ], taskFilters.source);
     const filtered = visibleTasks().length;
     const hasFilter = taskFilters.status !== "all" || taskFilters.source !== "all";
-    if (clear) clear.classList.toggle("hidden", !hasFilter);
     if (copy) refreshCopyRecoveryButton();
+    refreshTaskFilterControls();
     next.textContent = latestTask
       ? `下一步：${latestTask.next || "打开最近任务，补充日志、证据或创建会话。"}`
       : "下一步：从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。";
@@ -364,6 +364,37 @@
     copy.title = st.enabled ? "复制恢复 brief" : (st.reason || "当前不可用");
   }
 
+  function taskFilterControlState() {
+    if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+    if (!!tasksLoading) return { enabled: false, reason: "任务正在加载" };
+    if (!tasksFresh()) return { enabled: false, reason: "任务尚未加载" };
+    if (!tasks.length) return { enabled: false, reason: "还没有可过滤的工作流任务" };
+    return { enabled: true, reason: "" };
+  }
+
+  function setTaskFilterControlState(el, state, enabledTitle) {
+    if (!el) return;
+    el.disabled = !state.enabled;
+    el.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+    el.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+  }
+
+  function refreshTaskFilterControls() {
+    const st = taskFilterControlState();
+    setTaskFilterControlState($("#task-status-filter"), st, "按任务状态过滤");
+    setTaskFilterControlState($("#task-source-filter"), st, "按任务来源过滤");
+    const clear = $("#task-clear-filter");
+    if (!clear) return;
+    const hasFilter = taskFilters.status !== "all" || taskFilters.source !== "all";
+    const clearState = hasFilter
+      ? st
+      : { enabled: false, reason: st.enabled ? "当前没有任务过滤" : st.reason };
+    clear.disabled = !clearState.enabled;
+    clear.setAttribute("aria-disabled", clearState.enabled ? "false" : "true");
+    clear.title = clearState.enabled ? "清除任务过滤" : (clearState.reason || "当前不可用");
+    clear.classList.toggle("hidden", !hasFilter && st.enabled);
+  }
+
   async function saveTasks(msg) {
     const res = await postJson("/api/workflow-tasks", { tasks });
     if (res.error) {
@@ -398,17 +429,20 @@
         if (currentWorkspaceKey() !== workspaceKey) return false;
         const host = $("#task-list");
         if (host) host.innerHTML = `<div class="task-error">任务加载失败: ${esc(e && e.message ? e.message : e)}</div>`;
+        refreshTaskFilterControls();
         return false;
       } finally {
         if (tasksLoading === loading) {
           tasksLoading = null;
           tasksLoadingWorkspaceKey = null;
           refreshTaskRefreshButtons();
+          refreshTaskFilterControls();
         }
       }
     })();
     tasksLoading = loading;
     refreshTaskRefreshButtons();
+    refreshTaskFilterControls();
     return tasksLoading;
   }
 
@@ -951,11 +985,40 @@
     const create = $("#task-new");
     if (create) create.onclick = () => runTaskAction("create");
     const statusSel = $("#task-status-filter");
-    if (statusSel) statusSel.onchange = () => { taskFilters.status = statusSel.value || "all"; renderTasks(); };
+    if (statusSel) statusSel.onchange = () => {
+      const st = taskFilterControlState();
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshTaskFilterControls();
+        return;
+      }
+      taskFilters.status = statusSel.value || "all";
+      renderTasks();
+    };
     const sourceSel = $("#task-source-filter");
-    if (sourceSel) sourceSel.onchange = () => { taskFilters.source = sourceSel.value || "all"; renderTasks(); };
+    if (sourceSel) sourceSel.onchange = () => {
+      const st = taskFilterControlState();
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshTaskFilterControls();
+        return;
+      }
+      taskFilters.source = sourceSel.value || "all";
+      renderTasks();
+    };
     const clear = $("#task-clear-filter");
     if (clear) clear.onclick = () => {
+      const st = taskFilterControlState();
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshTaskFilterControls();
+        return;
+      }
+      if (taskFilters.status === "all" && taskFilters.source === "all") {
+        if (window.setMsg) setMsg("当前没有任务过滤", "warn");
+        refreshTaskFilterControls();
+        return;
+      }
       taskFilters.status = "all";
       taskFilters.source = "all";
       renderTasks();
@@ -966,8 +1029,10 @@
       refreshTaskCreateButton();
       refreshTaskRefreshButtons();
       refreshCopyRecoveryButton();
+      refreshTaskFilterControls();
     });
     refreshTaskCreateButton();
+    refreshTaskFilterControls();
     loadTasks();
     loadSessions();
   }
