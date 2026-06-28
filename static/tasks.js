@@ -188,9 +188,9 @@
     const values = {};
     sourceLines.forEach(line => {
       const raw = String(line || "").trim();
-      let m = raw.match(/^[-*]?\s*(workspace|workspaceId|activeFile|activeGroup|sideOrient|sidebarCollapsed|theme|currentFile)\s*:\s*(.+)$/i);
+      let m = raw.match(/^[-*]?\s*(workspace|workspaceId|activeFile|active file|activeGroup|active group|sideOrient|side orient|sidebarCollapsed|sidebar collapsed|theme|currentFile|current file)\s*:\s*(.+)$/i);
       if (m) {
-        values[m[1].toLowerCase()] = m[2].trim();
+        values[m[1].toLowerCase().replace(/\s+/g, "")] = m[2].trim();
         return;
       }
       m = raw.match(/^[-*]?\s*(main tabs|side tabs)\s*:\s*(\d+)/i);
@@ -312,14 +312,32 @@
     }, {});
     const latestTask = latestByUpdated(tasks);
     const latestSession = latestByUpdated(sessions);
+    const summary = taskRecoverySummary();
+    const latestTaskSummary = summary.latestTask;
+    const latestSessionSummary = summary.latestSession;
+    const sessionLayout = latestSessionSummary && latestSessionSummary.layout;
+    const sessionLayoutLine = sessionLayout
+      ? [
+        sessionLayout.workspace ? `工作区 ${sessionLayout.workspace}` : "",
+        sessionLayout.file ? `文件 ${sessionLayout.file}` : "",
+        sessionLayout.group ? `焦点 ${sessionLayout.group}` : "",
+        sessionLayout.tabs ? `标签 ${sessionLayout.tabs}` : "",
+        sessionLayout.sideOrient ? `侧栏 ${sessionLayout.sideOrient}` : "",
+      ].filter(Boolean).join(" · ")
+      : "";
     grid.innerHTML = [
       ["工作区", snap && snap.roots && snap.roots.length > 1 ? `${snap.roots.length} 个目录` : (window.currentRoot || "未打开")],
       ["当前文件", snap && snap.activeFile ? snap.activeFile : "none"],
       ["布局", `主 ${mainTabs} / 侧 ${sideTabs}`],
       ["任务", `待办 ${counts.todo || 0} · 进行 ${counts.running || 0} · 已验 ${counts.verified || 0} · 阻塞 ${counts.blocked || 0}`],
       ["最近任务", latestTask ? latestTask.title : "暂无"],
-      ["最近证据", latestTask && latestTask.evidence && latestTask.evidence.length ? latestTask.evidence[latestTask.evidence.length - 1] : "暂无"],
+      ["最近证据", latestTaskSummary && latestTaskSummary.latestEvidence ? `${latestTaskSummary.evidence || 0} 条 · ${latestTaskSummary.latestEvidence}` : "暂无"],
+      ["最近任务日志", latestTaskSummary && latestTaskSummary.latestLog ? latestTaskSummary.latestLog : "暂无"],
       ["最近会话", latestSession ? (latestSession.title || latestSession.taskTitle || latestSession.id) : "暂无"],
+      ["会话输出", latestSessionSummary && latestSessionSummary.latestOutput ? `${latestSessionSummary.outputs || 0} 条 · ${latestSessionSummary.latestOutput}` : "暂无"],
+      ["会话证据", latestSessionSummary && latestSessionSummary.latestEvidence ? `${latestSessionSummary.evidence || 0} 条 · ${latestSessionSummary.latestEvidence}` : "暂无"],
+      ["会话日志", latestSessionSummary && latestSessionSummary.latestLog ? latestSessionSummary.latestLog : "暂无"],
+      ["会话布局", sessionLayoutLine || "暂无"],
     ].map(([k, v]) => `<div class="task-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
     const sources = Array.from(new Set(tasks.map(taskSource))).sort();
     setSelectOptions(statusSel, [
