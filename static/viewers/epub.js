@@ -93,6 +93,7 @@
   var tocSel = null;
   var keyHandler = null;
   var loadState = "idle"; // idle | loading | ready | error
+  var tocState = "idle"; // idle | loading | ready | error
   var mountSession = null;
 
   function isCurrentSession(session) {
@@ -130,14 +131,15 @@
       "下一页",
       ready ? "当前为滚动模式，请先切换到翻页模式" : baseReason
     );
+    var tocLoading = tocState === "loading";
     var hasToc = !!(tocSel && tocSel.querySelector("option[value]:not([value=''])"));
     setControlState(
       tocSel,
-      !ready || !hasToc,
+      !ready || tocLoading || !hasToc,
       "目录",
-      ready ? "该电子书没有可用目录" : baseReason
+      tocLoading ? "目录加载中…" : (ready ? "该电子书没有可用目录" : baseReason)
     );
-    if (loading && tocSel) tocSel.title = "目录加载中…";
+    if ((loading || tocLoading) && tocSel) tocSel.title = "目录加载中…";
   }
 
   function rebuildRendition(session) {
@@ -245,6 +247,7 @@
     });
 
     loadState = "loading";
+    tocState = "idle";
     updateToolbarState();
     if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
       window.wbViewer.reportLoading(host, "电子书正在加载，暂不能创建验证任务");
@@ -260,6 +263,7 @@
           return rebuildRendition(session).then(function () {
             if (!isCurrentSession(session)) return;
             loadState = "ready";
+            tocState = "loading";
             updateToolbarState();
             try { reader.removeChild(msg); } catch (e) { /* already gone */ }
             if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
@@ -283,15 +287,20 @@
               }
             }
             addItems(toc, 0);
+            tocState = "ready";
             updateToolbarState();
           }).catch(function () {
-            if (isCurrentSession(session)) updateToolbarState();
+            if (isCurrentSession(session)) {
+              tocState = "error";
+              updateToolbarState();
+            }
           });
         });
       })
       .catch(function (err) {
         if (!isCurrentSession(session)) return;
         loadState = "error";
+        tocState = "error";
         if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
           window.wbViewer.reportError(host, err);
         }
@@ -322,6 +331,7 @@
     tocSel = null;
     flow = "scrolled-doc";
     loadState = "idle";
+    tocState = "idle";
   }
 
   // 阅读区保持书页默认浅色，主题切换不强行改书页背景，避免破坏正文排版配色。
