@@ -66,8 +66,9 @@
       if (window.state && state.kind !== "text") return { enabled: false, reason: "当前文件不是可运行文本文件" };
       if (!window.wbIsRunnable(path)) return { enabled: false, reason: "该文件类型不支持运行" };
     }
-    if (action === "runTask" && !selectedTerminalTask()) {
-      return { enabled: false, reason: "请先选择一个终端任务" };
+    if (action === "runTask") {
+      if (tasksLoaded && !hasTerminalTasks()) return { enabled: false, reason: "无可运行任务" };
+      if (!selectedTerminalTask()) return { enabled: false, reason: "请先选择一个终端任务" };
     }
     if (action === "createTask" && !window.addWorkflowTask) {
       return { enabled: false, reason: "任务面板尚未就绪" };
@@ -76,6 +77,7 @@
   }
 
   async function runTerminalAction(action) {
+    if (action === "runTask" && !tasksLoaded) await loadTasks(false);
     const st = terminalActionState(action);
     if (!st.enabled) {
       if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
@@ -1187,17 +1189,33 @@
   // ---------- 任务列表 ----------
   let tasksLoaded = false;
   let terminalTaskCatalog = { npm: [], make: [] };
+  function hasTerminalTasks() {
+    return !!((terminalTaskCatalog.npm && terminalTaskCatalog.npm.length)
+      || (terminalTaskCatalog.make && terminalTaskCatalog.make.length));
+  }
+  function setTerminalButtonState(btn, state, enabledTitle) {
+    if (!btn) return;
+    btn.disabled = !state.enabled;
+    btn.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+    btn.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+  }
+  function refreshTerminalTaskActions(reasonOverride) {
+    const runBtn = $("#term-task-run");
+    const createBtn = $("#term-task-create");
+    const runState = reasonOverride
+      ? { enabled: false, reason: reasonOverride }
+      : terminalActionState("runTask");
+    setTerminalButtonState(runBtn, runState, "运行选中任务");
+    setTerminalButtonState(createBtn, terminalActionState("createTask"), "从终端上下文创建任务");
+  }
   async function loadTasks(force) {
     if (tasksLoaded && !force) return;
     const sel = $("#term-task-sel");
     if (!sel) return;
-    const runBtn = $("#term-task-run");
     if (!hasWorkspace()) {
       sel.innerHTML = `<option value="" disabled selected>请先打开工作区</option>`;
       sel.disabled = true;
-      if (runBtn) { runBtn.disabled = true; runBtn.title = "请先打开工作区"; }
-      const createBtn = $("#term-task-create");
-      if (createBtn) { createBtn.disabled = true; createBtn.title = "请先打开工作区"; }
+      refreshTerminalTaskActions("请先打开工作区");
       tasksLoaded = true;
       return;
     }
@@ -1212,10 +1230,9 @@
         o.value = ""; o.textContent = "无任务"; o.disabled = true; o.selected = true;
         sel.appendChild(o);
         sel.disabled = true;
-        if (runBtn) { runBtn.disabled = true; runBtn.title = "无可运行任务"; }
+        refreshTerminalTaskActions("无可运行任务");
       } else {
         sel.disabled = false;
-        if (runBtn) { runBtn.disabled = false; runBtn.title = "运行选中任务"; }
         const ph = document.createElement("option");
         ph.value = ""; ph.textContent = "选择任务…"; ph.disabled = true; ph.selected = true;
         sel.appendChild(ph);
@@ -1239,17 +1256,15 @@
           });
           sel.appendChild(g);
         }
+        refreshTerminalTaskActions();
       }
-      const createBtn = $("#term-task-create");
-      if (createBtn) { createBtn.disabled = false; createBtn.title = "从终端上下文创建任务"; }
+      refreshTerminalTaskActions();
       tasksLoaded = true;
     } catch {
       terminalTaskCatalog = { npm: [], make: [] };
       sel.innerHTML = `<option value="" disabled selected>任务加载失败</option>`;
       sel.disabled = true;
-      if (runBtn) { runBtn.disabled = true; runBtn.title = "任务加载失败"; }
-      const createBtn = $("#term-task-create");
-      if (createBtn) { createBtn.disabled = false; createBtn.title = "从终端上下文创建任务"; }
+      refreshTerminalTaskActions("任务加载失败");
     }
   }
   window.reloadTasks = () => loadTasks(true);
@@ -1399,6 +1414,8 @@
 
     const taskRun = $("#term-task-run");
     if (taskRun) taskRun.onclick = () => window.wbTerminalActions.run("runTask");
+    const taskSel = $("#term-task-sel");
+    if (taskSel) taskSel.onchange = () => refreshTerminalTaskActions();
     const taskCreate = $("#term-task-create");
     if (taskCreate) taskCreate.onclick = () => window.wbTerminalActions.run("createTask");
 
@@ -1481,6 +1498,13 @@
                          return st.enabled ? true : st.reason;
                        },
                        run: () => window.wbTerminalActions.run("split") });
+      registerAction({ id: "terminal.runTask", name: "终端: 运行选中任务", hint: "npm/make", icon: "play",
+                       requires: ["workspace"], risk: "exec",
+                       enabled: () => {
+                         const st = window.wbTerminalActions.actionState("runTask");
+                         return st.enabled ? true : st.reason;
+                       },
+                       run: () => window.wbTerminalActions.run("runTask") });
       registerAction({ id: "task.fromTerminal", name: "任务: 从终端上下文创建", hint: "Terminal", icon: "terminal",
                        requires: ["workspace"], risk: "write",
                        enabled: () => {
