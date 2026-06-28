@@ -258,6 +258,8 @@ const TOOLS = [
       const refreshLoadState = () => {
         const st = toolsActionState("loadCurrentFile");
         loadBtn.disabled = !st.enabled;
+        loadBtn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+        loadBtn.classList.toggle("disabled", !st.enabled);
         loadBtn.title = st.enabled
           ? "载入当前文本文件内容"
           : (st.reason || "当前不可用");
