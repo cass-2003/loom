@@ -473,6 +473,9 @@
     const actionState = terminalActionState("toggle");
     st.classList.toggle("status-clickable", actionState.enabled);
     st.classList.toggle("disabled", !actionState.enabled);
+    st.setAttribute("role", "button");
+    st.setAttribute("aria-disabled", actionState.enabled ? "false" : "true");
+    st.tabIndex = actionState.enabled ? 0 : -1;
     st.title = actionState.enabled ? "切换终端面板" : (actionState.reason || "当前不可用");
   }
 
@@ -1450,6 +1453,11 @@
 
     const st = $("#status-term");
     if (st) st.onclick = () => window.wbTerminalActions.run("toggle");
+    if (st) st.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      window.wbTerminalActions.run("toggle");
+    });
 
     // Ctrl+` 切换终端面板；Ctrl+Shift+5 拆分终端
     document.addEventListener("keydown", (e) => {
