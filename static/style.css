@@ -771,6 +771,21 @@ body.markdown-active #btn-view-edit {
 #tool-body textarea { min-height: 90px; }
 .tool-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
 .tool-row .btn { flex: 1; padding: 6px; }
+.tool-row .btn:disabled,
+.tool-row .btn[aria-disabled="true"] {
+  opacity: .55;
+  cursor: not-allowed;
+  color: var(--muted);
+  background: var(--panel);
+  border-color: var(--border-soft);
+  transform: none;
+}
+.tool-row .btn:disabled:hover,
+.tool-row .btn[aria-disabled="true"]:hover {
+  color: var(--muted);
+  background: var(--panel);
+  border-color: var(--border-soft);
+}
 .tool-out { margin-top: 8px; font-size: 12px; white-space: pre-wrap;
   word-break: break-all; color: var(--muted); line-height: 1.5; }
 .tool-note { font-size: 11px; color: var(--muted); margin-top: 6px; }

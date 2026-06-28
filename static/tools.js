@@ -77,6 +77,8 @@ function bindToolCopyButton(button, output) {
   const refresh = () => {
     const st = toolOutputState(output);
     button.disabled = !st.enabled;
+    button.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+    button.classList.toggle("disabled", !st.enabled);
     button.title = st.enabled ? "复制结果到剪贴板" : st.reason;
   };
   button.onclick = () => {
