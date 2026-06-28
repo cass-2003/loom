@@ -98,6 +98,11 @@
     el.setAttribute("aria-disabled", state.enabled ? "false" : "true");
     el.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
   }
+  function taskActionState(action, fallback) {
+    return window.wbTaskActions && window.wbTaskActions.actionState
+      ? window.wbTaskActions.actionState(action)
+      : { enabled: false, reason: fallback || "任务面板尚未就绪" };
+  }
   function refreshProjectActions() {
     setProjectButtonState(
       $("#project-open-source"),
@@ -262,12 +267,8 @@
     const sessionLine = latestSession
       ? `${latestSession.title} · ${latestSession.status || "draft"}`
       : "暂无会话，可从任务卡创建 Agent brief";
-    const copyState = window.wbTaskActions && window.wbTaskActions.actionState
-      ? window.wbTaskActions.actionState("copyRecoveryBrief")
-      : { enabled: false, reason: "任务恢复 brief 尚未就绪" };
-    const sessionCopyState = window.wbTaskActions && window.wbTaskActions.actionState
-      ? window.wbTaskActions.actionState("copySessionRecovery")
-      : { enabled: false, reason: "Session 恢复包尚未就绪" };
+    const copyState = taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪");
+    const sessionCopyState = taskActionState("copySessionRecovery", "Session 恢复包尚未就绪");
     host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
       + `<span>${ready ? `${summary.tasks || 0} tasks · ${summary.sessions || 0} sessions` : "任务面板加载中"}</span></div>`
       + `<div class="project-continuity-grid">`
@@ -285,9 +286,15 @@
       if (window.focusWorkflowTasks) window.focusWorkflowTasks();
     };
     const copy = host.querySelector("[data-act='copy-recovery']");
-    if (copy) copy.onclick = copyTasksRecoveryBrief;
+    if (copy) {
+      setProjectButtonState(copy, copyState, "复制完整恢复 brief");
+      copy.onclick = copyTasksRecoveryBrief;
+    }
     const copySession = host.querySelector("[data-act='copy-session-recovery']");
-    if (copySession) copySession.onclick = copySessionRecoveryPackage;
+    if (copySession) {
+      setProjectButtonState(copySession, sessionCopyState, "复制 Session 恢复包");
+      copySession.onclick = copySessionRecoveryPackage;
+    }
   }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
@@ -318,14 +325,17 @@
       ? `<b>最近记录</b><button data-target="${esc(top.target)}">${esc(top.title)}</button><span>${esc(top.preview || "无预览")}</span>`
       : "<b>最近记录</b><span>暂无可恢复记录。可以追加验证或决策记录。</span>";
     const recentValidation = extractRecentValidation();
+    const validationTaskState = window.addWorkflowTask
+      ? { enabled: true, reason: "" }
+      : { enabled: false, reason: "任务面板尚未就绪" };
     if (validation) {
-      const taskReady = !!window.addWorkflowTask;
+      const recoveryCopyState = taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪");
       validation.innerHTML = recentValidation
         ? `<b>最近验证</b><button data-target="progress">${esc(recentValidation.title)}</button>`
           + `<span>${esc(recentValidation.evidence || recentValidation.goal || "暂无验证摘要")}</span>`
           + (recentValidation.next ? `<em>${esc(recentValidation.next)}</em>` : "")
-          + `<button class="project-validation-task" data-act="validation-task"${taskReady ? "" : " disabled title=\"任务面板尚未就绪\""}>从验证创建任务</button>`
-          + `<button class="project-validation-task" data-act="copy-task-recovery"${window.wbTaskActions ? "" : " disabled title=\"任务恢复 brief 尚未就绪\""}>复制任务恢复 brief</button>`
+          + `<button class="project-validation-task" data-act="validation-task"${validationTaskState.enabled ? "" : ` disabled title="${esc(validationTaskState.reason)}"`}>从验证创建任务</button>`
+          + `<button class="project-validation-task" data-act="copy-task-recovery"${recoveryCopyState.enabled ? "" : ` disabled title="${esc(recoveryCopyState.reason || "当前不可用")}"`}>复制任务恢复 brief</button>`
         : "<b>最近验证</b><span>暂无验证记录。运行检查后可追加验证记录。</span>";
     }
     if (road.ready) {
@@ -342,9 +352,15 @@
         b.onclick = () => setProjectDoc(b.dataset.target);
       });
       const taskBtn = validation.querySelector("[data-act='validation-task']");
-      if (taskBtn) taskBtn.onclick = () => createTaskFromRecentValidation(recentValidation);
+      if (taskBtn) {
+        setProjectButtonState(taskBtn, validationTaskState, "从验证创建任务");
+        taskBtn.onclick = () => createTaskFromRecentValidation(recentValidation);
+      }
       const copyTaskBrief = validation.querySelector("[data-act='copy-task-recovery']");
-      if (copyTaskBrief) copyTaskBrief.onclick = copyTasksRecoveryBrief;
+      if (copyTaskBrief) {
+        setProjectButtonState(copyTaskBrief, taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪"), "复制任务恢复 brief");
+        copyTaskBrief.onclick = copyTasksRecoveryBrief;
+      }
     }
     renderTaskContinuity();
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
