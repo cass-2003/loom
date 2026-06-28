@@ -117,6 +117,43 @@
       `Sidebar collapsed: ${snap.ui && snap.ui.sidebarCollapsed ? "yes" : "no"}`,
     ];
   }
+  function ecosystemRecoverySummary() {
+    const api = window.wbEcosystemActions;
+    if (api && api.summary) {
+      try { return api.summary(); } catch {}
+    }
+    return null;
+  }
+  function ecosystemRecoveryBrief() {
+    const summary = ecosystemRecoverySummary();
+    if (!summary) return "Ecosystem summary unavailable.";
+    const recommended = summary.recommended;
+    const risks = summary.risks
+      ? Object.keys(summary.risks).sort().map(k => `${k}=${summary.risks[k]}`).join(", ")
+      : "";
+    const sources = summary.sources
+      ? Object.keys(summary.sources).sort().map(k => `${k}=${summary.sources[k]}`).join(", ")
+      : "";
+    return [
+      `- status: ${summary.status || "unknown"}`,
+      `- entries: ${summary.playbooks || 0} playbooks / ${summary.skills || 0} skills / ${summary.visible || 0} visible`,
+      `- filters: risk=${summary.risk || "all"}, source=${summary.source || "all"}`,
+      `- risks: ${risks || "none"}`,
+      `- sources: ${sources || "none"}`,
+      `- recommended: ${recommended ? recommended.title : "none"}`,
+      `- recommendedPath: ${recommended ? recommended.path || "" : "none"}`,
+      `- scope: ${summary.scope || "none"}`,
+      "",
+      "### Command Preview",
+      ...((summary.commands || []).length ? summary.commands.map(x => "- " + x) : ["- none"]),
+      "",
+      "### Verification",
+      ...((summary.verification || []).length ? summary.verification.map(x => "- " + x) : ["- none"]),
+      "",
+      "### Evidence Fields",
+      ...((summary.evidence || []).length ? summary.evidence.map(x => "- " + x) : ["- none"]),
+    ].join("\n");
+  }
   function taskSource(t) {
     const text = [t && t.title, ...((t && t.log) || [])].join("\n").toLowerCase();
     if (/workspace layout|工作区布局/.test(text)) return "layout";
@@ -210,6 +247,9 @@
       "",
       "## Workspace",
       workspaceLayoutBrief(),
+      "",
+      "## Local Ecosystem",
+      ecosystemRecoveryBrief(),
       "",
       "## Current Filters",
       `- ${filterText}`,
