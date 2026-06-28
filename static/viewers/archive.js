@@ -225,7 +225,11 @@
   }
 
   // —— 渲染一个节点行 + 子树 ——
-  function renderNode(node, depth, listeners, onTreeStateChange) {
+  function isCurrentPreview(root, prevEl) {
+    return !!(root && state.root === root && prevEl && prevEl.isConnected);
+  }
+
+  function renderNode(node, depth, listeners, onTreeStateChange, root) {
     var wrap = document.createElement("div");
 
     var row = document.createElement("div");
@@ -279,7 +283,7 @@
         if (built) return;
         built = true;
         sortedChildren(node).forEach(function (child) {
-          childWrap.appendChild(renderNode(child, depth + 1, listeners, onTreeStateChange));
+          childWrap.appendChild(renderNode(child, depth + 1, listeners, onTreeStateChange, root));
         });
       }
       if (!collapsed) buildChildren();
@@ -307,7 +311,7 @@
         prevEl.className = "arc-prev";
         prevEl.innerHTML = '<div class="arc-prev-note">加载中…</div>';
         wrap.appendChild(prevEl);
-        loadPreview(node, prevEl);
+        loadPreview(node, prevEl, root);
       };
       row.addEventListener("click", onClick);
       listeners.push([row, "click", onClick]);
@@ -316,13 +320,15 @@
     return wrap;
   }
 
-  function loadPreview(node, prevEl) {
+  function loadPreview(node, prevEl, root) {
     if (!node.entry) {
+      if (!isCurrentPreview(root, prevEl)) return;
       prevEl.innerHTML = '<div class="arc-prev-note">无法读取该条目</div>';
       return;
     }
     if (isImageName(node.name)) {
       node.entry.async("base64").then(function (b64) {
+        if (!isCurrentPreview(root, prevEl)) return;
         var mime = IMG_MIME[extOf(node.name)] || "application/octet-stream";
         prevEl.innerHTML =
           '<div class="arc-prev-bar"><span class="arc-prev-name"></span>' +
@@ -336,6 +342,7 @@
         img.src = "data:" + mime + ";base64," + b64;
         prevEl.appendChild(img);
       }).catch(function (e) {
+        if (!isCurrentPreview(root, prevEl)) return;
         prevEl.innerHTML = '<div class="arc-prev-note">预览失败：' +
           escapeHtml(String(e && e.message || e)) + "</div>";
       });
@@ -343,6 +350,7 @@
     }
     // 文本预览：取前若干 KB
     node.entry.async("uint8array").then(function (u8) {
+      if (!isCurrentPreview(root, prevEl)) return;
       var truncated = u8.length > PREVIEW_LIMIT;
       var slice = truncated ? u8.subarray(0, PREVIEW_LIMIT) : u8;
       var text;
@@ -361,6 +369,7 @@
         (truncated ? " · 仅显示前 " + fmtSize(PREVIEW_LIMIT) : "");
       prevEl.querySelector(".arc-prev-pre").textContent = text;
     }).catch(function (e) {
+      if (!isCurrentPreview(root, prevEl)) return;
       prevEl.innerHTML = '<div class="arc-prev-note">预览失败：' +
         escapeHtml(String(e && e.message || e)) + "</div>";
     });
@@ -487,7 +496,7 @@
         }
 
         sortedChildren(tree).forEach(function (child) {
-          treeWrap.appendChild(renderNode(child, 0, state.listeners, updateActionState));
+          treeWrap.appendChild(renderNode(child, 0, state.listeners, updateActionState, root));
         });
 
         // 全部展开/折叠：操作所有 .arc-children + .arc-twist（仅目录）
