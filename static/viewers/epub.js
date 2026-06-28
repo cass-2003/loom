@@ -246,6 +246,9 @@
 
     loadState = "loading";
     updateToolbarState();
+    if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+      window.wbViewer.reportLoading(host, "电子书正在加载，暂不能创建验证任务");
+    }
 
     // 加载 epub.js → 取原始字节 → 渲染
     ensureEpubJs()
@@ -259,6 +262,9 @@
             loadState = "ready";
             updateToolbarState();
             try { reader.removeChild(msg); } catch (e) { /* already gone */ }
+            if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+              window.wbViewer.reportReady(host);
+            }
           });
         }).then(function () {
           if (!isCurrentSession(session) || !book) return;

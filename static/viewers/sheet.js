@@ -164,6 +164,9 @@
     host.appendChild(root);
 
     _state = { host: host, root: root, body: body, meta: meta, workbook: null, select: sel };
+    if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+      window.wbViewer.reportLoading(host, "表格正在加载，暂不能创建验证任务");
+    }
 
     var loading = document.createElement("div");
     loading.className = "wb-sheet-empty";
@@ -191,6 +194,9 @@
           e.className = "wb-sheet-empty";
           e.textContent = "未找到任何工作表。";
           body.appendChild(e);
+          if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+            window.wbViewer.reportReady(host);
+          }
           return;
         }
 
@@ -202,6 +208,9 @@
         };
 
         renderSheet(wb, names[0], body, meta);
+        if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+          window.wbViewer.reportReady(host);
+        }
       })
       .catch(function (err) {
         if (!_state || _state.host !== host) return;

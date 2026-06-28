@@ -125,6 +125,9 @@
       // host：外围用主题色背景，内部 .docx-paper 包裹文档为浅色纸张。
       host.classList.add("docx-viewer-host");
       showMessage(host, "正在加载 Word 文档…", false);
+      if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+        window.wbViewer.reportLoading(host, "Word 文档正在加载，暂不能创建验证任务");
+      }
 
       ensureDocxLib()
         .then(function (docx) {
@@ -165,6 +168,9 @@
               .then(function () {
                 if (!isCurrentSession(session, host)) return;
                 // 渲染成功
+                if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+                  window.wbViewer.reportReady(host);
+                }
               });
           });
         })

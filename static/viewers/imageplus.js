@@ -113,6 +113,12 @@
       "</div>";
   }
 
+  function reportReady(session) {
+    if (session && session.host && window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+      window.wbViewer.reportReady(session.host);
+    }
+  }
+
   function trackUrl(url, session) {
     if (session && url) session.objectUrls.push(url);
     return url;
@@ -141,6 +147,7 @@
         fitElement(canvas);
         stage.innerHTML = "";
         stage.appendChild(canvas);
+        reportReady(session);
         return;
       }
       // 没有合成 canvas（部分 PSD 不含合成预览），尝试缩略图
@@ -149,6 +156,7 @@
         fitElement(c);
         stage.innerHTML = "";
         stage.appendChild(c);
+        reportReady(session);
         return;
       }
       throw new Error("此 PSD 不含可渲染的合成图层或预览");
@@ -172,6 +180,7 @@
           fitElement(img);
           stage.innerHTML = "";
           stage.appendChild(img);
+          reportReady(session);
         };
         img.onerror = function () {
           showError(stage, "HEIC 解码后无法显示", name || "", session);
@@ -216,6 +225,7 @@
       fitElement(canvas);
       stage.innerHTML = "";
       stage.appendChild(canvas);
+      reportReady(session);
     });
   }
 
@@ -249,6 +259,9 @@
       const name = (info && info.name) || (info && info.path) || "";
       const stage = makeStage(host);
       showLoading(stage, "正在解码 " + (LABELS[ext] || ext.toUpperCase()) + " …");
+      if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+        window.wbViewer.reportLoading(host, "图片正在解码，暂不能创建验证任务");
+      }
 
       const decode = DECODERS[ext];
       if (!decode) {

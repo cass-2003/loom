@@ -129,6 +129,9 @@
         head.appendChild(title);
         head.appendChild(status);
         root.appendChild(head);
+        if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+          window.wbViewer.reportLoading(host, "字体正在加载，暂不能创建验证任务");
+        }
 
         var url = window.rawUrl(info.path);
         var face;
@@ -185,6 +188,9 @@
           });
           chars.appendChild(grid);
           root.appendChild(chars);
+          if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+            window.wbViewer.reportReady(host);
+          }
         }).catch(function (err) {
           if (!isCurrentSession(session, root)) return;
           if (window.wbViewer && typeof window.wbViewer.reportError === "function") {

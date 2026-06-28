@@ -429,6 +429,9 @@
       }
 
       showMsg(root, "正在读取压缩包…", info.name || "");
+      if (window.wbViewer && typeof window.wbViewer.reportLoading === "function") {
+        window.wbViewer.reportLoading(host, "压缩包正在读取，暂不能创建验证任务");
+      }
 
       window.fetchRaw(info.path).then(function (buf) {
         var ext = (info.ext || extOf(info.name || "")).toLowerCase().replace(/^\./, "");
@@ -485,6 +488,9 @@
 
         if (fileCount === 0) {
           showMsg(root, "压缩包为空", info.name || "");
+          if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+            window.wbViewer.reportReady(host);
+          }
           return;
         }
 
@@ -550,6 +556,9 @@
         state.listeners.push([expandBtn, "click", onExpand]);
         state.listeners.push([collapseBtn, "click", onCollapse]);
         updateActionState();
+        if (window.wbViewer && typeof window.wbViewer.reportReady === "function") {
+          window.wbViewer.reportReady(host);
+        }
       }).catch(function (err) {
         if (state.root !== root) return;
         if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
