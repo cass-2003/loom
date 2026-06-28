@@ -2810,15 +2810,47 @@ function switchView(view) {
   if (view === "ecosystem" && window.focusEcosystem) window.focusEcosystem();
   if (!wsRestoring && !wsSuspendSave && typeof saveWorkspace === "function") saveWorkspace();
 }
-document.querySelectorAll("#activitybar .act[data-view]").forEach(btn => {
-  btn.onclick = () => {
-    const view = btn.dataset.view;
+function viewActionState(action, view) {
+  if (action === "switch") {
+    if (!view || !$("#view-" + view)) return { enabled: false, reason: "未知视图" };
+    return { enabled: true, reason: "" };
+  }
+  if (action === "collapseActive") {
+    if (sidebarCollapsed) return { enabled: false, reason: "侧栏已折叠" };
+    return { enabled: true, reason: "" };
+  }
+  return { enabled: false, reason: "未知视图动作" };
+}
+function runViewAction(action, view) {
+  const st = viewActionState(action, view);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "switch") {
     if (view === activeView && !sidebarCollapsed) {
-      setSidebarCollapsed(true);
-      return;
+      return runViewAction("collapseActive", view);
     }
     if (sidebarCollapsed) setSidebarCollapsed(false);
     switchView(view);
+    return true;
+  }
+  if (action === "collapseActive") {
+    setSidebarCollapsed(true);
+    return true;
+  }
+  return false;
+}
+window.wbViewActions = {
+  actionState: viewActionState,
+  run: runViewAction,
+  current: () => ({ activeView, sidebarCollapsed }),
+};
+document.querySelectorAll("#activitybar .act[data-view]").forEach(btn => {
+  btn.onclick = () => {
+    const view = btn.dataset.view;
+    if (window.wbViewActions && wbViewActions.run) wbViewActions.run("switch", view);
+    else switchView(view);
   };
 });
 const sidebarToggle = $("#act-sidebar-toggle");

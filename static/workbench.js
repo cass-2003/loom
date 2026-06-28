@@ -581,7 +581,16 @@
      ["工具箱", "tools", "tools"], ["项目记忆", "project", "notebook"],
      ["任务 / Agent", "tasks", "listChecks"], ["Skills / Playbooks", "ecosystem", "blocks"]].forEach(([label, view, icon]) =>
       A({ id: "view." + view, name: "切换到：" + label, hint: "视图", icon,
-          run: () => { typeof switchView === "function" && switchView(view); } }));
+          enabled: () => {
+            const api = window.wbViewActions;
+            if (!api || !api.actionState) return "视图动作尚未就绪";
+            const st = api.actionState("switch", view);
+            return st.enabled ? true : st.reason;
+          },
+          run: () => {
+            if (window.wbViewActions && window.wbViewActions.run) window.wbViewActions.run("switch", view);
+            else if (typeof switchView === "function") switchView(view);
+          } }));
     // Markdown 导出
     A({ id: "markdown.exportHtml", name: "导出为 HTML", hint: "Markdown", icon: "download",
         requires: ["markdown"], risk: "write",
