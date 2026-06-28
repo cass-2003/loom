@@ -32,6 +32,41 @@
       return acc;
     }, {});
   }
+  function recommendedItem(items) {
+    if (ecosystemStatus !== "ready") return null;
+    return cache.playbooks.find(p => (p.risk || "read") === "write")
+      || cache.playbooks[0] || cache.skills[0] || items[0] || null;
+  }
+  function ecosystemRecoverySummary() {
+    const items = allItems();
+    const visible = visibleItems();
+    const risks = countBy(items, item => item.risk || "read");
+    const sources = countBy(items, item => item.source || "workspace");
+    const recommended = recommendedItem(items);
+    const preview = recommended ? previewPlan(recommended) : null;
+    return {
+      skills: cache.skills.length,
+      playbooks: cache.playbooks.length,
+      visible: visible.length,
+      risk: filters.risk,
+      source: filters.source,
+      status: ecosystemStatus,
+      error: ecosystemError,
+      risks,
+      sources,
+      recommended: recommended ? {
+        title: recommended.title,
+        kind: recommended.kind,
+        source: recommended.source || "workspace",
+        path: recommended.path || "",
+        risk: recommended.risk || "read",
+      } : null,
+      scope: preview ? preview.scope : "",
+      commands: preview ? preview.commands.slice(0, 3) : [],
+      verification: preview ? preview.verification.slice(0, 3) : [],
+      evidence: preview ? preview.evidence.slice(0, 3) : [],
+    };
+  }
   function setSelectOptions(sel, options, value) {
     if (!sel) return;
     sel.innerHTML = options.map(opt =>
@@ -70,10 +105,10 @@
     const sourceSel = $("#eco-source-filter");
     const clear = $("#eco-clear-filter");
     if (!grid || !next || !riskSel || !sourceSel) return;
+    const summary = ecosystemRecoverySummary();
     const items = allItems();
-    const visible = visibleItems();
-    const risks = countBy(items, item => item.risk || "read");
-    const sources = countBy(items, item => item.source || "workspace");
+    const risks = summary.risks;
+    const sources = summary.sources;
     const workspace = Array.isArray(window.currentWorkspaceRoots) && window.currentWorkspaceRoots.length > 1
       ? `${window.currentWorkspaceRoots.length} 个目录`
       : (window.currentRoot || "未打开");
@@ -82,10 +117,7 @@
       .map(k => `${riskInfo(k).label} ${risks[k]}`)
       .join(" · ") || "无";
     const sourceText = Object.keys(sources).sort().map(k => `${k} ${sources[k]}`).join(" · ") || "无";
-    const recommended = ecosystemStatus === "ready"
-      ? (cache.playbooks.find(p => (p.risk || "read") === "write")
-        || cache.playbooks[0] || cache.skills[0] || null)
-      : null;
+    const recommended = summary.recommended;
     const statusText = ecosystemStatus === "loading"
       ? "扫描中"
       : ecosystemStatus === "error"
@@ -93,15 +125,28 @@
         : ecosystemStatus === "ready"
           ? "已加载"
           : "待加载";
-    grid.innerHTML = [
+    const cards = [
       ["工作区", workspace],
       ["状态", statusText],
       ["入口", `${cache.playbooks.length} Playbooks · ${cache.skills.length} Skills`],
       ["风险", riskText],
       ["来源", sourceText],
-      ["当前过滤", `${visible.length}/${items.length} 可见`],
+      ["当前过滤", `${summary.visible}/${items.length} 可见`],
       ["推荐", recommended ? recommended.title : "暂无"],
-    ].map(([k, v]) => `<div class="eco-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
+    ];
+    if (recommended) {
+      cards.push(
+        ["推荐路径", recommended.path || "未声明"],
+        ["命令预览", summary.commands[0] || "未声明命令；保持手动检查"],
+        ["验证项", summary.verification[0] || "未声明验证项"],
+        ["证据字段", summary.evidence.join(" · ") || "无"],
+        ["作用范围", summary.scope || "未声明"],
+      );
+    }
+    grid.innerHTML = cards.map(([k, v], index) => {
+      const wide = index >= 7 ? " wide" : "";
+      return `<div class="eco-recovery-card${wide}"><b>${esc(k)}</b><span>${esc(v)}</span></div>`;
+    }).join("");
     const riskOptions = [{ value: "all", label: "全部" }]
       .concat(["read", "write", "exec", "network"].filter(k => risks[k]).map(k => ({ value: k, label: riskInfo(k).label })));
     const sourceOptions = [{ value: "all", label: "全部" }]
@@ -116,7 +161,7 @@
       : ecosystemStatus === "error"
         ? `下一步：检查 .workbench 定义或刷新重试。${ecosystemError ? " 错误：" + ecosystemError : ""}`
         : recommended
-      ? `下一步：查看 ${recommended.title}，或创建任务记录验证过程。`
+      ? `下一步：查看 ${recommended.title}，按恢复卡里的验证项手动检查，并把输出/截图/任务日志作为证据记录。`
       : "下一步：在 .workbench/playbooks 或 .workbench/skills 中添加本地流程定义。";
     refreshEcosystemActions();
   }
@@ -480,15 +525,7 @@
   window.wbEcosystemActions = {
     actionState: ecosystemActionState,
     run: runEcosystemAction,
-    summary: () => ({
-      skills: cache.skills.length,
-      playbooks: cache.playbooks.length,
-      visible: visibleItems().length,
-      risk: filters.risk,
-      source: filters.source,
-      status: ecosystemStatus,
-      error: ecosystemError,
-    }),
+    summary: ecosystemRecoverySummary,
   };
   window.reloadEcosystem = loadEcosystem;
   window.focusEcosystem = () => {
