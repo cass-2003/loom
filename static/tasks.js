@@ -278,6 +278,7 @@
       ["布局", `主 ${mainTabs} / 侧 ${sideTabs}`],
       ["任务", `待办 ${counts.todo || 0} · 进行 ${counts.running || 0} · 已验 ${counts.verified || 0} · 阻塞 ${counts.blocked || 0}`],
       ["最近任务", latestTask ? latestTask.title : "暂无"],
+      ["最近证据", latestTask && latestTask.evidence && latestTask.evidence.length ? latestTask.evidence[latestTask.evidence.length - 1] : "暂无"],
       ["最近会话", latestSession ? (latestSession.title || latestSession.taskTitle || latestSession.id) : "暂无"],
     ].map(([k, v]) => `<div class="task-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
     const sources = Array.from(new Set(tasks.map(taskSource))).sort();
@@ -318,6 +319,13 @@
         title: latestTask.title || "未命名任务",
         status: latestTask.status || "todo",
         source: taskSource(latestTask),
+        evidence: Array.isArray(latestTask.evidence) ? latestTask.evidence.length : 0,
+        latestEvidence: Array.isArray(latestTask.evidence) && latestTask.evidence.length
+          ? latestTask.evidence[latestTask.evidence.length - 1]
+          : "",
+        latestLog: Array.isArray(latestTask.log) && latestTask.log.length
+          ? latestTask.log[latestTask.log.length - 1]
+          : "",
         next: latestTask.next || "",
       } : null,
       latestSession: latestSession ? {

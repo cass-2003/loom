@@ -1459,6 +1459,12 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   color: var(--muted) !important; opacity: .55; cursor: not-allowed; text-decoration: none !important;
 }
 .project-task-continuity > span { display: block; max-height: 3.1em; overflow: hidden; }
+.project-task-continuity > span.project-continuity-evidence {
+  margin-top: 4px; color: var(--ok);
+}
+.project-task-continuity > span.project-continuity-log {
+  margin-top: 3px; color: var(--muted);
+}
 .project-task-continuity > em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; }
 .project-roadmap-brief {
   margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-soft);

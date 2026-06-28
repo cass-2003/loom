@@ -278,6 +278,12 @@
     const taskLine = latestTask
       ? `${latestTask.title} · ${latestTask.next || "打开任务继续补证据"}`
       : "暂无任务，可从最近验证、当前文件、Git 或 Playbook 创建";
+    const evidenceLine = latestTask && latestTask.latestEvidence
+      ? `${latestTask.evidence || 0} 条证据 · ${latestTask.latestEvidence}`
+      : "暂无任务证据，继续运行验证并挂到任务";
+    const logLine = latestTask && latestTask.latestLog
+      ? `最近日志 · ${latestTask.latestLog}`
+      : "";
     const sessionLine = latestSession
       ? `${latestSession.title} · ${latestSession.status || "draft"}`
       : "暂无会话，可从任务卡创建 Agent brief";
@@ -291,6 +297,8 @@
       + `</div>`
       + `<button data-act="open-tasks">${esc(latestTask ? latestTask.title : "打开 Tasks 面板")}</button>`
       + `<span>${esc(taskLine)}</span>`
+      + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`
+      + (logLine ? `<span class="project-continuity-log">${esc(logLine)}</span>` : "")
       + `<em>${esc(sessionLine)}</em>`
       + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`
       + `<button class="project-validation-task" data-act="copy-session-recovery"${sessionCopyState.enabled ? "" : ` disabled title="${esc(sessionCopyState.reason || "当前不可用")}"`}>复制 Session 恢复包</button>`;
