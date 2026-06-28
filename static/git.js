@@ -663,10 +663,18 @@ function renderBranchFilterButton() {
   btn.classList.toggle("active", !!gitState.branchFilterOpen);
 }
 
-function closeBranchFilterMenu() {
+let branchFilterAnchor = null;
+
+function closeBranchFilterMenu(opts = {}) {
+  const restoreFocus = !!opts.restoreFocus;
+  const anchor = branchFilterAnchor;
   gitState.branchFilterOpen = false;
   document.querySelectorAll(".branch-filter-pop").forEach(p => p.remove());
+  branchFilterAnchor = null;
   renderBranchFilterButton();
+  if (restoreFocus && anchor && document.contains(anchor)) {
+    try { anchor.focus(); } catch {}
+  }
 }
 
 function renderBranchFilterMenu(anchor) {
@@ -675,6 +683,7 @@ function renderBranchFilterMenu(anchor) {
     return;
   }
   closeBranchFilterMenu();
+  branchFilterAnchor = anchor;
   gitState.branchFilterOpen = true;
   renderBranchFilterButton();
   const pop = document.createElement("div");
@@ -702,15 +711,45 @@ function renderBranchFilterMenu(anchor) {
   if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
   pop.style.left = left + "px";
   pop.style.top = top + "px";
+  const focusMenuItem = (idx) => {
+    const buttons = Array.from(pop.querySelectorAll(".bfp-item"));
+    if (!buttons.length) return;
+    const next = Math.max(0, Math.min(buttons.length - 1, idx));
+    buttons[next].focus();
+  };
   pop.querySelectorAll(".bfp-item").forEach(btn => {
     btn.onclick = () => {
       gitState.ref = btn.dataset.value || "__all__";
       const sel = document.querySelector("#git-branch-sel");
       if (sel) sel.value = gitState.ref;
-      closeBranchFilterMenu();
+      closeBranchFilterMenu({ restoreFocus: true });
       renderSidebarGraph();
     };
+    btn.addEventListener("keydown", (e) => {
+      const buttons = Array.from(pop.querySelectorAll(".bfp-item"));
+      const idx = buttons.indexOf(btn);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusMenuItem(idx + 1 >= buttons.length ? 0 : idx + 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusMenuItem(idx - 1 < 0 ? buttons.length - 1 : idx - 1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        focusMenuItem(0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        focusMenuItem(buttons.length - 1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeBranchFilterMenu({ restoreFocus: true });
+      }
+    });
   });
+  setTimeout(() => {
+    const checked = pop.querySelector(".bfp-item.checked");
+    (checked || pop.querySelector(".bfp-item"))?.focus();
+  }, 0);
   setTimeout(() => {
     const off = (ev) => {
       if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
