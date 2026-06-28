@@ -46,6 +46,16 @@ const viewerContext = {
   error: "",
 };
 
+// Workspace state is read by early UI helpers during startup, so keep it out of
+// the temporal dead zone before any initialization side effects run.
+let currentRoot = null;   // 当前工作区主根（字符串）
+let currentWorkspaceId = null;
+let currentWorkspaceRoots = [];
+window.currentRoot = currentRoot;
+window.currentWorkspaceId = currentWorkspaceId;
+window.currentWorkspaceRoots = currentWorkspaceRoots;
+window.hasOpenWorkspace = () => !!currentRoot;
+
 // 行号槽状态（在 activateTab 之前用到，提前声明）
 let gutterLineCount = -1;   // 当前已渲染的行数（避免无谓重绘）
 let curGLine = -1;          // 当前高亮行
@@ -2793,15 +2803,6 @@ function fmtSize(n) {
 
 // ---------- 工作区（根目录）管理 ----------
 // IDE 式：启动先查 /api/config，有工作区则进文件树，否则渲染欢迎页。
-// 工作区会话状态（打开的标签等）按根路径分区存 localStorage，切根不丢。
-let currentRoot = null;   // 当前工作区主根（字符串）
-let currentWorkspaceId = null;
-let currentWorkspaceRoots = [];
-window.currentRoot = currentRoot;
-window.currentWorkspaceId = currentWorkspaceId;
-window.currentWorkspaceRoots = currentWorkspaceRoots;
-window.hasOpenWorkspace = () => !!currentRoot;
-
 function wsKey() {
   if (!currentWorkspaceId) return null;
   return "wb-ws:" + currentWorkspaceId;
