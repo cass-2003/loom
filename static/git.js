@@ -14,6 +14,7 @@ const gitState = {
   branch: null,
   ref: "",
   branchItems: [],
+  branchItemsReady: false,
   branchFilterOpen: false,
   hasHead: false,
   stagedFiles: [],
@@ -51,6 +52,7 @@ function gitActionState(action) {
     if (!window.currentRoot) return { enabled: false, reason: "请先打开工作区" };
     return { enabled: true, reason: "" };
   }
+  if (!window.currentRoot) return { enabled: false, reason: "请先打开工作区" };
   if (!gitState.repo) return { enabled: false, reason: "当前目录不在 Git 仓库内" };
   if (action === "commit") {
     if (gitState.changed === 0) return { enabled: false, reason: "没有可提交的更改" };
@@ -68,6 +70,9 @@ function gitActionState(action) {
   }
   if ((action === "branchOps" || action === "branchFilter") && !gitState.hasHead) {
     return { enabled: false, reason: "仓库还没有提交历史" };
+  }
+  if (action === "branchFilter" && !(gitState.branchItemsReady && gitState.branchItems.length)) {
+    return { enabled: false, reason: "分支历史筛选正在加载" };
   }
   if (action === "stash" && gitState.changed === 0) {
     return { enabled: false, reason: "没有可储藏的更改" };
@@ -228,7 +233,7 @@ function runGitBranchFilter(anchor) {
   return true;
 }
 
-async function runGitAction(action) {
+async function runGitAction(action, anchor) {
   const st = gitActionState(action);
   if (!st.enabled) {
     if (typeof setGitOut === "function") setGitOut(st.reason || "当前不可用", false);
@@ -253,10 +258,10 @@ async function runGitAction(action) {
     return runGitPush();
   }
   if (action === "branchOps") {
-    return runGitBranchOps();
+    return runGitBranchOps(anchor);
   }
   if (action === "branchFilter") {
-    return runGitBranchFilter();
+    return runGitBranchFilter(anchor);
   }
   if (action === "stash") {
     return runGitStashSave();
@@ -603,17 +608,25 @@ let branchesLoaded = "";   // 已填充的分支列表签名，避免重复重�
 async function populateBranches(current, token) {
   const sel = document.querySelector("#git-branch-sel");
   if (!sel) return;
+  gitState.branchItemsReady = false;
+  applyGitActionState();
   const d = await gjson(`/api/git/branches?path=${encodeURIComponent(gitCurPath())}`);
   if (token && token !== gitRefreshSeq) return;
   const branches = d.branches || [];
   const sig = (d.current || "") + "|" + branches.join(",");
-  if (sig === branchesLoaded) return;   // 列表没变，保留当前选择
+  if (sig === branchesLoaded) {
+    gitState.branchItemsReady = true;
+    applyGitActionState();
+    return;   // 列表没变，保留当前选择
+  }
   branchesLoaded = sig;
   if (!d.hasHead) {
     gitState.ref = "__all__";
     gitState.branchItems = [];
+    gitState.branchItemsReady = true;
     sel.innerHTML = `<option value="__all__">暂无历史</option>`;
     renderBranchFilterButton();
+    applyGitActionState();
     return;
   }
   if (!gitState.ref) gitState.ref = "__all__";
@@ -630,7 +643,9 @@ async function populateBranches(current, token) {
   }
   sel.innerHTML = html;
   sel.value = gitState.ref || "__all__";
+  gitState.branchItemsReady = true;
   renderBranchFilterButton();
+  applyGitActionState();
 }
 
 function branchLabelForValue(value) {
@@ -653,7 +668,7 @@ function closeBranchFilterMenu() {
 }
 
 function renderBranchFilterMenu(anchor) {
-  if (!gitState.hasHead || !(gitState.branchItems || []).length) {
+  if (!(gitState.branchItems || []).length) {
     setGitOut("仓库还没有提交历史，首次提交后才能筛选分支历史", false);
     return;
   }
@@ -957,12 +972,12 @@ function initGit() {
   const filterBtn = document.querySelector("#git-branch-filter");
   if (filterBtn) filterBtn.onclick = (e) => {
     e.stopPropagation();
-    runGitBranchFilter(filterBtn);
+    window.wbGitActions.run("branchFilter", filterBtn);
   };
   const statusBranch = document.querySelector("#status-branch");
   if (statusBranch) statusBranch.onclick = (e) => {
     e.stopPropagation();
-    runGitBranchFilter(statusBranch);
+    window.wbGitActions.run("branchFilter", statusBranch);
   };
 
   // 储藏（保存当前更改）
@@ -976,7 +991,7 @@ function initGit() {
   const branchOps = document.querySelector("#git-branch-ops");
   if (branchOps) branchOps.onclick = (e) => {
     e.stopPropagation();
-    window.wbGitActions.run("branchOps");
+    window.wbGitActions.run("branchOps", branchOps);
   };
 }
 
