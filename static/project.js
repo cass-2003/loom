@@ -224,6 +224,14 @@
     }
     return api.run("copyRecoveryBrief");
   }
+  function copySessionRecoveryPackage() {
+    const api = window.wbTaskActions;
+    if (!api || !api.run) {
+      if (window.setMsg) setMsg("Session 恢复包尚未就绪", "warn");
+      return false;
+    }
+    return api.run("copySessionRecovery");
+  }
   function taskRecoverySummary() {
     if (window.getWorkflowRecoverySummary) {
       try { return window.getWorkflowRecoverySummary(); } catch {}
@@ -257,6 +265,9 @@
     const copyState = window.wbTaskActions && window.wbTaskActions.actionState
       ? window.wbTaskActions.actionState("copyRecoveryBrief")
       : { enabled: false, reason: "任务恢复 brief 尚未就绪" };
+    const sessionCopyState = window.wbTaskActions && window.wbTaskActions.actionState
+      ? window.wbTaskActions.actionState("copySessionRecovery")
+      : { enabled: false, reason: "Session 恢复包尚未就绪" };
     host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
       + `<span>${ready ? `${summary.tasks || 0} tasks · ${summary.sessions || 0} sessions` : "任务面板加载中"}</span></div>`
       + `<div class="project-continuity-grid">`
@@ -266,7 +277,8 @@
       + `<button data-act="open-tasks">${esc(latestTask ? latestTask.title : "打开 Tasks 面板")}</button>`
       + `<span>${esc(taskLine)}</span>`
       + `<em>${esc(sessionLine)}</em>`
-      + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`;
+      + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`
+      + `<button class="project-validation-task" data-act="copy-session-recovery"${sessionCopyState.enabled ? "" : ` disabled title="${esc(sessionCopyState.reason || "当前不可用")}"`}>复制 Session 恢复包</button>`;
     const open = host.querySelector("[data-act='open-tasks']");
     if (open) open.onclick = () => {
       if (typeof switchView === "function") switchView("tasks");
@@ -274,6 +286,8 @@
     };
     const copy = host.querySelector("[data-act='copy-recovery']");
     if (copy) copy.onclick = copyTasksRecoveryBrief;
+    const copySession = host.querySelector("[data-act='copy-session-recovery']");
+    if (copySession) copySession.onclick = copySessionRecoveryPackage;
   }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
