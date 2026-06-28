@@ -85,15 +85,22 @@
   function makeViewer() {
     var state = null; // { face, host, mounted }
 
-    function cleanup() {
-      if (!state) return;
-      if (state.face) {
-        try { document.fonts.delete(state.face); } catch (e) {}
+    function cleanup(session) {
+      var target = session || state;
+      if (!target) return;
+      if (target.face) {
+        try { document.fonts.delete(target.face); } catch (e) {}
       }
-      if (state.host) {
-        try { state.host.innerHTML = ""; } catch (e) {}
+      if (target.host) {
+        try { target.host.innerHTML = ""; } catch (e) {}
       }
-      state = null;
+      if (!session || state === session) {
+        state = null;
+      }
+    }
+
+    function isCurrentSession(session, root) {
+      return !!(session && state === session && session.host && session.host.contains(root));
     }
 
     return {
@@ -108,7 +115,8 @@
         host.appendChild(root);
 
         var family = "PreviewFont-" + Math.random().toString(36).slice(2, 10);
-        state = { face: null, host: host, family: family };
+        var session = { face: null, host: host, family: family, root: root };
+        state = session;
 
         // 顶部信息 + 加载状态
         var head = el("div", "fontv-head");
@@ -126,7 +134,9 @@
         var face;
         try {
           face = new FontFace(family, "url(" + JSON.stringify(url) + ")");
+          session.pendingFace = face;
         } catch (e) {
+          if (!isCurrentSession(session, root)) return;
           if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
             window.wbViewer.reportError(host, e);
           }
@@ -137,12 +147,12 @@
 
         face.load().then(function (loaded) {
           // mount 期间可能已被 unmount/切换
-          if (!state || state.face !== null || !host.contains(root)) {
+          if (!isCurrentSession(session, root)) {
             try { document.fonts.delete(loaded); } catch (e) {}
             return;
           }
           document.fonts.add(loaded);
-          state.face = loaded;
+          session.face = loaded;
 
           status.textContent = "已加载";
           title.style.fontFamily = "'" + family + "'";
@@ -176,7 +186,7 @@
           chars.appendChild(grid);
           root.appendChild(chars);
         }).catch(function (err) {
-          if (!state || !host.contains(root)) return;
+          if (!isCurrentSession(session, root)) return;
           if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
             window.wbViewer.reportError(host, err);
           }
