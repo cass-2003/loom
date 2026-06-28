@@ -133,6 +133,20 @@
     };
   }
   function workspaceSummary() {
+    const api = window.wbWorkspaceLayoutActions;
+    if (api && api.summary) {
+      try {
+        const summary = api.summary();
+        return {
+          roots: summary.roots || [],
+          activeFile: summary.activeFile || null,
+          activeGroup: summary.activeGroup || "main",
+          main: { tabs: new Array(summary.mainTabs || 0).fill(null) },
+          side: { tabs: new Array(summary.sideTabs || 0).fill(null) },
+          ui: { sidebarCollapsed: !!summary.sidebarCollapsed },
+        };
+      } catch {}
+    }
     if (window.getWorkspaceLayoutSnapshot) {
       try { return window.getWorkspaceLayoutSnapshot(); } catch {}
     }
