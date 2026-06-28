@@ -2220,6 +2220,7 @@ function closeFind() {
   find.open = false;
   $("#editor-find").classList.add("hidden");
   find.matches = []; find.idx = -1;
+  applyFindControlState();
   $("#editor").focus();
 }
 
@@ -2228,11 +2229,16 @@ function computeMatches() {
   find.matches = [];
   const q = $("#find-input").value;
   const text = $("#editor").value;
+  $("#find-count").dataset.error = "";
   if (!q) return;
   if (find.regex) {
     let re;
     try { re = new RegExp(q, "g" + (find.ci ? "i" : "")); }
-    catch { $("#find-count").textContent = "正则错误"; return; }
+    catch {
+      $("#find-count").textContent = "正则错误";
+      $("#find-count").dataset.error = "regex";
+      return;
+    }
     let m, guard = 0;
     while ((m = re.exec(text)) && guard++ < 100000) {
       find.matches.push({ start: m.index, end: m.index + m[0].length });
@@ -2251,10 +2257,36 @@ function computeMatches() {
 
 function updateFindCount() {
   const c = $("#find-count");
-  if (!$("#find-input").value) { c.textContent = "无结果"; return; }
-  if (c.textContent === "正则错误") return;
-  if (find.matches.length === 0) { c.textContent = "无结果"; return; }
+  if (!$("#find-input").value) { c.textContent = "无结果"; applyFindControlState(); return; }
+  if (c.dataset.error === "regex") { applyFindControlState(); return; }
+  if (find.matches.length === 0) { c.textContent = "无结果"; applyFindControlState(); return; }
   c.textContent = `${find.idx + 1}/${find.matches.length}`;
+  applyFindControlState();
+}
+
+function findControlState(action) {
+  if (action === "close" || action === "toggleRegex" || action === "toggleCase") return { enabled: true, reason: "" };
+  if (!find.open) return { enabled: false, reason: "查找栏尚未打开" };
+  const query = $("#find-input") ? $("#find-input").value : "";
+  if (!query) return { enabled: false, reason: "请输入查找内容" };
+  if ($("#find-count") && $("#find-count").dataset.error === "regex") return { enabled: false, reason: "正则表达式无效" };
+  if (!find.matches.length) return { enabled: false, reason: "没有匹配结果" };
+  return { enabled: true, reason: "" };
+}
+
+function setFindButtonState(id, state, enabledTitle) {
+  const btn = $(id);
+  if (!btn) return;
+  btn.disabled = !state.enabled;
+  btn.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+  btn.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+}
+
+function applyFindControlState() {
+  setFindButtonState("#find-prev", findControlState("previous"), "上一个 (Shift+Enter)");
+  setFindButtonState("#find-next", findControlState("next"), "下一个 (Enter)");
+  setFindButtonState("#replace-one", findControlState("replaceOne"), "替换");
+  setFindButtonState("#replace-all", findControlState("replaceAll"), "全部替换");
 }
 
 // 选中第 idx 个匹配并滚动可见
@@ -2293,8 +2325,10 @@ function runFind(advance) {
 
 function findNext(dir) {
   if (!find.matches.length) { computeMatches(); }
-  if (!find.matches.length) { updateFindCount(); return; }
+  const st = findControlState(dir < 0 ? "previous" : "next");
+  if (!st.enabled) { updateFindCount(); setMsg(st.reason || "当前不可用", "warn"); return false; }
   selectMatch(find.idx + (dir || 1));
+  return true;
 }
 
 // 触发 input 事件以更新脏标记/预览/行号
@@ -2412,13 +2446,15 @@ $("#preview").addEventListener("scroll", () => syncScrollFrom($("#preview"), $("
 
 // 替换当前选中的匹配
 function replaceCurrent() {
-  if (find.idx < 0 || !find.matches.length) { findNext(1); return; }
+  const st = findControlState("replaceOne");
+  if (!st.enabled) { updateFindCount(); setMsg(st.reason || "当前不可用", "warn"); return false; }
+  if (find.idx < 0 || !find.matches.length) { return findNext(1); }
   const ta = $("#editor");
   const m = find.matches[find.idx];
   // 仅当当前选区正好是该匹配才替换，否则先定位
   if (ta.selectionStart !== m.start || ta.selectionEnd !== m.end) {
     selectMatch(find.idx);
-    return;
+    return true;
   }
   const rep = $("#replace-input").value;
   ta.setRangeText(rep, m.start, m.end, "end");
@@ -2427,16 +2463,18 @@ function replaceCurrent() {
   ta.selectionStart = ta.selectionEnd = nextCaret;
   // 重新计算并定位下一个
   computeMatches();
-  if (!find.matches.length) { find.idx = -1; updateFindCount(); return; }
+  if (!find.matches.length) { find.idx = -1; updateFindCount(); return true; }
   let t = find.matches.findIndex(x => x.start >= nextCaret);
   if (t < 0) t = 0;
   selectMatch(t);
+  return true;
 }
 
 // 全部替换
 function replaceAll() {
   computeMatches();
-  if (!find.matches.length) { updateFindCount(); return; }
+  const st = findControlState("replaceAll");
+  if (!st.enabled) { updateFindCount(); setMsg(st.reason || "当前不可用", "warn"); return false; }
   const ta = $("#editor");
   const rep = $("#replace-input").value;
   // 从后往前替换，避免下标偏移
@@ -2452,6 +2490,7 @@ function replaceAll() {
   find.idx = -1;
   updateFindCount();
   setMsg(`已替换 ${count} 处`, "ok");
+  return true;
 }
 
 $("#find-input").addEventListener("input", () => runFind(false));
@@ -2478,6 +2517,7 @@ $("#find-case").onclick = () => {
   $("#find-case").classList.toggle("on", !find.ci);
   runFind(false);
 };
+applyFindControlState();
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
