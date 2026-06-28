@@ -1600,20 +1600,27 @@ class Handler(BaseHTTPRequestHandler):
             for entry in sorted(d.iterdir(), key=lambda e: e.name.lower()):
                 if entry.name.startswith("$") or entry.name == "System Volume Information":
                     continue
-                rel_path = workspace_relpath(entry)
-                if entry.is_dir():
+                try:
+                    rel_path = workspace_relpath(entry)
+                    is_dir = entry.is_dir()
+                except (OSError, ValueError):
+                    # Broken symlinks/junctions or targets outside the workspace should not
+                    # make the whole Explorer tree fail to render.
+                    continue
+                if is_dir:
                     dirs.append({"name": entry.name, "path": rel_path, "type": "dir"})
-                else:
-                    try:
-                        size = entry.stat().st_size
-                    except OSError:
-                        size = 0   # 坏软链/junction(目标缺失)或枚举期间被删(TOCTOU)：跳过尺寸而非整树报错
-                    files.append({
-                        "name": entry.name, "path": rel_path, "type": "file",
-                        "kind": classify(entry),
-                        "size": size,
-                    })
-        except PermissionError:
+                    continue
+                try:
+                    size = entry.stat().st_size
+                    kind = classify(entry)
+                except OSError:
+                    continue  # TOCTOU or inaccessible file: skip this entry only.
+                files.append({
+                    "name": entry.name, "path": rel_path, "type": "file",
+                    "kind": kind,
+                    "size": size,
+                })
+        except (PermissionError, OSError):
             return self._err("permission denied", 403)
         if inner:
             rel_norm = f"@{idx}/{inner}" if idx else inner

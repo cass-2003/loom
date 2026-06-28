@@ -684,6 +684,28 @@
         run: () => {
           if (window.wbTabActions && window.wbTabActions.run) window.wbTabActions.run("closeCurrent");
         } });
+    A({ id: "split.toggleOrientation", name: "副分屏: 切换方向", hint: "Layout", icon: "splitH",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbSplitActions;
+          if (!api || !api.actionState) return "副分屏动作尚未就绪";
+          const st = api.actionState("toggleOrientation");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbSplitActions && window.wbSplitActions.run) window.wbSplitActions.run("toggleOrientation");
+        } });
+    A({ id: "split.collapseAll", name: "副分屏: 关闭并移回主组", hint: "Layout", icon: "columns",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbSplitActions;
+          if (!api || !api.actionState) return "副分屏动作尚未就绪";
+          const st = api.actionState("collapseAll");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbSplitActions && window.wbSplitActions.run) window.wbSplitActions.run("collapseAll");
+        } });
     // Git 提交
     A({ id: "git.commit.focus", name: "Git: 提交", hint: "Ctrl+Enter", icon: "check",
         requires: ["workspace"],

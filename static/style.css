@@ -563,6 +563,9 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
   background: transparent; border: none; cursor: pointer;
 }
 #side-tabbar .side-tools .tb-btn:hover { background: var(--hover); color: var(--text); }
+#side-tabbar .side-tools .tb-btn:disabled {
+  cursor: default; opacity: .45; color: var(--muted); background: transparent;
+}
 
 #side-pane { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; background: var(--bg); }
 #side-gutter {

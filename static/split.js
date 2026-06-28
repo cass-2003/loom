@@ -119,9 +119,20 @@
       + `<button class="tb-btn" id="side-close-all" title="关闭分屏（文件移回主组）">`
       + `${window.svgIcon("close", 15)}</button>`;
     bar.appendChild(tools);
-    tools.querySelector("#side-orient").onclick = () => setOrient(orient === "v" ? "h" : "v");
-    tools.querySelector("#side-close-all").onclick = () => collapseAll();
+    const orientBtn = tools.querySelector("#side-orient");
+    const closeAllBtn = tools.querySelector("#side-close-all");
+    setSideToolButtonState(orientBtn, splitActionState("toggleOrientation"), "切换分屏方向：左右 / 上下");
+    setSideToolButtonState(closeAllBtn, splitActionState("collapseAll"), "关闭分屏（文件移回主组）");
+    orientBtn.onclick = () => window.wbSplitActions.run("toggleOrientation");
+    closeAllBtn.onclick = () => window.wbSplitActions.run("collapseAll");
     applyLayout();
+  }
+
+  function setSideToolButtonState(btn, st, enabledTitle) {
+    if (!btn) return;
+    btn.disabled = !st.enabled;
+    btn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+    btn.title = st.enabled ? enabledTitle : (st.reason || "当前不可用");
   }
 
   // ---------- 副组编辑器 ----------
@@ -247,6 +258,33 @@
     localStorage.setItem(ORIENT_KEY, orient);
     localStorage.removeItem(SIZE_WS_KEY());   // 换方向后比例重算
     renderSideTabs();
+  }
+
+  function splitActionState(action) {
+    if (action === "toggleOrientation" || action === "collapseAll") {
+      if (!hasSide()) return { enabled: false, reason: "当前没有打开副分屏" };
+      return { enabled: true, reason: "" };
+    }
+    return { enabled: false, reason: "未知副分屏动作" };
+  }
+
+  function runSplitAction(action) {
+    const st = splitActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "toggleOrientation") {
+      setOrient(orient === "v" ? "h" : "v");
+      if (window.setMsg) window.setMsg("已切换副分屏方向", "ok");
+      return true;
+    }
+    if (action === "collapseAll") {
+      collapseAll();
+      if (window.setMsg) window.setMsg("已关闭副分屏并移回主组", "ok");
+      return true;
+    }
+    return false;
   }
 
   // ---------- 行号槽（轻量）----------
@@ -581,6 +619,11 @@
     has: (p) => !!sideTabByPath(p),       // 该文件是否在副组
     activate: (p) => activateSide(p),      // 切到副组里的该文件
     remapPath, dropPath, reset, hasUnsaved, snapshot,   // 生命周期联动
+  };
+  window.wbSplitActions = {
+    actionState: splitActionState,
+    run: runSplitAction,
+    summary: snapshot,
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
