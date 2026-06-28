@@ -1258,6 +1258,22 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 :root[data-theme="light"] .notes-add-btn { color: #fff; }
 .notes-add-btn:hover { background: var(--accent-press); }
 .notes-add-btn:active { transform: translateY(1px); }
+.notes-add-btn:disabled,
+.notes-add-btn[aria-disabled="true"] {
+  opacity: .5;
+  cursor: not-allowed;
+  color: var(--muted);
+  background: var(--bg3);
+  border: 1px solid var(--border-soft);
+}
+.notes-add-btn:disabled:hover,
+.notes-add-btn[aria-disabled="true"]:hover {
+  background: var(--bg3);
+}
+.notes-add-btn:disabled:active,
+.notes-add-btn[aria-disabled="true"]:active {
+  transform: none;
+}
 
 .todo-list { display: flex; flex-direction: column; gap: 2px; }
 .todo-empty { color: var(--muted); font-size: 12px; padding: 10px 6px; text-align: center; }

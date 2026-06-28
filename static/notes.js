@@ -5,6 +5,7 @@
   let loaded = false;      // 首次加载完成前不触发保存
   let saveTimer = null;
   let dragId = null;       // 拖拽中的 todo id
+  let refreshAddState = null;
 
   function el(id) { return document.getElementById(id); }
   function esc(s) {
@@ -32,6 +33,7 @@
     const ta = el("notes-text");
     if (ta) ta.value = note;
     renderTodos();
+    if (refreshAddState) refreshAddState();
   }
 
   function scheduleSave() {
@@ -167,12 +169,22 @@
   function addTodo() {
     const input = el("todo-input");
     if (!input) return;
+    if (!loaded) {
+      const st = el("notes-status");
+      if (st) st.textContent = "便签加载中…";
+      if (refreshAddState) refreshAddState();
+      return;
+    }
     const v = input.value.trim();
-    if (!v) return;
+    if (!v) {
+      if (refreshAddState) refreshAddState();
+      return;
+    }
     todos.push({ id: newId(), text: v, done: false });
     input.value = "";
     renderTodos();
     scheduleSave();
+    if (refreshAddState) refreshAddState();
   }
 
   // ---------- 初始化 ----------
@@ -182,14 +194,24 @@
     const noteTa = el("notes-text");
     if (!addInput) return;
 
+    refreshAddState = () => {
+      const disabled = !loaded || !addInput.value.trim();
+      addBtn.disabled = disabled;
+      addBtn.setAttribute("aria-disabled", disabled ? "true" : "false");
+      addBtn.classList.toggle("disabled", disabled);
+      addBtn.title = !loaded ? "便签加载中…" : disabled ? "输入待办内容后添加" : "添加";
+    };
+
     addBtn.addEventListener("click", addTodo);
     addInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); addTodo(); }
     });
+    addInput.addEventListener("input", refreshAddState);
     noteTa.addEventListener("input", () => {
       note = noteTa.value;
       scheduleSave();
     });
+    refreshAddState();
     load();
   }
 
