@@ -203,6 +203,10 @@
     ].join("\n");
   }
   async function copyRecoveryBrief() {
+    if (!tasksLoaded || !sessionsLoaded) {
+      if (window.setMsg) setMsg("任务/会话尚未加载", "warn");
+      return false;
+    }
     const text = recoveryBrief();
     try {
       await navigator.clipboard.writeText(text);
@@ -255,10 +259,7 @@
     const filtered = visibleTasks().length;
     const hasFilter = taskFilters.status !== "all" || taskFilters.source !== "all";
     if (clear) clear.classList.toggle("hidden", !hasFilter);
-    if (copy) {
-      copy.disabled = !tasksLoaded && !sessionsLoaded;
-      copy.title = copy.disabled ? "任务/会话尚未加载" : "复制恢复 brief";
-    }
+    if (copy) refreshCopyRecoveryButton();
     next.textContent = latestTask
       ? `下一步：${latestTask.next || "打开最近任务，补充日志、证据或创建会话。"}`
       : "下一步：从当前文件、Git 变更、Playbook 或工作区布局创建一个可验证任务。";
@@ -296,6 +297,15 @@
   }
   function notifyRecoveryChanged() {
     if (window.renderProjectRecovery) window.renderProjectRecovery();
+  }
+
+  function refreshCopyRecoveryButton() {
+    const copy = $("#task-copy-recovery");
+    if (!copy) return;
+    const st = taskActionState("copyRecoveryBrief");
+    copy.disabled = !st.enabled;
+    copy.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+    copy.title = st.enabled ? "复制恢复 brief" : (st.reason || "当前不可用");
   }
 
   async function saveTasks(msg) {
@@ -764,7 +774,7 @@
       renderTasks();
     };
     const copy = $("#task-copy-recovery");
-    if (copy) copy.onclick = copyRecoveryBrief;
+    if (copy) copy.onclick = () => runTaskAction("copyRecoveryBrief");
     loadTasks();
     loadSessions();
   }
@@ -779,7 +789,7 @@
     const hasSession = sessions.length > 0;
     if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (action === "copyRecoveryBrief") {
-      if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
+      if (!tasksLoaded || !sessionsLoaded) return { enabled: false, reason: "任务/会话尚未加载" };
       return { enabled: true, reason: "" };
     }
     if (action === "appendMemory" || action === "createSession" || action === "copySessionBrief" || action === "importTaskResult") {
@@ -796,6 +806,7 @@
     if (!tasksLoaded) await loadTasks();
     if (action === "focusRecovery" && !sessionsLoaded) await loadSessions();
     if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief") && !sessionsLoaded) await loadSessions();
+    refreshCopyRecoveryButton();
     const st = taskActionState(action);
     if (!st.enabled) {
       if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
