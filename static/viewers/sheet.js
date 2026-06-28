@@ -52,6 +52,7 @@
       ".wb-sheet-toolbar label { color:var(--muted); }",
       ".wb-sheet-select { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:13px; outline:none; cursor:pointer; }",
       ".wb-sheet-select:focus { border-color:var(--accent); }",
+      ".wb-sheet-select:disabled { opacity:.55; cursor:not-allowed; color:var(--muted); }",
       ".wb-sheet-meta { color:var(--muted); margin-left:auto; }",
       ".wb-sheet-body { flex:1 1 auto; min-height:0; overflow:auto; padding:0; }",
       ".wb-sheet-body table { border-collapse:collapse; font-size:13px; color:var(--text); width:auto; }",
@@ -70,6 +71,34 @@
 
   // 模块级状态：当前 mount 的工作簿/容器，供 select 切换 + unmount 清理
   var _state = null;
+
+  function setSelectState(sel, disabled, title) {
+    if (!sel) return;
+    sel.disabled = !!disabled;
+    sel.setAttribute("aria-disabled", disabled ? "true" : "false");
+    sel.title = title || (disabled ? "当前不可用" : "选择工作表");
+  }
+
+  function setSelectOptions(sel, names) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (!names || !names.length) {
+      var empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "无工作表";
+      sel.appendChild(empty);
+      setSelectState(sel, true, "未找到任何工作表");
+      return;
+    }
+    names.forEach(function (n, i) {
+      var opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = n;
+      sel.appendChild(opt);
+    });
+    var disabled = names.length <= 1;
+    setSelectState(sel, disabled, disabled ? "只有一个工作表，无需切换" : "选择工作表");
+  }
 
   function renderSheet(workbook, name, bodyEl, metaEl) {
     var XLSX = window.XLSX;
@@ -110,9 +139,23 @@
     var toolbar = document.createElement("div");
     toolbar.className = "wb-sheet-toolbar";
 
+    var lab = document.createElement("label");
+    lab.textContent = "工作表：";
+    var sel = document.createElement("select");
+    sel.className = "wb-sheet-select";
+    var loadingOpt = document.createElement("option");
+    loadingOpt.value = "";
+    loadingOpt.textContent = "加载中…";
+    sel.appendChild(loadingOpt);
+    setSelectState(sel, true, "工作表加载中…");
+
     var meta = document.createElement("span");
     meta.className = "wb-sheet-meta";
+    meta.textContent = "加载中…";
 
+    toolbar.appendChild(lab);
+    toolbar.appendChild(sel);
+    toolbar.appendChild(meta);
     var body = document.createElement("div");
     body.className = "wb-sheet-body";
 
@@ -120,7 +163,7 @@
     root.appendChild(body);
     host.appendChild(root);
 
-    _state = { host: host, root: root, body: body, meta: meta, workbook: null, select: null };
+    _state = { host: host, root: root, body: body, meta: meta, workbook: null, select: sel };
 
     var loading = document.createElement("div");
     loading.className = "wb-sheet-empty";
@@ -142,6 +185,8 @@
 
         var names = wb.SheetNames || [];
         if (!names.length) {
+          setSelectOptions(sel, []);
+          meta.textContent = "";
           var e = document.createElement("div");
           e.className = "wb-sheet-empty";
           e.textContent = "未找到任何工作表。";
@@ -149,32 +194,12 @@
           return;
         }
 
-        // 多表时给个切换下拉
-        if (names.length > 1) {
-          var lab = document.createElement("label");
-          lab.textContent = "工作表：";
-          var sel = document.createElement("select");
-          sel.className = "wb-sheet-select";
-          names.forEach(function (n, i) {
-            var opt = document.createElement("option");
-            opt.value = String(i);
-            opt.textContent = n;
-            sel.appendChild(opt);
-          });
-          sel.addEventListener("change", function () {
-            var idx = parseInt(sel.value, 10) || 0;
-            renderSheet(wb, names[idx], body, meta);
-          });
-          toolbar.appendChild(lab);
-          toolbar.appendChild(sel);
-          _state.select = sel;
-        } else {
-          var single = document.createElement("span");
-          single.style.color = "var(--text-dim)";
-          single.textContent = names[0];
-          toolbar.appendChild(single);
-        }
-        toolbar.appendChild(meta);
+        setSelectOptions(sel, names);
+        sel.onchange = function () {
+          if (sel.disabled) return;
+          var idx = parseInt(sel.value, 10) || 0;
+          renderSheet(wb, names[idx], body, meta);
+        };
 
         renderSheet(wb, names[0], body, meta);
       })
@@ -184,6 +209,13 @@
           window.wbViewer.reportError(host, err);
         }
         body.innerHTML = "";
+        sel.innerHTML = "";
+        var opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "加载失败";
+        sel.appendChild(opt);
+        setSelectState(sel, true, "表格加载失败，不能切换工作表");
+        meta.textContent = "";
         var e = document.createElement("div");
         e.className = "wb-sheet-error";
         e.textContent = "无法解析表格：" + (err && err.message ? err.message : String(err));
