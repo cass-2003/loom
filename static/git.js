@@ -38,7 +38,9 @@ function setStatusBranchState(stateInfo) {
   const enabled = !!(stateInfo && stateInfo.enabled);
   el.classList.toggle("status-clickable", enabled);
   el.classList.toggle("disabled", !enabled);
+  el.setAttribute("role", "button");
   el.setAttribute("aria-disabled", enabled ? "false" : "true");
+  el.tabIndex = enabled ? 0 : -1;
   el.title = enabled ? "筛选 Git 历史分支" : ((stateInfo && stateInfo.reason) || "Git 分支不可用");
 }
 
@@ -993,6 +995,11 @@ function initGit() {
     e.stopPropagation();
     window.wbGitActions.run("branchFilter", statusBranch);
   };
+  if (statusBranch) statusBranch.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    window.wbGitActions.run("branchFilter", statusBranch);
+  });
 
   // 储藏（保存当前更改）
   const stashSave = document.querySelector("#git-stash-save");
