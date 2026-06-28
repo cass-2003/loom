@@ -615,6 +615,54 @@
     }
   }
 
+  function sessionCardActionState(session, action) {
+    if (!session) return { enabled: false, reason: "没有找到 Agent Session" };
+    const linkedTask = findTaskForSession(session);
+    if (action === "brief") {
+      if (session.brief || linkedTask) return { enabled: true, reason: "" };
+      return { enabled: false, reason: "该 Session 没有 brief，也未绑定可生成 brief 的任务" };
+    }
+    if (action === "recovery") {
+      return { enabled: true, reason: "" };
+    }
+    if (action === "import") {
+      return { enabled: true, reason: "" };
+    }
+    return { enabled: true, reason: "" };
+  }
+
+  function renderSessionButton(action, label, session, enabledTitle) {
+    const st = sessionCardActionState(session, action);
+    return `<button data-act="${esc(action)}" title="${esc(st.enabled ? enabledTitle : st.reason)}" `
+      + `aria-disabled="${st.enabled ? "false" : "true"}"${st.enabled ? "" : " disabled"}>${esc(label)}</button>`;
+  }
+
+  function setSessionButtonState(btn, session, action, enabledTitle) {
+    if (!btn) return;
+    const st = sessionCardActionState(session, action);
+    btn.disabled = !st.enabled;
+    btn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+    btn.title = st.enabled ? enabledTitle : (st.reason || "当前不可用");
+  }
+
+  async function copySessionCardBrief(session) {
+    const st = sessionCardActionState(session, "brief");
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    const linkedTask = findTaskForSession(session);
+    const text = session.brief || sessionBrief(linkedTask);
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) setMsg("已复制 Session brief", "ok");
+      return true;
+    } catch {
+      prompt("复制下面的 Session brief：", text);
+      return true;
+    }
+  }
+
   function taskMemoryTitle(t) {
     return `Task ${STATUS[t.status] || t.status}: ${t.title}`;
   }
@@ -862,29 +910,30 @@
         <div class="task-section"><b>Outputs</b><ul>${outputs || "<li>暂无</li>"}</ul></div>
         <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
         <div class="task-actions">
-          <button data-act="brief">复制 brief</button>
-          <button data-act="recovery">复制恢复包</button>
-          <button data-act="import">导入结果</button>
+          ${renderSessionButton("brief", "复制 brief", s, "复制 Session brief")}
+          ${renderSessionButton("recovery", "复制恢复包", s, "复制 Session 恢复包")}
+          ${renderSessionButton("import", "导入结果", s, "导入 Agent 结果")}
         </div>
       </article>`;
     }).join("");
     list.querySelectorAll(".session-card").forEach(card => {
       const id = card.dataset.id;
+      const session = sessions.find(s => s.id === id);
+      if (!session) return;
+      setSessionButtonState(card.querySelector("[data-act='brief']"), session, "brief", "复制 Session brief");
+      setSessionButtonState(card.querySelector("[data-act='recovery']"), session, "recovery", "复制 Session 恢复包");
+      setSessionButtonState(card.querySelector("[data-act='import']"), session, "import", "导入 Agent 结果");
       card.addEventListener("click", e => {
         const btn = e.target.closest("button[data-act]");
         if (!btn) return;
-        const session = sessions.find(s => s.id === id);
-        if (!session) return;
+        const action = btn.dataset.act;
+        const st = sessionCardActionState(session, action);
+        if (!st.enabled) {
+          if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+          return;
+        }
         if (btn.dataset.act === "brief") {
-          const text = session.brief || "";
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(
-              () => window.setMsg && setMsg("已复制 Session brief", "ok"),
-              () => prompt("复制下面的 Session brief：", text)
-            );
-          } else {
-            prompt("复制下面的 Session brief：", text);
-          }
+          copySessionCardBrief(session);
         } else if (btn.dataset.act === "recovery") {
           copySessionRecoveryPackage(id);
         } else if (btn.dataset.act === "import") {
