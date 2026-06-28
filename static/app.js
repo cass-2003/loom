@@ -1013,6 +1013,8 @@ function applyViewerActionState() {
   if (!btn) return;
   const st = viewerActionState("createTask");
   btn.disabled = !st.enabled;
+  btn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+  btn.classList.toggle("disabled", !st.enabled);
   btn.title = st.enabled ? "从当前查看器文件创建验证任务" : (st.reason || "当前不可用");
 }
 
