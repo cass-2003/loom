@@ -943,7 +943,7 @@
       if (!hasTask) return { enabled: false, reason: "还没有可操作的工作流任务" };
     }
     if (action === "copySessionRecovery") {
-      if (!sessionsFresh()) return { enabled: true, reason: "" };
+      if (!tasksFresh() || !sessionsFresh()) return { enabled: false, reason: "任务/会话尚未加载" };
       if (!hasSession) return { enabled: false, reason: "还没有可恢复的 Agent Session" };
     }
     if (action === "importSessionResult" && !hasSession && !hasTask) {
