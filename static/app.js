@@ -649,6 +649,41 @@ function closeCurrent() {
   }));
 }
 
+function tabActionState(action) {
+  if (action === "closeCurrent") {
+    if (window.split && split.isSideFocused()) {
+      return split.activeText && split.activeText()
+        ? { enabled: true, reason: "" }
+        : { enabled: false, reason: "副分屏没有可关闭标签" };
+    }
+    return state.activeTab
+      ? { enabled: true, reason: "" }
+      : { enabled: false, reason: "当前没有可关闭标签" };
+  }
+  return { enabled: false, reason: "未知标签动作" };
+}
+
+function runTabAction(action) {
+  const st = tabActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "closeCurrent") {
+    if (window.split && split.isSideFocused()) {
+      return split.closeActive ? split.closeActive() : false;
+    }
+    closeTab(state.activeTab);
+    return true;
+  }
+  return false;
+}
+
+window.wbTabActions = {
+  actionState: tabActionState,
+  run: runTabAction,
+};
+
 // 在树中按 path 找到对应的 .node-row（仅限已渲染节点）
 function findRow(path) {
   return document.querySelector(`#tree .node-row[data-path="${cssEsc(path)}"]`);

@@ -175,6 +175,12 @@
     } else renderSideTabs();
   }
 
+  function closeActive() {
+    if (!hasSide() || !side.active) return false;
+    closeSide(side.active);
+    return true;
+  }
+
   // ---------- 主 ↔ 副 搬运（move 语义）----------
   function moveToSide(path, zone) {
     const st = wb().state;
@@ -571,6 +577,7 @@
     isSideFocused: () => focus === "side" && hasSide(),
     hasSide, save, focus: () => focus,
     activeText,
+    closeActive,
     has: (p) => !!sideTabByPath(p),       // 该文件是否在副组
     activate: (p) => activateSide(p),      // 切到副组里的该文件
     remapPath, dropPath, reset, hasUnsaved, snapshot,   // 生命周期联动

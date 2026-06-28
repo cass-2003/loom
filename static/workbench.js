@@ -668,8 +668,15 @@
     }));
     // 关闭当前标签
     A({ id: "tab.closeCurrent", name: "关闭当前标签", hint: "", icon: "close",
-        requires: ["currentFile"],
-        run: () => { if (window.state && state.activeTab && typeof closeTab === "function") closeTab(state.activeTab); } });
+        enabled: () => {
+          const api = window.wbTabActions;
+          if (!api || !api.actionState) return "标签动作尚未就绪";
+          const st = api.actionState("closeCurrent");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbTabActions && window.wbTabActions.run) window.wbTabActions.run("closeCurrent");
+        } });
     // Git 提交
     A({ id: "git.commit.focus", name: "Git: 提交", hint: "Ctrl+Enter", icon: "check",
         requires: ["workspace"],
