@@ -44,6 +44,16 @@ installer\Output\Workbench-Setup-0.1.0.exe
 
 如果本机还没安装 Inno Setup 6，需要先安装；脚本不再要求你手动把 `ISCC.exe` 加进 `PATH`。
 
+## 浏览器烟测（开发验证）
+
+Codex 桌面运行时自带的 Node 依赖使用 pnpm 嵌套目录。直接 `node smoke.js` 可能找不到 `playwright-core`，需要用仓库脚本补齐 `NODE_PATH`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-browser-smoke.ps1 path\to\smoke.js
+```
+
+脚本会优先使用 Codex runtime 的 Node，并把 `node_modules` 与 `.pnpm\node_modules` 加入解析路径；传入的 smoke 文件可以是仓库相对路径或绝对路径。
+
 ## 功能
 
 VS Code 风格布局：**活动栏（图标）→ 侧边栏（随图标切换）→ 中间编辑区（标签栏 + 内容）→ 状态栏**，底部可折叠**集成终端**。
