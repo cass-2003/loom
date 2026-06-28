@@ -577,7 +577,15 @@
         } });
     A({ id: "workspace.showEmpty", name: "显示工作区空状态", hint: "工作区", icon: "folder",
         requires: ["workspace"],
-        run: () => { typeof showEmptyWorkspace === "function" && showEmptyWorkspace(window.currentRoot); } });
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("showEmpty");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("showEmpty");
+        } });
     A({ id: "workspace.copyLayoutBrief", name: "工作区: 复制布局 brief", hint: "Layout", icon: "copy",
         requires: ["workspace"], risk: "read",
         enabled: () => {

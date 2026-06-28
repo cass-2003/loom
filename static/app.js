@@ -3292,6 +3292,17 @@ async function chooseAndSwitchWorkspace() {
 function workspaceActionState(action) {
   if (action === "open") return { enabled: true, reason: "" };
   if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+  if (action === "showEmpty") {
+    const mainTabs = state && Array.isArray(state.tabs) ? state.tabs.length : 0;
+    const sideTabs = window.split && typeof window.split.snapshot === "function"
+      ? ((window.split.snapshot().tabs || []).length)
+      : 0;
+    if (mainTabs || sideTabs || state.activeTab || state.current) {
+      return { enabled: false, reason: "仍有打开的文件，不能显示空工作区" };
+    }
+    if (typeof showEmptyWorkspace !== "function") return { enabled: false, reason: "空工作区视图尚未就绪" };
+    return { enabled: true, reason: "" };
+  }
   if (action === "newFileRoot" && typeof fsCreate !== "function") {
     return { enabled: false, reason: "新建文件能力尚未就绪" };
   }
@@ -3313,6 +3324,11 @@ async function runWorkspaceAction(action) {
   if (action === "open") { await chooseAndSwitchWorkspace(); return true; }
   if (action === "newFileRoot") { await fsCreate("", $("#tree")); return true; }
   if (action === "newFolderRoot") { await fsCreateDir("", $("#tree")); return true; }
+  if (action === "showEmpty") {
+    showEmptyWorkspace(currentRoot);
+    setMsg("已显示空工作区状态", "ok");
+    return true;
+  }
   if (action === "refreshTree") {
     state.expanded.clear();
     await initTree();
