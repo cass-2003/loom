@@ -1458,9 +1458,9 @@ window.updateStatusFileAction = updateStatusFileAction;
 function updateTopActionState() {
   const saveBtn = $("#btn-save");
   if (saveBtn) {
-    const canSave = state.kind === "text" || state.kind === "md";
-    saveBtn.disabled = !canSave;
-    saveBtn.title = canSave ? "保存 (Ctrl+S)" : "当前视图不可保存";
+    const st = fileSaveActionState("save");
+    saveBtn.disabled = !st.enabled;
+    saveBtn.title = st.enabled ? "保存 (Ctrl+S)" : (st.reason || "当前视图不可保存");
   }
   const viewBtn = $("#btn-view-edit");
   if (viewBtn && !document.body.classList.contains("markdown-active")) {
@@ -2388,6 +2388,20 @@ $("#editor").addEventListener("keydown", (e) => {
 });
 
 // ---------- 保存 ----------
+function fileSaveActionState(action) {
+  if (action === "save") {
+    if (window.split && split.isSideFocused()) {
+      const side = split.activeText && split.activeText();
+      return side ? { enabled: true, reason: "" } : { enabled: false, reason: "副分屏没有可保存文件" };
+    }
+    if (!state.current) return { enabled: false, reason: "当前没有打开文件" };
+    if (!(state.kind === "text" || state.kind === "md")) {
+      return { enabled: false, reason: "当前视图不可保存" };
+    }
+  }
+  return { enabled: true, reason: "" };
+}
+
 async function save() {
   if (!state.current) return;
   const path = state.current;          // 在 await 前固定目标路径，避免存盘往返中切换标签存错文件
@@ -2414,9 +2428,27 @@ async function save() {
 }
 // 焦点在副分屏组时存副组，否则存主组
 function saveRouted() {
+  const st = fileSaveActionState("save");
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
   if (window.split && window.split.isSideFocused()) return window.split.save();
   return save();
 }
+window.saveRouted = saveRouted;
+window.wbFileSaveActions = {
+  actionState: fileSaveActionState,
+  run: (action) => {
+    const st = fileSaveActionState(action);
+    if (!st.enabled) {
+      setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "save") return saveRouted();
+    return false;
+  },
+};
 $("#btn-save").onclick = saveRouted;
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveRouted(); }

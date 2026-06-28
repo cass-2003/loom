@@ -480,8 +480,17 @@
           if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("newFolderRoot");
         } });
     A({ id: "file.save", name: "保存文件", hint: "Ctrl+S", icon: "save",
-        requires: ["editableFile"], risk: "write",
-        run: () => { typeof save === "function" && save(); } });
+        risk: "write",
+        enabled: () => {
+          const api = window.wbFileSaveActions;
+          if (!api || !api.actionState) return "保存动作尚未就绪";
+          const st = api.actionState("save");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbFileSaveActions && window.wbFileSaveActions.run) window.wbFileSaveActions.run("save");
+          else if (typeof saveRouted === "function") saveRouted();
+        } });
     A({ id: "file.quickOpen", name: "快速打开文件", hint: "Ctrl+P", icon: "search",
         requires: ["workspace"],
         run: () => { typeof openQuickOpen === "function" && openQuickOpen(); } });

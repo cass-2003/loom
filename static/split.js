@@ -290,6 +290,7 @@
       $("#status-file").textContent = wb().current;
     }
     if (window.updateStatusFileAction) window.updateStatusFileAction();
+    if (window.updateTopActionState) window.updateTopActionState();
     window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
       detail: { group: g, path: g === "side" ? side.active : wb().current },
     }));
