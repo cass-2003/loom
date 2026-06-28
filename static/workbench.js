@@ -974,6 +974,18 @@
           typeof switchView === "function" && switchView("tasks");
           if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("copySessionBrief");
         } });
+    A({ id: "session.copyRecovery", name: "Agent: 复制最近会话恢复包", hint: "Session", icon: "copy",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("copySessionRecovery");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          typeof switchView === "function" && switchView("tasks");
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("copySessionRecovery");
+        } });
     A({ id: "session.importResult", name: "Agent: 导入会话结果", hint: "Session", icon: "download",
         risk: "write",
         enabled: () => {

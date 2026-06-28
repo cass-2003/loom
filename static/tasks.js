@@ -480,6 +480,61 @@
     ].join("\n");
   }
 
+  function sessionRecoveryPackage(session) {
+    const t = findTaskForSession(session);
+    const title = session && (session.title || session.taskTitle) || (t && t.title) || "Untitled Session";
+    return [
+      `# Agent Session Recovery: ${title}`,
+      "",
+      "## Session",
+      `- id: ${session && session.id || "none"}`,
+      `- status: ${session && session.status || "draft"}`,
+      `- taskId: ${session && session.taskId || (t && t.id) || "none"}`,
+      `- createdAt: ${session && session.createdAt || "unknown"}`,
+      `- updatedAt: ${session && session.updatedAt || "unknown"}`,
+      "",
+      "## Workspace Layout",
+      workspaceLayoutBrief(),
+      "",
+      "## Session Context",
+      ...((session && session.context || []).length ? session.context.map(x => "- " + x) : ["- （暂无）"]),
+      "",
+      "## Linked Task Brief",
+      t ? taskBrief(t) : "（未找到关联任务）",
+      "",
+      "## Session Outputs",
+      ...((session && session.outputs || []).length ? session.outputs.map(x => "- " + x) : ["- （暂无）"]),
+      "",
+      "## Evidence",
+      ...((session && session.evidence || []).length ? session.evidence.map(x => "- " + x) : ["- （暂无）"]),
+      "",
+      "## Session Log",
+      ...((session && session.log || []).length ? session.log.map(x => "- " + x) : ["- （暂无）"]),
+      "",
+      "## Next",
+      t && t.next ? t.next : "继续检查 session 输出和 evidence，补齐验证记录或导入新的 Agent 结果。",
+    ].join("\n");
+  }
+
+  async function copySessionRecoveryPackage(id) {
+    if (!sessionsLoaded) await loadSessions();
+    if (!tasksLoaded) await loadTasks();
+    const session = sessions.find(s => s.id === id);
+    if (!session) {
+      if (window.setMsg) setMsg("没有找到可恢复的 Session", "warn");
+      return false;
+    }
+    const text = sessionRecoveryPackage(session);
+    try {
+      await navigator.clipboard.writeText(text);
+      if (window.setMsg) setMsg("已复制 Session 恢复包", "ok");
+      return true;
+    } catch {
+      prompt("复制下面的 Session 恢复包：", text);
+      return true;
+    }
+  }
+
   function taskMemoryTitle(t) {
     return `Task ${STATUS[t.status] || t.status}: ${t.title}`;
   }
@@ -728,6 +783,7 @@
         <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
         <div class="task-actions">
           <button data-act="brief">复制 brief</button>
+          <button data-act="recovery">复制恢复包</button>
           <button data-act="import">导入结果</button>
         </div>
       </article>`;
@@ -749,6 +805,8 @@
           } else {
             prompt("复制下面的 Session brief：", text);
           }
+        } else if (btn.dataset.act === "recovery") {
+          copySessionRecoveryPackage(id);
         } else if (btn.dataset.act === "import") {
           importAgentResult(id, session.taskId);
         }
@@ -796,6 +854,10 @@
       if (!tasksLoaded) return { enabled: true, reason: "" };
       if (!hasTask) return { enabled: false, reason: "还没有可操作的工作流任务" };
     }
+    if (action === "copySessionRecovery") {
+      if (!sessionsLoaded) return { enabled: true, reason: "" };
+      if (!hasSession) return { enabled: false, reason: "还没有可恢复的 Agent Session" };
+    }
     if (action === "importSessionResult" && !hasSession && !hasTask) {
       if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
       return { enabled: false, reason: "还没有可导入结果的任务或会话" };
@@ -805,7 +867,7 @@
   async function runTaskAction(action) {
     if (!tasksLoaded) await loadTasks();
     if (action === "focusRecovery" && !sessionsLoaded) await loadSessions();
-    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief") && !sessionsLoaded) await loadSessions();
+    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsLoaded) await loadSessions();
     refreshCopyRecoveryButton();
     const st = taskActionState(action);
     if (!st.enabled) {
@@ -828,6 +890,7 @@
     if (action === "appendMemory") return appendTaskToMemory(tasks[0].id);
     if (action === "createSession") return createSessionFromTask(tasks[0].id);
     if (action === "copySessionBrief") return copySessionBrief(tasks[0].id);
+    if (action === "copySessionRecovery") return copySessionRecoveryPackage(sessions[0] && sessions[0].id);
     if (action === "importTaskResult") return importAgentResult(null, tasks[0].id);
     if (action === "importSessionResult") {
       if (sessions[0]) return importAgentResult(sessions[0].id, sessions[0].taskId);
@@ -858,6 +921,9 @@
   };
   window.copyActiveSessionBrief = () => {
     runTaskAction("copySessionBrief");
+  };
+  window.copyActiveSessionRecoveryPackage = () => {
+    runTaskAction("copySessionRecovery");
   };
   window.importAgentResultToActiveTask = () => {
     runTaskAction("importTaskResult");
