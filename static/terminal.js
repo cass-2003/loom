@@ -76,6 +76,14 @@
     return { enabled: true, reason: "" };
   }
 
+  function setTerminalButtonState(btn, state, enabledTitle) {
+    if (!btn) return;
+    btn.disabled = !state.enabled;
+    btn.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+    btn.classList.toggle("disabled", !state.enabled);
+    btn.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+  }
+
   async function runTerminalAction(action) {
     if (action === "runTask" && !tasksLoaded) await loadTasks(false);
     const st = terminalActionState(action);
@@ -438,31 +446,33 @@
     const setBtn = (sel, enabledTitle, enabled) => {
       const btn = $(sel);
       if (!btn) return;
-      btn.disabled = !hasWs || !enabled;
-      btn.title = hasWs ? enabledTitle : wsReason;
+      setTerminalButtonState(btn, {
+        enabled: !!(hasWs && enabled),
+        reason: hasWs ? "当前没有活动终端" : wsReason,
+      }, enabledTitle);
     };
-    setBtn("#term-new", "新建终端", true);
-    setBtn("#term-new-caret", "选择 Shell 新建终端", true);
+    const newState = terminalActionState("new");
+    setTerminalButtonState($("#term-new"), newState, "新建终端");
+    setTerminalButtonState($("#term-new-caret"), newState, "选择 Shell 新建终端");
     setBtn("#term-dock", "终端停靠：底部 / 右侧", true);
     setBtn("#term-maximize", "向上铺满文件区 / 还原", true);
-    setBtn("#term-collapse", "折叠 / 展开", true);
     setBtn("#term-list-toggle", "切换终端列表", true);
     setBtn("#term-clear", "清屏（仅当前窗格）", !!activeGroup());
     const toggleState = terminalActionState("toggle");
     const collapse = $("#term-collapse");
     if (collapse) {
-      collapse.disabled = !toggleState.enabled;
-      collapse.title = toggleState.enabled ? "折叠 / 展开" : (toggleState.reason || wsReason);
+      setTerminalButtonState(collapse, toggleState, "折叠 / 展开");
     }
     const splitBtn = $("#term-split"), killBtn = $("#term-kill");
     if (splitBtn) {
       const splitState = terminalActionState("split");
-      splitBtn.disabled = !splitState.enabled;
-      splitBtn.title = splitState.enabled ? "拆分终端 (Ctrl+Shift+5)" : (splitState.reason || wsReason);
+      setTerminalButtonState(splitBtn, splitState, "拆分终端 (Ctrl+Shift+5)");
     }
     if (killBtn) {
-      killBtn.disabled = !hasWs || !activeGroup();
-      killBtn.title = hasWs ? "关闭当前终端" : wsReason;
+      setTerminalButtonState(killBtn, {
+        enabled: !!(hasWs && activeGroup()),
+        reason: hasWs ? "当前没有活动终端" : wsReason,
+      }, "关闭当前终端");
     }
     updateStatusTermState();
   }
@@ -951,7 +961,10 @@
       return !!g;
     })();
     const pr = ensuring;
-    pr.finally(() => { if (ensuring === pr) ensuring = null; });
+    pr.finally(() => {
+      if (ensuring === pr) ensuring = null;
+      updateToolbar();
+    });
     return pr;
   }
 
@@ -1195,12 +1208,6 @@
   function hasTerminalTasks() {
     return !!((terminalTaskCatalog.npm && terminalTaskCatalog.npm.length)
       || (terminalTaskCatalog.make && terminalTaskCatalog.make.length));
-  }
-  function setTerminalButtonState(btn, state, enabledTitle) {
-    if (!btn) return;
-    btn.disabled = !state.enabled;
-    btn.setAttribute("aria-disabled", state.enabled ? "false" : "true");
-    btn.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
   }
   function refreshTerminalTaskActions(reasonOverride) {
     const runBtn = $("#term-task-run");
