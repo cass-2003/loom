@@ -2698,16 +2698,42 @@ document.addEventListener("keydown", (e) => {
 // ---------- Ctrl+P 快速打开 ----------
 let qoFiles = [];          // 全量相对路径缓存
 let qoFilesLoaded = false;
+let qoFilesWorkspaceKey = "";
+let qoFilesError = "";
 let qoResults = [];        // 当前过滤结果（{path, marks}）
 let qoSel = 0;             // 当前高亮索引
 
+function quickOpenWorkspaceKey() {
+  return currentWorkspaceId || (currentWorkspaceRoots && currentWorkspaceRoots.join("|")) || currentRoot || "";
+}
+
+function resetQuickOpenCache() {
+  qoFiles = [];
+  qoFilesLoaded = false;
+  qoFilesWorkspaceKey = "";
+  qoFilesError = "";
+  qoResults = [];
+  qoSel = 0;
+  const list = $("#qo-list");
+  if (quickOpenIsOpen() && list) list.innerHTML = `<div class="qo-empty">文件列表需要重新加载…</div>`;
+}
+
 async function loadFlatFiles(force = false) {
-  if (qoFilesLoaded && !force) return;
+  const key = quickOpenWorkspaceKey();
+  if (qoFilesLoaded && qoFilesWorkspaceKey === key && !force) return;
+  qoFilesError = "";
   try {
     const data = await fetch("/api/files-flat").then(r => r.json());
+    if (data && data.error) throw new Error(data.error);
     qoFiles = Array.isArray(data.files) ? data.files : [];
     qoFilesLoaded = true;
-  } catch { qoFiles = []; }
+    qoFilesWorkspaceKey = key;
+  } catch (err) {
+    qoFiles = [];
+    qoFilesLoaded = false;
+    qoFilesWorkspaceKey = key;
+    qoFilesError = err && err.message ? err.message : "文件列表加载失败";
+  }
 }
 
 // 子序列模糊匹配：返回匹配的字符下标数组，不匹配返回 null。
@@ -2797,8 +2823,16 @@ window.wbQuickOpenActions = {
   run: runQuickOpenAction,
   isOpen: quickOpenIsOpen,
 };
+window.addEventListener("wb:workspace-state", resetQuickOpenCache);
 
 function qoRender(query) {
+  const list = $("#qo-list");
+  if (qoFilesError) {
+    qoResults = [];
+    qoSel = 0;
+    list.innerHTML = `<div class="qo-empty">文件列表加载失败：${escHtml(qoFilesError)}</div>`;
+    return;
+  }
   query = query.trim();
   let items;
   if (!query) {
@@ -2817,7 +2851,6 @@ function qoRender(query) {
   }
   qoResults = items;
   qoSel = 0;
-  const list = $("#qo-list");
   if (items.length === 0) {
     list.innerHTML = `<div class="qo-empty">无匹配文件</div>`;
     return;
