@@ -514,8 +514,15 @@
         requires: ["workspace"], risk: "write",
         run: () => createTaskFromSeed(workspaceLayoutTaskSeed()) });
     A({ id: "editor.find", name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
-        requires: ["editableFile"],
-        run: () => { typeof openFind === "function" && openFind(); } });
+        enabled: () => {
+          const api = window.wbFindActions;
+          if (!api || !api.actionState) return "查找动作尚未就绪";
+          const st = api.actionState("open");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbFindActions && window.wbFindActions.run) window.wbFindActions.run("open");
+        } });
     A({ id: "theme.toggle", name: "切换深浅主题", hint: "", icon: "moon",
         enabled: () => {
           const api = window.wbChromeActions;

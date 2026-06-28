@@ -2122,8 +2122,28 @@ const find = { open: false, regex: false, ci: true, matches: [], idx: -1 };
 
 function findIsOpen() { return find.open; }
 
+function findActionState(action) {
+  if (action === "open") {
+    if (window.split && split.isSideFocused()) {
+      return { enabled: false, reason: "副分屏查找/替换暂未接入" };
+    }
+    if (state.kind !== "text") {
+      return { enabled: false, reason: "仅文本源码视图支持查找/替换" };
+    }
+    if ($("#editor-wrap").classList.contains("hidden")) {
+      return { enabled: false, reason: "当前编辑器不可见" };
+    }
+    return { enabled: true, reason: "" };
+  }
+  return { enabled: false, reason: "未知查找动作" };
+}
+
 function openFind() {
-  if (state.kind !== "text") return;   // 仅文本编辑可用
+  const st = findActionState("open");
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
   find.open = true;
   $("#editor-find").classList.remove("hidden");
   const ta = $("#editor");
@@ -2133,6 +2153,7 @@ function openFind() {
   if (sel && !sel.includes("\n")) inp.value = sel;
   inp.focus(); inp.select();
   runFind(false);
+  return true;
 }
 
 function closeFind() {
@@ -2400,14 +2421,27 @@ $("#find-case").onclick = () => {
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
-    // 仅在「主」文本编辑视图激活时拦截；焦点在分屏副组(或非文本视图)时放行浏览器查找
-    const sideFocused = window.split && window.split.isSideFocused && window.split.isSideFocused();
-    if (state.kind === "text" && !$("#editor-wrap").classList.contains("hidden") && !sideFocused) {
+    // 仅在共享查找动作可用时拦截；副分屏/非文本视图放行浏览器原生查找。
+    const st = findActionState("open");
+    if (st.enabled) {
       e.preventDefault();
       openFind();
     }
   }
 });
+
+window.wbFindActions = {
+  actionState: findActionState,
+  run: (action) => {
+    const st = findActionState(action);
+    if (!st.enabled) {
+      setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "open") return openFind();
+    return false;
+  },
+};
 
 // Tab 键插入缩进（宽度跟随设置：2/4 空格或真实 Tab）
 $("#editor").addEventListener("keydown", (e) => {
