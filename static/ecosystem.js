@@ -43,8 +43,25 @@
     el.setAttribute("aria-disabled", state.enabled ? "false" : "true");
     el.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
   }
+  function filterControlState(kind) {
+    if (ecosystemStatus === "loading") return { enabled: false, reason: "生态入口正在扫描" };
+    if (ecosystemStatus === "error" && !allItems().length) {
+      return { enabled: false, reason: ecosystemError || "生态入口加载失败" };
+    }
+    if (!allItems().length) return { enabled: false, reason: "暂无可过滤的生态入口" };
+    if (kind === "clear" && filters.risk === "all" && filters.source === "all") {
+      return { enabled: false, reason: "当前没有过滤条件" };
+    }
+    return { enabled: true, reason: "" };
+  }
+  function refreshFilterControlState() {
+    setControlState($("#eco-risk-filter"), filterControlState("risk"), "按风险过滤");
+    setControlState($("#eco-source-filter"), filterControlState("source"), "按来源过滤");
+    setControlState($("#eco-clear-filter"), filterControlState("clear"), "清除生态过滤");
+  }
   function refreshEcosystemActions() {
     setControlState($("#eco-refresh"), ecosystemActionState("refresh"), "刷新生态入口");
+    refreshFilterControlState();
   }
   function renderRecovery() {
     const grid = $("#eco-recovery-grid");
@@ -93,6 +110,7 @@
     setSelectOptions(sourceSel, sourceOptions, filters.source);
     const hasFilter = filters.risk !== "all" || filters.source !== "all";
     if (clear) clear.classList.toggle("hidden", !hasFilter);
+    refreshFilterControlState();
     next.textContent = ecosystemStatus === "loading"
       ? "下一步：等待扫描完成；刷新期间不会使用旧入口创建任务或复制命令。"
       : ecosystemStatus === "error"
@@ -445,6 +463,12 @@
     if (sourceSel) sourceSel.onchange = () => { filters.source = sourceSel.value || "all"; renderEcosystem(); };
     const clear = $("#eco-clear-filter");
     if (clear) clear.onclick = () => {
+      const st = filterControlState("clear");
+      if (!st.enabled) {
+        if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
+        refreshFilterControlState();
+        return;
+      }
       filters.risk = "all";
       filters.source = "all";
       renderEcosystem();

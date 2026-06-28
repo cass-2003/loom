@@ -1712,6 +1712,23 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   min-width: 0; border: 1px solid var(--border-soft); border-radius: 7px;
   background: var(--bg); color: var(--text-dim); padding: 5px 7px; font: inherit; font-size: 11.5px;
 }
+.eco-filter-row select:disabled,
+.eco-filter-row select[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: .58;
+}
+#eco-clear-filter:disabled,
+#eco-clear-filter[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: .55;
+}
+#eco-clear-filter:disabled:hover,
+#eco-clear-filter[aria-disabled="true"]:hover {
+  color: var(--muted);
+  background: transparent;
+}
 .eco-next {
   margin-top: 8px; color: var(--text-dim); font-size: 11.5px; line-height: 1.45;
   border-top: 1px solid var(--border-soft); padding-top: 7px;
