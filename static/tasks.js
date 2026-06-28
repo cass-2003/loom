@@ -1185,15 +1185,12 @@
       return ok;
     }
     if (!tasksFresh()) await loadTasks();
-    if (action === "focusRecovery" && !sessionsFresh()) await loadSessions();
-    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsFresh()) await loadSessions();
-    refreshCopyRecoveryButton();
-    const st = taskActionState(action);
-    if (!st.enabled) {
-      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
-      return false;
-    }
     if (action === "focusRecovery") {
+      const st = taskActionState(action);
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        return false;
+      }
       if (typeof switchView === "function") switchView("tasks");
       renderTaskRecovery();
       const panel = $("#task-recovery");
@@ -1202,8 +1199,18 @@
         panel.classList.add("task-recovery-pulse");
         setTimeout(() => panel.classList.remove("task-recovery-pulse"), 900);
       }
+      if (!sessionsFresh()) await loadSessions();
+      renderTaskRecovery();
+      refreshCopyRecoveryButton();
       if (window.setMsg) setMsg("已打开任务恢复中心", "ok");
       return true;
+    }
+    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsFresh()) await loadSessions();
+    refreshCopyRecoveryButton();
+    const st = taskActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+      return false;
     }
     if (action === "copyRecoveryBrief") return copyRecoveryBrief();
     if (action === "appendMemory") return appendTaskToMemory(tasks[0].id);

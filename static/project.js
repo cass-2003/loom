@@ -251,6 +251,14 @@
     }
     return api.run("copySessionRecovery");
   }
+  function focusTasksRecovery() {
+    const api = window.wbTaskActions;
+    if (!api || !api.run) {
+      if (window.setMsg) setMsg("任务恢复中心尚未就绪", "warn");
+      return false;
+    }
+    return api.run("focusRecovery");
+  }
   function ecosystemRecoverySummary() {
     const api = window.wbEcosystemActions;
     if (api && api.summary) {
@@ -337,13 +345,14 @@
       : "";
     const copyState = taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪");
     const sessionCopyState = taskActionState("copySessionRecovery", "Session 恢复包尚未就绪");
+    const focusTasksState = taskActionState("focusRecovery", "任务恢复中心尚未就绪");
     host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
       + `<span>${ready ? `${summary.tasks || 0} tasks · ${summary.sessions || 0} sessions` : "任务面板加载中"}</span></div>`
       + `<div class="project-continuity-grid">`
       + `<span><b>状态</b>待办 ${counts.todo || 0} · 进行 ${counts.running || 0} · 已验 ${counts.verified || 0}</span>`
       + `<span><b>视图</b>${esc(filter)} · ${ready ? `${summary.visible || 0} 可见` : "待同步"}</span>`
       + `</div>`
-      + `<button data-act="open-tasks">${esc(latestTask ? latestTask.title : "打开 Tasks 面板")}</button>`
+      + `<button data-act="open-tasks"${focusTasksState.enabled ? "" : ` disabled title="${esc(focusTasksState.reason || "当前不可用")}"`}>${esc(latestTask ? latestTask.title : "打开 Tasks 面板")}</button>`
       + `<span>${esc(taskLine)}</span>`
       + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`
       + (logLine ? `<span class="project-continuity-log">${esc(logLine)}</span>` : "")
@@ -355,10 +364,10 @@
       + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`
       + `<button class="project-validation-task" data-act="copy-session-recovery"${sessionCopyState.enabled ? "" : ` disabled title="${esc(sessionCopyState.reason || "当前不可用")}"`}>复制 Session 恢复包</button>`;
     const open = host.querySelector("[data-act='open-tasks']");
-    if (open) open.onclick = () => {
-      if (typeof switchView === "function") switchView("tasks");
-      if (window.focusWorkflowTasks) window.focusWorkflowTasks();
-    };
+    if (open) {
+      setProjectButtonState(open, focusTasksState, "打开 Tasks 恢复中心");
+      open.onclick = focusTasksRecovery;
+    }
     const copy = host.querySelector("[data-act='copy-recovery']");
     if (copy) {
       setProjectButtonState(copy, copyState, "复制完整恢复 brief");
