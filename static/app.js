@@ -2994,18 +2994,23 @@ function showWelcome(cfg) {
     $("#welcome-recent").classList.remove("hidden");
     for (const r of recent) {
       const li = document.createElement("li");
-      li.className = "welcome-recent-item";
-      // 失效路径置灰（不主动剔除，保留用户记忆，点击时由 set-root 校验）
-      // 这里不预检 is_dir（前端无文件系统访问），交给后端 set-root 报错
+      const stale = r.exists === false;
+      li.className = "welcome-recent-item" + (stale ? " stale" : "");
+      li.dataset.disabled = stale ? "true" : "false";
+      li.title = stale ? "工作区路径已失效，可从列表移除" : "打开最近工作区";
       li.innerHTML = `
         <span class="wr-icon"><span class="i" data-icon="folder"></span></span>
-        <span class="wr-text">
+        <span class="wr-text"${stale ? ' aria-disabled="true"' : ""}>
           <div class="wr-name">${escapeHtml(r.name)}</div>
           <div class="wr-path">${escapeHtml((r.roots && r.roots.join("  ·  ")) || r.path)}</div>
         </span>
         <button class="wr-remove" title="从列表移除"><span class="i" data-icon="close"></span></button>`;
       li.addEventListener("click", (e) => {
         if (e.target.closest(".wr-remove")) return;
+        if (stale) {
+          setMsg("最近工作区路径已失效，可从列表移除", "warn");
+          return;
+        }
         switchWorkspace(r.roots && r.roots.length ? r.roots : r.path);
       });
       li.querySelector(".wr-remove").addEventListener("click", (e) => {

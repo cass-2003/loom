@@ -464,7 +464,10 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 }
 .welcome-recent-item:hover .wr-remove { opacity: 1; }
 .welcome-recent-item .wr-remove:hover { color: var(--danger, #e06c75); background: var(--bg); }
-.welcome-recent-item.stale { opacity: .5; }
+.welcome-recent-item.stale .wr-icon,
+.welcome-recent-item.stale .wr-text { opacity: .5; }
+.welcome-recent-item.stale { cursor: default; }
+.welcome-recent-item.stale:hover { border-color: var(--border-soft); background: var(--bg-soft); }
 .welcome-recent-item.stale .wr-name::after { content: "（已失效）"; color: var(--muted); font-weight: 400; font-size: 11px; }
 
 .workspace-empty {

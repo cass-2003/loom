@@ -218,6 +218,25 @@ def _touch_recent_workspace(cfg: dict, roots: list[Path]):
     cfg["recentWorkspaces"] = recent[:10]
 
 
+def _annotate_recent_workspaces(items: list) -> list:
+    """Return recent workspace entries with lightweight existence status."""
+    annotated = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            annotated.append(item)
+            continue
+        entry = dict(item)
+        roots = entry.get("roots")
+        valid_roots = [root for root in roots if isinstance(root, str) and root] if isinstance(roots, list) else []
+        if valid_roots:
+            entry["exists"] = all(Path(root).is_dir() for root in valid_roots)
+        else:
+            path = entry.get("path")
+            entry["exists"] = Path(str(path)).is_dir() if isinstance(path, str) and path else False
+        annotated.append(entry)
+    return annotated
+
+
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
@@ -1982,9 +2001,10 @@ class Handler(BaseHTTPRequestHandler):
         cfg = load_config()
         roots = [str(r) for r in current_workspace_roots()]
         cur = _workspace_payload(roots) if roots else None
+        recent = cfg.get("recentWorkspaces", cfg.get("recent", []))
         return self._json({
             "lastRoot": roots[0] if roots else cfg.get("lastRoot"),
-            "recent": cfg.get("recentWorkspaces", cfg.get("recent", [])),
+            "recent": _annotate_recent_workspaces(recent),
             "currentRoot": str(ROOT) if ROOT is not None else None,
             "currentWorkspace": cur,
             "workspaceRoots": roots,
