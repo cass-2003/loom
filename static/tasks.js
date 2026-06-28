@@ -332,6 +332,20 @@
     if (window.renderProjectRecovery) window.renderProjectRecovery();
   }
 
+  function refreshTaskRefreshButtons() {
+    const taskBtn = $("#task-refresh");
+    const sessionBtn = $("#session-refresh");
+    const apply = (btn, action, readyTitle) => {
+      if (!btn) return;
+      const st = taskActionState(action);
+      btn.disabled = !st.enabled;
+      btn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+      btn.title = st.enabled ? readyTitle : (st.reason || "当前不可用");
+    };
+    apply(taskBtn, "refresh", "刷新任务和会话");
+    apply(sessionBtn, "refreshSessions", "刷新会话");
+  }
+
   function refreshCopyRecoveryButton() {
     const copy = $("#task-copy-recovery");
     if (!copy) return;
@@ -358,6 +372,7 @@
     const workspaceKey = currentWorkspaceKey();
     if (tasksLoading && tasksLoadingWorkspaceKey === workspaceKey) return tasksLoading;
     tasksLoadingWorkspaceKey = workspaceKey;
+    refreshTaskRefreshButtons();
     const loading = (async () => {
       try {
         const data = await fetch("/api/workflow-tasks", { cache: "no-store" }).then(r => r.json());
@@ -379,10 +394,12 @@
         if (tasksLoading === loading) {
           tasksLoading = null;
           tasksLoadingWorkspaceKey = null;
+          refreshTaskRefreshButtons();
         }
       }
     })();
     tasksLoading = loading;
+    refreshTaskRefreshButtons();
     return tasksLoading;
   }
 
@@ -390,6 +407,7 @@
     const workspaceKey = currentWorkspaceKey();
     if (sessionsLoading && sessionsLoadingWorkspaceKey === workspaceKey) return sessionsLoading;
     sessionsLoadingWorkspaceKey = workspaceKey;
+    refreshTaskRefreshButtons();
     const loading = (async () => {
       try {
         const data = await fetch("/api/agent-sessions", { cache: "no-store" }).then(r => r.json());
@@ -410,10 +428,12 @@
         if (sessionsLoading === loading) {
           sessionsLoading = null;
           sessionsLoadingWorkspaceKey = null;
+          refreshTaskRefreshButtons();
         }
       }
     })();
     sessionsLoading = loading;
+    refreshTaskRefreshButtons();
     return sessionsLoading;
   }
 
@@ -867,9 +887,9 @@
 
   function initTasksPanel() {
     const refresh = $("#task-refresh");
-    if (refresh) refresh.onclick = loadTasks;
+    if (refresh) refresh.onclick = () => runTaskAction("refresh");
     const sessionRefresh = $("#session-refresh");
-    if (sessionRefresh) sessionRefresh.onclick = loadSessions;
+    if (sessionRefresh) sessionRefresh.onclick = () => runTaskAction("refreshSessions");
     const create = $("#task-new");
     if (create) create.onclick = promptTask;
     const statusSel = $("#task-status-filter");
@@ -896,6 +916,23 @@
   function taskActionState(action) {
     const hasTask = tasks.length > 0;
     const hasSession = sessions.length > 0;
+    const loadingTasks = !!tasksLoading;
+    const loadingSessions = !!sessionsLoading;
+    if (action === "refresh") {
+      if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+      if (loadingTasks || loadingSessions) return { enabled: false, reason: "任务/会话正在刷新" };
+      return { enabled: true, reason: "" };
+    }
+    if (action === "refreshTasks") {
+      if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+      if (loadingTasks) return { enabled: false, reason: "任务正在刷新" };
+      return { enabled: true, reason: "" };
+    }
+    if (action === "refreshSessions") {
+      if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+      if (loadingSessions) return { enabled: false, reason: "会话正在刷新" };
+      return { enabled: true, reason: "" };
+    }
     if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (action === "copyRecoveryBrief") {
       if (!tasksFresh() || !sessionsFresh()) return { enabled: false, reason: "任务/会话尚未加载" };
@@ -916,6 +953,29 @@
     return { enabled: true, reason: "" };
   }
   async function runTaskAction(action) {
+    if (action === "refresh" || action === "refreshTasks" || action === "refreshSessions") {
+      const st = taskActionState(action);
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshTaskRefreshButtons();
+        return false;
+      }
+      if (typeof switchView === "function") switchView("tasks");
+      if (action === "refreshTasks") {
+        const ok = await loadTasks();
+        if (window.setMsg && ok) setMsg("任务已刷新", "ok");
+        return !!ok;
+      }
+      if (action === "refreshSessions") {
+        const ok = await loadSessions();
+        if (window.setMsg && ok) setMsg("会话已刷新", "ok");
+        return !!ok;
+      }
+      const results = await Promise.all([loadTasks(), loadSessions()]);
+      const ok = results.every(Boolean);
+      if (window.setMsg) setMsg(ok ? "任务和会话已刷新" : "任务或会话刷新失败", ok ? "ok" : "warn");
+      return ok;
+    }
     if (!tasksFresh()) await loadTasks();
     if (action === "focusRecovery" && !sessionsFresh()) await loadSessions();
     if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsFresh()) await loadSessions();
@@ -958,6 +1018,7 @@
       tasksLoaded: tasksFresh(),
       sessionsLoaded: sessionsFresh(),
       workspaceKey: currentWorkspaceKey(),
+      refreshBusy: !!tasksLoading || !!sessionsLoading,
       recovery: taskRecoverySummary(),
     }),
   };

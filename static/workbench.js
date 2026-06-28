@@ -1008,9 +1008,15 @@
         requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",
         run: () => createTaskFromSeed(gitTaskSeed(), "没有可记录的 Git 变更") });
     A({ id: "task.refresh", name: "任务: 刷新任务列表", hint: "Agent", icon: "refresh",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("refresh");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
-          typeof switchView === "function" && switchView("tasks");
-          if (window.reloadWorkflowTasks) window.reloadWorkflowTasks();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("refresh");
         } });
     A({ id: "task.focusRecovery", name: "任务: 打开恢复中心", hint: "Recovery", icon: "listChecks",
         risk: "read",
