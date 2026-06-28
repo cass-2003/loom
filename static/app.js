@@ -3289,8 +3289,21 @@ async function chooseAndSwitchWorkspace() {
   }
 }
 
+async function createAndSwitchWorkspace() {
+  const p = prompt("输入新文件夹路径（将创建并打开）：", "");
+  if (!p || !p.trim()) return false;
+  const path = p.trim();
+  const r = await fsPost("/api/create-workspace", { path });
+  if (r.error) {
+    setMsg(r.error, "err");
+    return false;
+  }
+  await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
+  return true;
+}
+
 function workspaceActionState(action) {
-  if (action === "open") return { enabled: true, reason: "" };
+  if (action === "open" || action === "create") return { enabled: true, reason: "" };
   if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
   if (action === "showEmpty") {
     const mainTabs = state && Array.isArray(state.tabs) ? state.tabs.length : 0;
@@ -3322,6 +3335,7 @@ async function runWorkspaceAction(action) {
     return false;
   }
   if (action === "open") { await chooseAndSwitchWorkspace(); return true; }
+  if (action === "create") return !!(await createAndSwitchWorkspace());
   if (action === "newFileRoot") { await fsCreate("", $("#tree")); return true; }
   if (action === "newFolderRoot") { await fsCreateDir("", $("#tree")); return true; }
   if (action === "showEmpty") {
@@ -3358,17 +3372,7 @@ function bindWelcomeButtons() {
   if (openBtn) openBtn.onclick = () => wbWorkspaceActions.run("open");
 
   const newBtn = $("#welcome-new");
-  if (newBtn) newBtn.onclick = async () => {
-    const p = prompt("输入新文件夹路径（将创建并打开）：", "");
-    if (!p || !p.trim()) return;
-    const path = p.trim();
-    const r = await fsPost("/api/create-workspace", { path });
-    if (r.error) {
-      setMsg(r.error, "err");
-      return;
-    }
-    await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
-  };
+  if (newBtn) newBtn.onclick = () => wbWorkspaceActions.run("create");
 }
 
 hydrateIcons();   // 把 data-icon 占位换成 SVG

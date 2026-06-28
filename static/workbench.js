@@ -575,6 +575,17 @@
         run: () => {
           if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("open");
         } });
+    A({ id: "workspace.create", name: "新建并打开工作区", hint: "文件夹", icon: "folderPlus",
+        risk: "write",
+        enabled: () => {
+          const api = window.wbWorkspaceActions;
+          if (!api || !api.actionState) return "工作区动作尚未就绪";
+          const st = api.actionState("create");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceActions && window.wbWorkspaceActions.run) window.wbWorkspaceActions.run("create");
+        } });
     A({ id: "workspace.showEmpty", name: "显示工作区空状态", hint: "工作区", icon: "folder",
         requires: ["workspace"],
         enabled: () => {
