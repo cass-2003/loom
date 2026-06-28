@@ -5,6 +5,10 @@
   let searchSeq = 0;          // 请求令牌（防竞态）
   const collapsed = new Set(); // 折叠的文件分组
   let workspaceOpen = typeof window.hasOpenWorkspace === "function" ? window.hasOpenWorkspace() : true;
+  const OPTION_TITLES = {
+    "search-case": "区分大小写",
+    "search-regex": "使用正则表达式",
+  };
 
   function el(id) { return document.getElementById(id); }
   function esc(s) {
@@ -165,7 +169,9 @@
     [caseBtn, regexBtn].forEach(btn => {
       if (!btn) return;
       btn.disabled = disabled;
-      btn.title = disabled ? "请先打开工作区" : btn.title;
+      btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+      btn.classList.toggle("disabled", disabled);
+      btn.title = disabled ? "请先打开工作区" : (OPTION_TITLES[btn.id] || "");
     });
     if (disabled) renderWorkspaceDisabled();
   }
@@ -181,11 +187,13 @@
       if (e.key === "Enter") { e.preventDefault(); clearTimeout(searchTimer); runSearch(); }
     });
     caseBtn.addEventListener("click", () => {
+      if (!workspaceOpen) { renderWorkspaceDisabled(); return; }
       sState.case = !sState.case;
       caseBtn.classList.toggle("active", sState.case);
       runSearch();
     });
     regexBtn.addEventListener("click", () => {
+      if (!workspaceOpen) { renderWorkspaceDisabled(); return; }
       sState.regex = !sState.regex;
       regexBtn.classList.toggle("active", sState.regex);
       runSearch();

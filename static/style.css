@@ -1182,6 +1182,20 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 }
 .search-opt:hover { background: var(--hover); color: var(--text-dim); }
 .search-opt.active { background: var(--sel); border-color: var(--accent); color: var(--accent); }
+.search-opt:disabled,
+.search-opt[aria-disabled="true"] {
+  opacity: .55;
+  cursor: not-allowed;
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border-soft);
+}
+.search-opt:disabled:hover,
+.search-opt[aria-disabled="true"]:hover {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border-soft);
+}
 .search-summary { padding: 2px 14px 6px; font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
 .search-summary .search-err { color: var(--danger); }
 .search-results { flex: 1; overflow: auto; padding: 0 6px 10px; }
