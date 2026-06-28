@@ -272,6 +272,14 @@
     }
     return api.run("focusRecovery");
   }
+  function copyRecommendedEcosystemPreview() {
+    const api = window.wbEcosystemActions;
+    if (!api || !api.run) {
+      if (window.setMsg) setMsg("生态入口尚未就绪", "warn");
+      return false;
+    }
+    return api.run("copyRecommendedPreview");
+  }
   function taskRecoverySummary() {
     if (window.getWorkflowRecoverySummary) {
       try { return window.getWorkflowRecoverySummary(); } catch {}
@@ -367,6 +375,7 @@
     if (!host) return;
     const summary = ecosystemRecoverySummary();
     const focusState = ecosystemActionState("focusRecovery", "生态入口尚未就绪");
+    const copyPreviewState = ecosystemActionState("copyRecommendedPreview", "生态入口尚未就绪");
     const recommended = summary && summary.recommended;
     const status = summary
       ? summary.status === "ready"
@@ -404,11 +413,17 @@
       + `<span>${esc(targetLine)}</span>`
       + `<span class="project-continuity-session">${esc(verifyLine)}</span>`
       + `<span class="project-continuity-log">${esc(commandLine)}</span>`
-      + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`;
+      + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`
+      + `<button class="project-validation-task" data-act="copy-ecosystem-preview"${copyPreviewState.enabled ? "" : ` disabled title="${esc(copyPreviewState.reason || "当前不可用")}"`}>复制推荐预览包</button>`;
     const open = host.querySelector("[data-act='open-ecosystem']");
     if (open) {
       setProjectButtonState(open, focusState, "打开 Skills / Playbooks 恢复入口");
       open.onclick = focusEcosystemRecovery;
+    }
+    const copyPreview = host.querySelector("[data-act='copy-ecosystem-preview']");
+    if (copyPreview) {
+      setProjectButtonState(copyPreview, copyPreviewState, "复制推荐执行预览包");
+      copyPreview.onclick = copyRecommendedEcosystemPreview;
     }
   }
   function renderRecovery() {

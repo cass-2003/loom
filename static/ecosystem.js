@@ -37,6 +37,9 @@
     return cache.playbooks.find(p => (p.risk || "read") === "write")
       || cache.playbooks[0] || cache.skills[0] || items[0] || null;
   }
+  function currentRecommendedItem() {
+    return recommendedItem(allItems());
+  }
   function ecosystemRecoverySummary() {
     const items = allItems();
     const visible = visibleItems();
@@ -257,6 +260,10 @@
     if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (ecosystemStatus === "loading") return { enabled: false, reason: "生态入口正在扫描" };
     if (ecosystemStatus === "error") return { enabled: false, reason: ecosystemError || "生态入口加载失败" };
+    if (action === "copyRecommendedPreview") {
+      if (!currentRecommendedItem()) return { enabled: false, reason: "暂无推荐生态入口" };
+      return { enabled: true, reason: "" };
+    }
     if (action === "task" && !window.addWorkflowTask) {
       return { enabled: false, reason: "任务面板尚未就绪" };
     }
@@ -287,6 +294,15 @@
         setTimeout(() => panel.classList.remove("eco-recovery-pulse"), 900);
       }
       if (window.setMsg) window.setMsg("已打开生态恢复入口", "ok");
+      return true;
+    }
+    if (action === "copyRecommendedPreview") {
+      const recommended = currentRecommendedItem();
+      if (!recommended) {
+        if (window.setMsg) window.setMsg("暂无推荐生态入口", "warn");
+        return false;
+      }
+      await copyText(executionPreviewMarkdown(recommended), "已复制推荐执行预览包", "复制推荐执行预览包：");
       return true;
     }
     if (!item) {
