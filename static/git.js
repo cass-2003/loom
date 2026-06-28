@@ -751,6 +751,7 @@ async function renderSidebarGraph(token) {
     const laneColor = LANE_COLORS[lane % LANE_COLORS.length];
     const refsHTML = (c.refs || []).map(formatRefChip).join("");
     rows += `<div class="ggraph-row" data-hash="${c.hash}" data-lane="${lane}" data-lane-offset="${laneOffset}" `
+      + `role="button" tabindex="0" aria-expanded="false" title="展开提交改动文件" `
       + `style="height:${ROW_H}px; --lane-offset:${laneOffset}px; --lane-color:${laneColor}">`
       + `<div class="ggraph-main">`
       + `<div class="ggraph-top"><span class="ggraph-msg">${escapeHtml(c.subject)}</span>${refsHTML ? `<span class="ggraph-refs">${refsHTML}</span>` : ""}</div>`
@@ -762,6 +763,11 @@ async function renderSidebarGraph(token) {
   logEl.querySelectorAll(".ggraph-row").forEach(row => {
     attachCommitHover(row);
     row.addEventListener("click", () => toggleCommitFiles(row));
+    row.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggleCommitFiles(row);
+    });
   });
 }
 
@@ -783,14 +789,22 @@ async function toggleCommitFiles(row) {
   if (next && next.classList.contains("ggraph-files")) {
     next.remove();
     row.classList.remove("expanded");
+    row.setAttribute("aria-expanded", "false");
+    row.title = "展开提交改动文件";
     return;
   }
   // 同一时间只展开一个：移除其它已展开面板
   document.querySelectorAll(".ggraph-files").forEach(e => e.remove());
-  document.querySelectorAll(".ggraph-row.expanded").forEach(e => e.classList.remove("expanded"));
+  document.querySelectorAll(".ggraph-row.expanded").forEach(e => {
+    e.classList.remove("expanded");
+    e.setAttribute("aria-expanded", "false");
+    e.title = "展开提交改动文件";
+  });
 
   const h = row.dataset.hash;
   row.classList.add("expanded");
+  row.setAttribute("aria-expanded", "true");
+  row.title = "收起提交改动文件";
   const panel = document.createElement("div");
   panel.className = "ggraph-files";
   const laneOffset = parseInt(row.dataset.laneOffset || "0", 10);
