@@ -393,6 +393,57 @@
     };
   }
 
+  function workspaceLayoutActionState(action) {
+    if (action === "copyBrief" || action === "createTask") {
+      if (!hasWorkspace()) return { enabled: false, reason: "需要打开工作区" };
+      if (!window.getWorkspaceLayoutSnapshot || !window.formatWorkspaceLayoutBrief) {
+        return { enabled: false, reason: "工作区布局快照尚未就绪" };
+      }
+      if (action === "createTask" && !window.addWorkflowTask) {
+        return { enabled: false, reason: "任务面板尚未就绪" };
+      }
+      return { enabled: true, reason: "" };
+    }
+    return { enabled: false, reason: "未知工作区布局动作" };
+  }
+
+  async function runWorkspaceLayoutAction(action) {
+    const st = workspaceLayoutActionState(action);
+    if (!st.enabled) {
+      if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
+      return false;
+    }
+    if (action === "copyBrief") {
+      await copyWorkspaceLayoutBrief();
+      return true;
+    }
+    if (action === "createTask") {
+      await createTaskFromSeed(workspaceLayoutTaskSeed());
+      return true;
+    }
+    return false;
+  }
+
+  window.wbWorkspaceLayoutActions = {
+    actionState: workspaceLayoutActionState,
+    run: runWorkspaceLayoutAction,
+    brief: workspaceLayoutBrief,
+    taskSeed: workspaceLayoutTaskSeed,
+    summary: () => {
+      const snapshot = window.getWorkspaceLayoutSnapshot ? window.getWorkspaceLayoutSnapshot() : null;
+      return {
+        hasWorkspace: hasWorkspace(),
+        workspaceId: snapshot && snapshot.workspaceId ? snapshot.workspaceId : (window.currentWorkspaceId || null),
+        roots: snapshot && Array.isArray(snapshot.roots) ? snapshot.roots.slice() : [],
+        activeFile: snapshot && snapshot.active ? snapshot.active.path : null,
+        activeGroup: snapshot ? snapshot.activeGroup : null,
+        mainTabs: snapshot && snapshot.main && snapshot.main.tabs ? snapshot.main.tabs.length : 0,
+        sideTabs: snapshot && snapshot.side && snapshot.side.tabs ? snapshot.side.tabs.length : 0,
+        sidebarCollapsed: !!(snapshot && snapshot.ui && snapshot.ui.sidebarCollapsed),
+      };
+    },
+  };
+
   async function copyWorkspaceLayoutBrief() {
     const text = workspaceLayoutBrief();
     try {
@@ -529,10 +580,30 @@
         run: () => { typeof showEmptyWorkspace === "function" && showEmptyWorkspace(window.currentRoot); } });
     A({ id: "workspace.copyLayoutBrief", name: "工作区: 复制布局 brief", hint: "Layout", icon: "copy",
         requires: ["workspace"], risk: "read",
-        run: () => copyWorkspaceLayoutBrief() });
+        enabled: () => {
+          const api = window.wbWorkspaceLayoutActions;
+          if (!api || !api.actionState) return "工作区布局动作尚未就绪";
+          const st = api.actionState("copyBrief");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceLayoutActions && window.wbWorkspaceLayoutActions.run) {
+            window.wbWorkspaceLayoutActions.run("copyBrief");
+          }
+        } });
     A({ id: "task.fromWorkspaceLayout", name: "任务: 从工作区布局创建交接任务", hint: "Layout", icon: "columns",
         requires: ["workspace"], risk: "write",
-        run: () => createTaskFromSeed(workspaceLayoutTaskSeed()) });
+        enabled: () => {
+          const api = window.wbWorkspaceLayoutActions;
+          if (!api || !api.actionState) return "工作区布局动作尚未就绪";
+          const st = api.actionState("createTask");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbWorkspaceLayoutActions && window.wbWorkspaceLayoutActions.run) {
+            window.wbWorkspaceLayoutActions.run("createTask");
+          }
+        } });
     A({ id: "editor.find", name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
         enabled: () => {
           const api = window.wbFindActions;
