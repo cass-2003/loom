@@ -96,6 +96,11 @@
   }
 
   function renderItem(item) {
+    const actionButton = (action, label) => {
+      const st = ecosystemActionState(action, item);
+      const disabled = st.enabled ? "" : ` disabled aria-disabled="true" title="${esc(st.reason || "当前不可用")}"`;
+      return `<button class="eco-open" data-act="${esc(action)}"${disabled}>${esc(label)}</button>`;
+    };
     const ver = item.verification && item.verification.length
       ? `<div class="eco-lines"><b>验证</b>${item.verification.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
     const inputs = item.inputs && item.inputs.length
@@ -116,11 +121,11 @@
       <p>${esc(desc)}</p>
       ${scope}${inputs}${req}${commands}${ver}
       <div class="eco-actions">
-        <button class="eco-open" data-act="open">${item.source === "builtin" ? "查看定义" : "打开定义"}</button>
-        <button class="eco-open" data-act="preview">执行预览</button>
-        <button class="eco-open" data-act="copy-preview">复制预览包</button>
-        <button class="eco-open" data-act="task">创建任务</button>
-        <button class="eco-open" data-act="copy">复制验证命令</button>
+        ${actionButton("open", item.source === "builtin" ? "查看定义" : "打开定义")}
+        ${actionButton("preview", "执行预览")}
+        ${actionButton("copy-preview", "复制预览包")}
+        ${actionButton("task", "创建任务")}
+        ${actionButton("copy", "复制验证命令")}
       </div>
     </article>`;
   }
@@ -378,6 +383,7 @@
       card.addEventListener("click", async e => {
         const btn = e.target.closest("[data-act]");
         if (!btn) return;
+        if (btn.disabled || btn.getAttribute("aria-disabled") === "true") return;
         const item = findItem(card);
         if (!item) return;
         const act = btn.dataset.act;
