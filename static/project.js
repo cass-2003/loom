@@ -251,6 +251,27 @@
     }
     return api.run("copySessionRecovery");
   }
+  function ecosystemRecoverySummary() {
+    const api = window.wbEcosystemActions;
+    if (api && api.summary) {
+      try { return api.summary(); } catch {}
+    }
+    return null;
+  }
+  function ecosystemActionState(action, fallback) {
+    const api = window.wbEcosystemActions;
+    return api && api.actionState
+      ? api.actionState(action)
+      : { enabled: false, reason: fallback || "生态入口尚未就绪" };
+  }
+  function focusEcosystemRecovery() {
+    const api = window.wbEcosystemActions;
+    if (!api || !api.run) {
+      if (window.setMsg) setMsg("生态入口尚未就绪", "warn");
+      return false;
+    }
+    return api.run("focusRecovery");
+  }
   function taskRecoverySummary() {
     if (window.getWorkflowRecoverySummary) {
       try { return window.getWorkflowRecoverySummary(); } catch {}
@@ -330,6 +351,55 @@
       copySession.onclick = copySessionRecoveryPackage;
     }
   }
+  function renderEcosystemContinuity() {
+    const host = $("#project-ecosystem-continuity");
+    if (!host) return;
+    const summary = ecosystemRecoverySummary();
+    const focusState = ecosystemActionState("focusRecovery", "生态入口尚未就绪");
+    const recommended = summary && summary.recommended;
+    const status = summary
+      ? summary.status === "ready"
+        ? `${summary.playbooks || 0} playbooks · ${summary.skills || 0} skills`
+        : summary.status === "loading"
+          ? "生态入口扫描中"
+          : summary.status === "error"
+            ? `加载失败 · ${summary.error || "未知错误"}`
+            : "生态入口待加载"
+      : "生态入口尚未就绪";
+    const riskText = summary && summary.risks
+      ? Object.keys(summary.risks).sort().map(k => `${k} ${summary.risks[k]}`).join(" · ") || "无"
+      : "无";
+    const sourceText = summary && summary.sources
+      ? Object.keys(summary.sources).sort().map(k => `${k} ${summary.sources[k]}`).join(" · ") || "无"
+      : "无";
+    const targetLine = recommended
+      ? `${recommended.title} · ${recommended.kind || "entry"} · ${recommended.source || "workspace"}`
+      : "暂无推荐入口；可在 .workbench/playbooks 或 .workbench/skills 添加本地定义";
+    const verifyLine = summary && summary.verification && summary.verification.length
+      ? summary.verification[0]
+      : "暂无验证项；打开 Skills / Playbooks 查看定义或补充 verification";
+    const commandLine = summary && summary.commands && summary.commands.length
+      ? summary.commands[0]
+      : "暂无命令预览；保持手动检查和任务证据记录";
+    const evidenceLine = summary && summary.evidence && summary.evidence.length
+      ? summary.evidence.join(" · ")
+      : "暂无证据字段";
+    host.innerHTML = `<div class="project-continuity-head"><b>本地生态</b><span>${esc(status)}</span></div>`
+      + `<div class="project-continuity-grid">`
+      + `<span><b>风险</b>${esc(riskText)}</span>`
+      + `<span><b>来源</b>${esc(sourceText)}</span>`
+      + `</div>`
+      + `<button data-act="open-ecosystem"${focusState.enabled ? "" : ` disabled title="${esc(focusState.reason || "当前不可用")}"`}>${esc(recommended ? recommended.title : "打开 Skills / Playbooks")}</button>`
+      + `<span>${esc(targetLine)}</span>`
+      + `<span class="project-continuity-session">${esc(verifyLine)}</span>`
+      + `<span class="project-continuity-log">${esc(commandLine)}</span>`
+      + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`;
+    const open = host.querySelector("[data-act='open-ecosystem']");
+    if (open) {
+      setProjectButtonState(open, focusState, "打开 Skills / Playbooks 恢复入口");
+      open.onclick = focusEcosystemRecovery;
+    }
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
@@ -397,6 +467,7 @@
       }
     }
     renderTaskContinuity();
+    renderEcosystemContinuity();
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) {
       copyRoadmap.onclick = copyRoadmapBrief;
