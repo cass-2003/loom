@@ -250,7 +250,9 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 }
 #ctx-menu .ctx-item:hover { background: var(--hover); color: var(--text); }
 #ctx-menu .ctx-item.disabled,
-#ctx-menu .ctx-item.disabled:hover {
+#ctx-menu .ctx-item[aria-disabled="true"],
+#ctx-menu .ctx-item.disabled:hover,
+#ctx-menu .ctx-item[aria-disabled="true"]:hover {
   opacity: .45; cursor: not-allowed; background: transparent; color: var(--muted);
 }
 #ctx-menu .ctx-item .icn { color: var(--muted); }
@@ -258,6 +260,14 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 #ctx-menu .ctx-item.danger { color: var(--danger); }
 #ctx-menu .ctx-item.danger .icn { color: var(--danger); }
 #ctx-menu .ctx-item.danger:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+#ctx-menu .ctx-item.danger[aria-disabled="true"],
+#ctx-menu .ctx-item.danger[aria-disabled="true"]:hover {
+  color: var(--muted); background: transparent;
+}
+#ctx-menu .ctx-item[aria-disabled="true"] .icn,
+#ctx-menu .ctx-item[aria-disabled="true"]:hover .icn {
+  color: var(--muted);
+}
 #ctx-menu .ctx-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }
 
 /* 模态对话框（输入名称 / 确认删除） */

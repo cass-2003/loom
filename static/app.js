@@ -743,25 +743,37 @@ function showCtxMenu(x, y, items) {
   closeCtxMenu();
   const menu = document.createElement("div");
   menu.id = "ctx-menu";
+  menu.setAttribute("role", "menu");
   for (const it of items) {
     if (it.sep) {
       const sep = document.createElement("div");
       sep.className = "ctx-sep";
+      sep.setAttribute("role", "separator");
       menu.appendChild(sep);
       continue;
     }
     const el = document.createElement("div");
     const disabled = typeof it.enabled === "function" ? !it.enabled() : !!it.disabled;
     el.className = "ctx-item" + (it.danger ? " danger" : "") + (disabled ? " disabled" : "");
-    if (disabled) el.title = it.reason || "当前不可用";
+    el.dataset.action = it.actionId || "";
+    el.setAttribute("role", "menuitem");
+    el.setAttribute("tabindex", disabled ? "-1" : "0");
+    el.setAttribute("aria-disabled", disabled ? "true" : "false");
+    el.title = disabled ? (it.reason || "当前不可用") : (it.title || it.label || "");
     el.innerHTML = svgIcon(it.icon, 15) + `<span>${escHtml(it.label)}</span>`;
-    el.onclick = () => {
+    const activate = () => {
       if (disabled) {
         if (it.reason) setMsg(it.reason, "warn");
         return;
       }
       closeCtxMenu();
       it.action();
+    };
+    el.onclick = activate;
+    el.onkeydown = (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      activate();
     };
     menu.appendChild(el);
   }
@@ -795,8 +807,11 @@ function bindRowContextMenu(row, entry) {
     setExplorerSelection(entry, row);
     const isDir = entry.type === "dir";
     const gitHistoryState = explorerActionState("history");
+    const gitBlameState = explorerActionState("blame");
     const newFileState = explorerActionState("newFile");
     const newFolderState = explorerActionState("newFolder");
+    const renameState = explorerActionState("rename");
+    const deleteState = explorerActionState("delete");
     const runExplorer = (action) => {
       if (window.wbExplorer && wbExplorer.run) return wbExplorer.run(action);
       return false;
@@ -805,12 +820,14 @@ function bindRowContextMenu(row, entry) {
     if (isDir) {
       items.push({
         icon: "filePlus", label: "新建文件",
+        actionId: "newFile",
         disabled: !newFileState.enabled,
         reason: newFileState.reason,
         action: () => runExplorer("newFile"),
       });
       items.push({
         icon: "folderPlus", label: "新建文件夹",
+        actionId: "newFolder",
         disabled: !newFolderState.enabled,
         reason: newFolderState.reason,
         action: () => runExplorer("newFolder"),
@@ -820,24 +837,32 @@ function bindRowContextMenu(row, entry) {
     if (!isDir) {
       items.push({
         icon: "history", label: "文件历史 (Git)",
+        actionId: "history",
         disabled: !gitHistoryState.enabled,
         reason: gitHistoryState.reason,
         action: () => runExplorer("history"),
       });
       items.push({
         icon: "list", label: "Blame (逐行作者)",
-        disabled: !gitHistoryState.enabled,
-        reason: gitHistoryState.reason,
+        actionId: "blame",
+        disabled: !gitBlameState.enabled,
+        reason: gitBlameState.reason,
         action: () => runExplorer("blame"),
       });
       items.push({ sep: true });
     }
     items.push({
       icon: "pencil", label: "重命名",
+      actionId: "rename",
+      disabled: !renameState.enabled,
+      reason: renameState.reason,
       action: () => runExplorer("rename"),
     });
     items.push({
       icon: "trash", label: "删除", danger: true,
+      actionId: "delete",
+      disabled: !deleteState.enabled,
+      reason: deleteState.reason,
       action: () => runExplorer("delete"),
     });
     showCtxMenu(e.clientX, e.clientY, items);
