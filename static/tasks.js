@@ -333,6 +333,17 @@
         title: latestSession.title || latestSession.taskTitle || "未命名会话",
         status: latestSession.status || "draft",
         taskId: latestSession.taskId || "",
+        outputs: Array.isArray(latestSession.outputs) ? latestSession.outputs.length : 0,
+        latestOutput: Array.isArray(latestSession.outputs) && latestSession.outputs.length
+          ? latestSession.outputs[latestSession.outputs.length - 1]
+          : "",
+        evidence: Array.isArray(latestSession.evidence) ? latestSession.evidence.length : 0,
+        latestEvidence: Array.isArray(latestSession.evidence) && latestSession.evidence.length
+          ? latestSession.evidence[latestSession.evidence.length - 1]
+          : "",
+        latestLog: Array.isArray(latestSession.log) && latestSession.log.length
+          ? latestSession.log[latestSession.log.length - 1]
+          : "",
       } : null,
     };
   }

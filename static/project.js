@@ -287,6 +287,15 @@
     const sessionLine = latestSession
       ? `${latestSession.title} · ${latestSession.status || "draft"}`
       : "暂无会话，可从任务卡创建 Agent brief";
+    const sessionOutputLine = latestSession && latestSession.latestOutput
+      ? `${latestSession.outputs || 0} 条输出 · ${latestSession.latestOutput}`
+      : "";
+    const sessionEvidenceLine = latestSession && latestSession.latestEvidence
+      ? `${latestSession.evidence || 0} 条会话证据 · ${latestSession.latestEvidence}`
+      : "";
+    const sessionLogLine = latestSession && latestSession.latestLog
+      ? `会话日志 · ${latestSession.latestLog}`
+      : "";
     const copyState = taskActionState("copyRecoveryBrief", "任务恢复 brief 尚未就绪");
     const sessionCopyState = taskActionState("copySessionRecovery", "Session 恢复包尚未就绪");
     host.innerHTML = `<div class="project-continuity-head"><b>任务连续性</b>`
@@ -300,6 +309,9 @@
       + `<span class="project-continuity-evidence">${esc(evidenceLine)}</span>`
       + (logLine ? `<span class="project-continuity-log">${esc(logLine)}</span>` : "")
       + `<em>${esc(sessionLine)}</em>`
+      + (sessionOutputLine ? `<span class="project-continuity-session">${esc(sessionOutputLine)}</span>` : "")
+      + (sessionEvidenceLine ? `<span class="project-continuity-session">${esc(sessionEvidenceLine)}</span>` : "")
+      + (sessionLogLine ? `<span class="project-continuity-log">${esc(sessionLogLine)}</span>` : "")
       + `<button class="project-validation-task" data-act="copy-recovery"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason || "当前不可用")}"`}>复制完整恢复 brief</button>`
       + `<button class="project-validation-task" data-act="copy-session-recovery"${sessionCopyState.enabled ? "" : ` disabled title="${esc(sessionCopyState.reason || "当前不可用")}"`}>复制 Session 恢复包</button>`;
     const open = host.querySelector("[data-act='open-tasks']");
