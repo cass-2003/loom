@@ -98,7 +98,11 @@
   }
 
   // 渲染期间用于跟踪当前 mount，避免切换文件后旧的异步渲染把内容写回新容器。
-  var _renderToken = 0;
+  var _session = null;
+
+  function isCurrentSession(session, host) {
+    return !!(session && _session === session && session.host === host && document.body.contains(host));
+  }
 
   function showMessage(host, text, isError) {
     host.innerHTML = "";
@@ -113,8 +117,9 @@
     label: "Word 文档",
 
     mount: function mount(host, info) {
-      var myToken = ++_renderToken;
       var path = info && info.path;
+      var session = { host: host, path: path };
+      _session = session;
 
       ensureStyle();
       // host：外围用主题色背景，内部 .docx-paper 包裹文档为浅色纸张。
@@ -123,20 +128,22 @@
 
       ensureDocxLib()
         .then(function (docx) {
-          if (myToken !== _renderToken) return; // 已切换到别的文件
+          if (!isCurrentSession(session, host)) return; // 已切换到别的文件
           if (!path) throw new Error("缺少文件路径");
           return window.fetchRaw(path).then(function (buf) {
-            if (myToken !== _renderToken) return;
+            if (!isCurrentSession(session, host)) return;
             var blob = new Blob([buf], {
               type:
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             });
 
             // 清空占位消息，建好 纸张 容器
+            if (!isCurrentSession(session, host)) return;
             host.innerHTML = "";
             var paper = document.createElement("div");
             paper.className = "docx-paper";
             host.appendChild(paper);
+            session.paper = paper;
 
             // styleContainer 与 内容容器 同为 paper：把 docx-preview 注入的样式
             // 限定在纸张内，避免污染全局/被深色主题影响。
@@ -156,13 +163,13 @@
                 trimXmlDeclaration: true,
               })
               .then(function () {
-                if (myToken !== _renderToken) return;
+                if (!isCurrentSession(session, host)) return;
                 // 渲染成功
               });
           });
         })
         .catch(function (err) {
-          if (myToken !== _renderToken) return;
+          if (!isCurrentSession(session, host)) return;
           if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
             window.wbViewer.reportError(host, err);
           }
@@ -176,7 +183,7 @@
 
     unmount: function unmount() {
       // 让进行中的异步渲染失效；实际 DOM 由 app.js 清空 #viewer-host。
-      _renderToken++;
+      _session = null;
     },
   };
 
