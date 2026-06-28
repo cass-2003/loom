@@ -93,6 +93,11 @@
   var tocSel = null;
   var keyHandler = null;
   var loadState = "idle"; // idle | loading | ready | error
+  var mountSession = null;
+
+  function isCurrentSession(session) {
+    return !!(session && !session.destroyed && mountSession === session);
+  }
 
   function setControlState(el, disabled, enabledTitle, disabledReason) {
     if (!el) return;
@@ -135,8 +140,8 @@
     if (loading && tocSel) tocSel.title = "目录加载中…";
   }
 
-  function rebuildRendition() {
-    if (!book || !areaEl) return;
+  function rebuildRendition(session) {
+    if (!isCurrentSession(session) || !book || !areaEl) return Promise.resolve(false);
     if (rendition) {
       try { rendition.destroy(); } catch (e) { /* ignore */ }
       rendition = null;
@@ -154,6 +159,8 @@
 
   function mount(host, info) {
     ensureStyle();
+    var session = { host: host, destroyed: false };
+    mountSession = session;
 
     var root = el("div", "epub-viewer");
     var toolbar = el("div", "epub-toolbar");
@@ -197,14 +204,17 @@
 
     // 翻页按钮 / 键盘
     btnPrev.addEventListener("click", function () {
+      if (!isCurrentSession(session)) return;
       if (btnPrev.disabled || !rendition) return;
       rendition.prev();
     });
     btnNext.addEventListener("click", function () {
+      if (!isCurrentSession(session)) return;
       if (btnNext.disabled || !rendition) return;
       rendition.next();
     });
     keyHandler = function (ev) {
+      if (!isCurrentSession(session)) return;
       if (flow !== "paginated" || !rendition) return;
       if (ev.key === "ArrowLeft") { rendition.prev(); }
       else if (ev.key === "ArrowRight") { rendition.next(); }
@@ -213,6 +223,7 @@
 
     // 模式切换
     btnMode.addEventListener("click", function () {
+      if (!isCurrentSession(session)) return;
       if (btnMode.disabled || !book) return;
       if (flow === "scrolled-doc") {
         flow = "paginated";
@@ -222,11 +233,12 @@
         btnMode.textContent = "翻页模式";
       }
       updateToolbarState();
-      rebuildRendition();
+      rebuildRendition(session);
     });
 
     // 目录跳转
     tocSel.addEventListener("change", function () {
+      if (!isCurrentSession(session)) return;
       if (tocSel.disabled) return;
       var href = tocSel.value;
       if (href && rendition) rendition.display(href);
@@ -238,16 +250,21 @@
     // 加载 epub.js → 取原始字节 → 渲染
     ensureEpubJs()
       .then(function (ePub) {
+        if (!isCurrentSession(session)) return;
         return window.fetchRaw(info.path).then(function (buf) {
+          if (!isCurrentSession(session)) return;
           book = ePub(buf);
-          return rebuildRendition().then(function () {
+          return rebuildRendition(session).then(function () {
+            if (!isCurrentSession(session)) return;
             loadState = "ready";
             updateToolbarState();
             try { reader.removeChild(msg); } catch (e) { /* already gone */ }
           });
         }).then(function () {
+          if (!isCurrentSession(session) || !book) return;
           // 目录
           return book.loaded.navigation.then(function (nav) {
+            if (!isCurrentSession(session)) return;
             var toc = (nav && nav.toc) || [];
             function addItems(items, depth) {
               for (var i = 0; i < items.length; i++) {
@@ -261,10 +278,13 @@
             }
             addItems(toc, 0);
             updateToolbarState();
-          }).catch(function () { /* 无目录不致命 */ });
+          }).catch(function () {
+            if (isCurrentSession(session)) updateToolbarState();
+          });
         });
       })
       .catch(function (err) {
+        if (!isCurrentSession(session)) return;
         loadState = "error";
         if (window.wbViewer && typeof window.wbViewer.reportError === "function") {
           window.wbViewer.reportError(host, err);
@@ -275,6 +295,8 @@
   }
 
   function unmount() {
+    if (mountSession) mountSession.destroyed = true;
+    mountSession = null;
     if (keyHandler) {
       document.removeEventListener("keydown", keyHandler);
       keyHandler = null;
