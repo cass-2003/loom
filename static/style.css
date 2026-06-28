@@ -2269,7 +2269,8 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .status-clickable { cursor: pointer; gap: 4px; }
 .status-clickable:hover { color: var(--text-dim); }
 .status-item.disabled,
-#status-file.disabled { cursor: default; color: var(--muted); opacity: .72; }
+#status-file.disabled,
+#status-file[aria-disabled="true"] { cursor: default; color: var(--muted); opacity: .72; }
 #status-term.active { color: var(--accent); }
 
 /* 运行此文件按钮（浮于内容右上角） */

@@ -1543,6 +1543,9 @@ function updateStatusFileAction() {
   const st = currentFileActionState("revealInExplorer");
   el.classList.toggle("status-clickable", st.enabled);
   el.classList.toggle("disabled", !st.enabled);
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+  el.tabIndex = st.enabled ? 0 : -1;
   const copyState = currentFileActionState("copyPath");
   el.title = st.enabled
     ? "点击在资源管理器中定位当前文件；右键复制路径"
@@ -2953,6 +2956,11 @@ $("#btn-refresh").onclick = () => window.wbWorkspaceActions && wbWorkspaceAction
 $("#btn-new-file").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFileRoot");
 $("#btn-new-dir").onclick = () => window.wbWorkspaceActions && wbWorkspaceActions.run("newFolderRoot");
 $("#status-file").onclick = () => window.wbCurrentFile && wbCurrentFile.run("revealInExplorer");
+$("#status-file").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault();
+  if (window.wbCurrentFile) wbCurrentFile.run("revealInExplorer");
+});
 $("#status-file").addEventListener("contextmenu", (e) => {
   e.preventDefault();
   if (window.wbCurrentFile) wbCurrentFile.run("copyPath");
