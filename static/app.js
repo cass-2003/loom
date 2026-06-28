@@ -2641,6 +2641,51 @@ function closeQuickOpen() {
   $("#quickopen").classList.add("hidden");
 }
 
+function quickOpenActionState(action) {
+  if (action === "open") {
+    if (!currentRoot) return { enabled: false, reason: "请先打开工作区" };
+    if (!$("#quickopen") || !$("#qo-input") || !$("#qo-list")) {
+      return { enabled: false, reason: "快速打开面板尚未就绪" };
+    }
+    return { enabled: true, reason: "" };
+  }
+  if (action === "toggle") return quickOpenActionState("open");
+  if (action === "close") {
+    return quickOpenIsOpen()
+      ? { enabled: true, reason: "" }
+      : { enabled: false, reason: "快速打开未打开" };
+  }
+  return { enabled: false, reason: "未知快速打开动作" };
+}
+
+async function runQuickOpenAction(action) {
+  const st = quickOpenActionState(action);
+  if (!st.enabled) {
+    setMsg(st.reason || "当前不可用", "warn");
+    return false;
+  }
+  if (action === "open") {
+    await openQuickOpen();
+    return true;
+  }
+  if (action === "toggle") {
+    if (quickOpenIsOpen()) closeQuickOpen();
+    else await openQuickOpen();
+    return true;
+  }
+  if (action === "close") {
+    closeQuickOpen();
+    return true;
+  }
+  return false;
+}
+
+window.wbQuickOpenActions = {
+  actionState: quickOpenActionState,
+  run: runQuickOpenAction,
+  isOpen: quickOpenIsOpen,
+};
+
 function qoRender(query) {
   query = query.trim();
   let items;
@@ -2734,8 +2779,12 @@ $("#quickopen").addEventListener("mousedown", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "p") {
+    const api = window.wbQuickOpenActions;
+    const st = api && api.actionState ? api.actionState("toggle") : { enabled: !!currentRoot, reason: "" };
+    if (!st.enabled) return;
     e.preventDefault();
-    if (quickOpenIsOpen()) closeQuickOpen(); else openQuickOpen();
+    if (api && api.run) api.run("toggle");
+    else if (quickOpenIsOpen()) closeQuickOpen(); else openQuickOpen();
   }
 });
 

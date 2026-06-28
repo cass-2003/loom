@@ -504,8 +504,16 @@
           else if (typeof saveRouted === "function") saveRouted();
         } });
     A({ id: "file.quickOpen", name: "快速打开文件", hint: "Ctrl+P", icon: "search",
-        requires: ["workspace"],
-        run: () => { typeof openQuickOpen === "function" && openQuickOpen(); } });
+        enabled: () => {
+          const api = window.wbQuickOpenActions;
+          if (!api || !api.actionState) return "快速打开动作尚未就绪";
+          const st = api.actionState("open");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbQuickOpenActions && window.wbQuickOpenActions.run) window.wbQuickOpenActions.run("open");
+          else if (typeof openQuickOpen === "function") openQuickOpen();
+        } });
     A({ id: "workspace.open", name: "打开工作区", hint: "文件夹", icon: "folderOpen",
         enabled: () => {
           const api = window.wbWorkspaceActions;
