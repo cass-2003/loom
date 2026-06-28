@@ -89,9 +89,15 @@
       "</div>";
   }
 
-  function showError(stage, title, detail) {
-    if (mountState && mountState.host && window.wbViewer && typeof window.wbViewer.reportError === "function") {
-      window.wbViewer.reportError(mountState.host, new Error(title + (detail ? ": " + detail : "")));
+  function isCurrentSession(session) {
+    return !!(session && !session.destroyed && mountState === session);
+  }
+
+  function showError(stage, title, detail, session) {
+    const current = session || mountState;
+    if (!isCurrentSession(current)) return;
+    if (current.host && window.wbViewer && typeof window.wbViewer.reportError === "function") {
+      window.wbViewer.reportError(current.host, new Error(title + (detail ? ": " + detail : "")));
     }
     stage.innerHTML =
       '<div style="color:#e0e0e0;font:13px/1.7 system-ui,sans-serif;max-width:560px;text-align:center;">' +
@@ -107,16 +113,17 @@
       "</div>";
   }
 
-  function trackUrl(url) {
-    if (mountState && url) mountState.objectUrls.push(url);
+  function trackUrl(url, session) {
+    if (session && url) session.objectUrls.push(url);
     return url;
   }
 
   // ---------- 各格式解码 ----------
 
   // PSD：ag-psd readPsd 取合成 canvas
-  function renderPsd(stage, buf) {
+  function renderPsd(stage, buf, session) {
     return loadScript("agPsd").then(function (agPsd) {
+      if (!isCurrentSession(session)) return;
       let psd;
       try {
         psd = agPsd.readPsd(buf, {
@@ -128,7 +135,7 @@
         // 退一步：把图层数据也读出来再试一次
         psd = agPsd.readPsd(buf, { skipThumbnail: false });
       }
-      if (mountState && mountState.destroyed) return;
+      if (!isCurrentSession(session)) return;
       const canvas = psd && (psd.canvas || (psd.imageResources && null));
       if (canvas && canvas.width) {
         fitElement(canvas);
@@ -149,24 +156,25 @@
   }
 
   // HEIC/HEIF：heic2any -> PNG blob -> objectURL -> <img>
-  function renderHeic(stage, buf, name) {
+  function renderHeic(stage, buf, name, session) {
     return loadScript("heic2any").then(function (heic2any) {
+      if (!isCurrentSession(session)) return;
       const blob = new Blob([buf]); // 不强制 mime，heic2any 自行嗅探
       return heic2any({ blob: blob, toType: "image/png" }).then(function (out) {
-        if (mountState && mountState.destroyed) return;
+        if (!isCurrentSession(session)) return;
         // 动图/多帧 HEIC 可能返回数组，取第一帧
         const pngBlob = Array.isArray(out) ? out[0] : out;
-        const url = trackUrl(URL.createObjectURL(pngBlob));
+        const url = trackUrl(URL.createObjectURL(pngBlob), session);
         const img = document.createElement("img");
         img.alt = name || "HEIC";
         img.onload = function () {
-          if (mountState && mountState.destroyed) return;
+          if (!isCurrentSession(session)) return;
           fitElement(img);
           stage.innerHTML = "";
           stage.appendChild(img);
         };
         img.onerror = function () {
-          showError(stage, "HEIC 解码后无法显示", name || "");
+          showError(stage, "HEIC 解码后无法显示", name || "", session);
         };
         img.src = url;
       });
@@ -174,9 +182,9 @@
   }
 
   // TIFF/TIF：UTIF 解码首个 IFD -> RGBA -> canvas
-  function renderTiff(stage, buf, name) {
+  function renderTiff(stage, buf, name, session) {
     return loadScript("UTIF").then(function (UTIF) {
-      if (mountState && mountState.destroyed) return;
+      if (!isCurrentSession(session)) return;
       const ifds = UTIF.decode(buf);
       if (!ifds || !ifds.length) throw new Error("未能解析 TIFF 结构");
       const ifd = ifds[0];
@@ -192,6 +200,7 @@
         throw e;
       }
       const rgba = UTIF.toRGBA8(ifd); // Uint8Array
+      if (!isCurrentSession(session)) return;
       const w = ifd.width,
         h = ifd.height;
       if (!w || !h || !rgba || !rgba.length) {
@@ -232,7 +241,8 @@
     label: "图片增强(PSD/HEIC/TIFF)",
 
     mount: function (host, info) {
-      mountState = { host: host, objectUrls: [], destroyed: false };
+      const session = { host: host, objectUrls: [], destroyed: false };
+      mountState = session;
       const ext = (info && info.ext ? String(info.ext) : "")
         .toLowerCase()
         .replace(/^\./, "");
@@ -242,28 +252,29 @@
 
       const decode = DECODERS[ext];
       if (!decode) {
-        showError(stage, "不支持的图片格式", ext);
+        showError(stage, "不支持的图片格式", ext, session);
         return;
       }
 
       const path = info && info.path;
       if (!path) {
-        showError(stage, "缺少文件路径");
+        showError(stage, "缺少文件路径", "", session);
         return;
       }
 
       window
         .fetchRaw(path)
         .then(function (buf) {
-          if (mountState && mountState.destroyed) return;
-          return decode(stage, buf, name);
+          if (!isCurrentSession(session)) return;
+          return decode(stage, buf, name, session);
         })
         .catch(function (e) {
-          if (mountState && mountState.destroyed) return;
+          if (!isCurrentSession(session)) return;
           showError(
             stage,
             (LABELS[ext] || "图片") + " 解码失败",
-            e && e.message ? e.message : String(e)
+            e && e.message ? e.message : String(e),
+            session
           );
         });
     },
