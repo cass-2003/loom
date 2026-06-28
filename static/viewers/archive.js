@@ -29,7 +29,7 @@
       ".arc-btn{font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;",
       "  background:var(--panel);color:var(--text-dim);border:1px solid var(--border);transition:background .12s,color .12s;}",
       ".arc-btn:hover:not(:disabled){background:var(--hover);color:var(--text);}",
-      ".arc-btn:disabled{opacity:.5;cursor:not-allowed;color:var(--muted);background:var(--bg2);}",
+      ".arc-btn:disabled,.arc-btn.disabled{opacity:.5;cursor:not-allowed;color:var(--muted);background:var(--bg2);}",
       ".arc-tree{flex:1;min-height:0;overflow:auto;padding:6px 8px 14px;}",
       ".arc-row{display:flex;align-items:center;gap:7px;padding:3px 8px;border-radius:6px;",
       "  cursor:default;font-size:12.5px;color:var(--text-dim);white-space:nowrap;}",
@@ -488,11 +488,26 @@
           return;
         }
 
+        function setArchiveButtonState(btn, disabled, enabledTitle, disabledReason) {
+          btn.disabled = !!disabled;
+          btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+          btn.classList.toggle("disabled", !!disabled);
+          btn.title = disabled ? disabledReason : enabledTitle;
+        }
+
         function updateActionState() {
-          expandBtn.disabled = !treeWrap.querySelector(".arc-children.collapsed");
-          collapseBtn.disabled = !treeWrap.querySelector(".arc-children:not(.collapsed)");
-          expandBtn.title = expandBtn.disabled ? "当前没有可展开的目录" : "展开压缩包内所有目录";
-          collapseBtn.title = collapseBtn.disabled ? "当前没有可折叠的目录" : "折叠压缩包内所有目录";
+          setArchiveButtonState(
+            expandBtn,
+            !treeWrap.querySelector(".arc-children.collapsed"),
+            "展开压缩包内所有目录",
+            "当前没有可展开的目录"
+          );
+          setArchiveButtonState(
+            collapseBtn,
+            !treeWrap.querySelector(".arc-children:not(.collapsed)"),
+            "折叠压缩包内所有目录",
+            "当前没有可折叠的目录"
+          );
         }
 
         sortedChildren(tree).forEach(function (child) {
