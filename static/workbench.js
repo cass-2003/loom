@@ -1002,9 +1002,15 @@
         } });
     A({ id: "task.create", name: "任务: 新建工作流任务", hint: "Agent", icon: "listChecks",
         risk: "write",
+        enabled: () => {
+          const api = window.wbTaskActions;
+          if (!api || !api.actionState) return "任务面板尚未就绪";
+          const st = api.actionState("create");
+          return st.enabled ? true : st.reason;
+        },
         run: () => {
           typeof switchView === "function" && switchView("tasks");
-          if (window.createWorkflowTask) window.createWorkflowTask();
+          if (window.wbTaskActions && window.wbTaskActions.run) window.wbTaskActions.run("create");
         } });
     A({ id: "task.fromCurrentFile", name: "任务: 从当前文件创建", hint: "Context", icon: "fileText",
         requires: ["workspace", "currentFile"], risk: "write",

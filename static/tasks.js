@@ -346,6 +346,15 @@
     apply(sessionBtn, "refreshSessions", "刷新会话");
   }
 
+  function refreshTaskCreateButton() {
+    const create = $("#task-new");
+    if (!create) return;
+    const st = taskActionState("create");
+    create.disabled = !st.enabled;
+    create.setAttribute("aria-disabled", st.enabled ? "false" : "true");
+    create.title = st.enabled ? "新建任务" : (st.reason || "当前不可用");
+  }
+
   function refreshCopyRecoveryButton() {
     const copy = $("#task-copy-recovery");
     if (!copy) return;
@@ -891,7 +900,7 @@
     const sessionRefresh = $("#session-refresh");
     if (sessionRefresh) sessionRefresh.onclick = () => runTaskAction("refreshSessions");
     const create = $("#task-new");
-    if (create) create.onclick = promptTask;
+    if (create) create.onclick = () => runTaskAction("create");
     const statusSel = $("#task-status-filter");
     if (statusSel) statusSel.onchange = () => { taskFilters.status = statusSel.value || "all"; renderTasks(); };
     const sourceSel = $("#task-source-filter");
@@ -904,6 +913,12 @@
     };
     const copy = $("#task-copy-recovery");
     if (copy) copy.onclick = () => runTaskAction("copyRecoveryBrief");
+    window.addEventListener("wb:workspace-state", () => {
+      refreshTaskCreateButton();
+      refreshTaskRefreshButtons();
+      refreshCopyRecoveryButton();
+    });
+    refreshTaskCreateButton();
     loadTasks();
     loadSessions();
   }
@@ -911,13 +926,18 @@
   window.initTasksPanel = initTasksPanel;
   window.reloadWorkflowTasks = loadTasks;
   window.reloadAgentSessions = loadSessions;
-  window.createWorkflowTask = promptTask;
+  window.createWorkflowTask = () => runTaskAction("create");
   window.addWorkflowTask = addWorkflowTask;
   function taskActionState(action) {
     const hasTask = tasks.length > 0;
     const hasSession = sessions.length > 0;
     const loadingTasks = !!tasksLoading;
     const loadingSessions = !!sessionsLoading;
+    if (action === "create") {
+      if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+      if (!window.addWorkflowTask) return { enabled: false, reason: "任务面板尚未就绪" };
+      return { enabled: true, reason: "" };
+    }
     if (action === "refresh") {
       if (!window.hasOpenWorkspace || !window.hasOpenWorkspace()) return { enabled: false, reason: "请先打开工作区" };
       if (loadingTasks || loadingSessions) return { enabled: false, reason: "任务/会话正在刷新" };
@@ -953,6 +973,17 @@
     return { enabled: true, reason: "" };
   }
   async function runTaskAction(action) {
+    if (action === "create") {
+      const st = taskActionState(action);
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshTaskCreateButton();
+        return false;
+      }
+      if (typeof switchView === "function") switchView("tasks");
+      promptTask();
+      return true;
+    }
     if (action === "refresh" || action === "refreshTasks" || action === "refreshSessions") {
       const st = taskActionState(action);
       if (!st.enabled) {
