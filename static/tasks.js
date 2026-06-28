@@ -10,9 +10,13 @@
   let tasks = [];
   let tasksLoaded = false;
   let tasksLoading = null;
+  let tasksWorkspaceKey = null;
+  let tasksLoadingWorkspaceKey = null;
   let sessions = [];
   let sessionsLoaded = false;
   let sessionsLoading = null;
+  let sessionsWorkspaceKey = null;
+  let sessionsLoadingWorkspaceKey = null;
   const taskFilters = { status: "all", source: "all" };
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -47,13 +51,42 @@
     const s = String(text || "").trim();
     return s.length > limit ? s.slice(0, limit - 1) + "…" : s;
   }
+  function currentWorkspaceKey() {
+    return window.currentWorkspaceId || window.currentRoot || "__no_workspace__";
+  }
+  function tasksFresh() {
+    return tasksLoaded && tasksWorkspaceKey === currentWorkspaceKey();
+  }
+  function sessionsFresh() {
+    return sessionsLoaded && sessionsWorkspaceKey === currentWorkspaceKey();
+  }
   function workspaceLayoutSnapshot() {
+    const api = window.wbWorkspaceLayoutActions;
+    if (api && api.summary) {
+      try {
+        const summary = api.summary();
+        return {
+          workspaceId: summary.workspaceId,
+          root: summary.roots && summary.roots[0],
+          roots: summary.roots || [],
+          activeFile: summary.activeFile,
+          activeGroup: summary.activeGroup,
+          main: { tabs: new Array(summary.mainTabs || 0).fill(null) },
+          side: { tabs: new Array(summary.sideTabs || 0).fill(null) },
+          ui: { sidebarCollapsed: !!summary.sidebarCollapsed },
+        };
+      } catch {}
+    }
     if (window.getWorkspaceLayoutSnapshot) {
       try { return window.getWorkspaceLayoutSnapshot(); } catch {}
     }
     return null;
   }
   function workspaceLayoutBrief() {
+    const api = window.wbWorkspaceLayoutActions;
+    if (api && api.brief) {
+      try { return api.brief(); } catch {}
+    }
     const snap = workspaceLayoutSnapshot();
     if (window.formatWorkspaceLayoutBrief) {
       try { return window.formatWorkspaceLayoutBrief(snap); } catch {}
@@ -322,47 +355,65 @@
   }
 
   async function loadTasks() {
-    if (tasksLoading) return tasksLoading;
-    tasksLoading = (async () => {
+    const workspaceKey = currentWorkspaceKey();
+    if (tasksLoading && tasksLoadingWorkspaceKey === workspaceKey) return tasksLoading;
+    tasksLoadingWorkspaceKey = workspaceKey;
+    const loading = (async () => {
       try {
         const data = await fetch("/api/workflow-tasks", { cache: "no-store" }).then(r => r.json());
         if (data.error) throw new Error(data.error);
+        if (currentWorkspaceKey() !== workspaceKey) return false;
         tasks = Array.isArray(data.tasks) ? data.tasks : [];
         tasksLoaded = true;
+        tasksWorkspaceKey = workspaceKey;
         renderTaskRecovery();
         renderTasks();
         notifyRecoveryChanged();
         return true;
       } catch (e) {
+        if (currentWorkspaceKey() !== workspaceKey) return false;
         const host = $("#task-list");
         if (host) host.innerHTML = `<div class="task-error">任务加载失败: ${esc(e && e.message ? e.message : e)}</div>`;
         return false;
       } finally {
-        tasksLoading = null;
+        if (tasksLoading === loading) {
+          tasksLoading = null;
+          tasksLoadingWorkspaceKey = null;
+        }
       }
     })();
+    tasksLoading = loading;
     return tasksLoading;
   }
 
   async function loadSessions() {
-    if (sessionsLoading) return sessionsLoading;
-    sessionsLoading = (async () => {
+    const workspaceKey = currentWorkspaceKey();
+    if (sessionsLoading && sessionsLoadingWorkspaceKey === workspaceKey) return sessionsLoading;
+    sessionsLoadingWorkspaceKey = workspaceKey;
+    const loading = (async () => {
       try {
         const data = await fetch("/api/agent-sessions", { cache: "no-store" }).then(r => r.json());
         if (data.error) throw new Error(data.error);
+        if (currentWorkspaceKey() !== workspaceKey) return false;
         sessions = Array.isArray(data.sessions) ? data.sessions : [];
         sessionsLoaded = true;
+        sessionsWorkspaceKey = workspaceKey;
         renderTaskRecovery();
         renderSessions();
         notifyRecoveryChanged();
         return true;
       } catch (e) {
+        if (currentWorkspaceKey() !== workspaceKey) return false;
         if (window.setMsg) setMsg("会话加载失败: " + (e && e.message ? e.message : e), "err");
         return false;
       } finally {
-        sessionsLoading = null;
+        if (sessionsLoading === loading) {
+          sessionsLoading = null;
+          sessionsLoadingWorkspaceKey = null;
+        }
       }
     })();
+    sessionsLoading = loading;
     return sessionsLoading;
   }
 
@@ -402,7 +453,7 @@
   }
 
   async function addWorkflowTask(seed) {
-    if (!tasksLoaded) await loadTasks();
+    if (!tasksFresh()) await loadTasks();
     const now = new Date().toISOString().slice(0, 19);
     tasks.unshift({
       id: nowId(),
@@ -847,27 +898,27 @@
     const hasSession = sessions.length > 0;
     if (action === "focusRecovery") return { enabled: true, reason: "" };
     if (action === "copyRecoveryBrief") {
-      if (!tasksLoaded || !sessionsLoaded) return { enabled: false, reason: "任务/会话尚未加载" };
+      if (!tasksFresh() || !sessionsFresh()) return { enabled: false, reason: "任务/会话尚未加载" };
       return { enabled: true, reason: "" };
     }
     if (action === "appendMemory" || action === "createSession" || action === "copySessionBrief" || action === "importTaskResult") {
-      if (!tasksLoaded) return { enabled: true, reason: "" };
+      if (!tasksFresh()) return { enabled: true, reason: "" };
       if (!hasTask) return { enabled: false, reason: "还没有可操作的工作流任务" };
     }
     if (action === "copySessionRecovery") {
-      if (!sessionsLoaded) return { enabled: true, reason: "" };
+      if (!sessionsFresh()) return { enabled: true, reason: "" };
       if (!hasSession) return { enabled: false, reason: "还没有可恢复的 Agent Session" };
     }
     if (action === "importSessionResult" && !hasSession && !hasTask) {
-      if (!tasksLoaded || !sessionsLoaded) return { enabled: true, reason: "" };
+      if (!tasksFresh() || !sessionsFresh()) return { enabled: true, reason: "" };
       return { enabled: false, reason: "还没有可导入结果的任务或会话" };
     }
     return { enabled: true, reason: "" };
   }
   async function runTaskAction(action) {
-    if (!tasksLoaded) await loadTasks();
-    if (action === "focusRecovery" && !sessionsLoaded) await loadSessions();
-    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsLoaded) await loadSessions();
+    if (!tasksFresh()) await loadTasks();
+    if (action === "focusRecovery" && !sessionsFresh()) await loadSessions();
+    if ((action === "importSessionResult" || action === "copySessionBrief" || action === "copyRecoveryBrief" || action === "copySessionRecovery") && !sessionsFresh()) await loadSessions();
     refreshCopyRecoveryButton();
     const st = taskActionState(action);
     if (!st.enabled) {
@@ -904,8 +955,9 @@
     summary: () => ({
       tasks: tasks.length,
       sessions: sessions.length,
-      tasksLoaded,
-      sessionsLoaded,
+      tasksLoaded: tasksFresh(),
+      sessionsLoaded: sessionsFresh(),
+      workspaceKey: currentWorkspaceKey(),
       recovery: taskRecoverySummary(),
     }),
   };
