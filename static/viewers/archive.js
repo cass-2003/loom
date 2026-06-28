@@ -35,6 +35,7 @@
       "  cursor:default;font-size:12.5px;color:var(--text-dim);white-space:nowrap;}",
       ".arc-row.clickable{cursor:pointer;}",
       ".arc-row:hover{background:var(--hover);}",
+      ".arc-row.clickable:focus-visible{outline:2px solid var(--accent);outline-offset:1px;background:var(--hover);}",
       ".arc-twist{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;",
       "  flex-shrink:0;color:var(--muted);transition:transform .12s;}",
       ".arc-twist.open{transform:rotate(90deg);}",
@@ -229,6 +230,26 @@
     return !!(root && state.root === root && prevEl && prevEl.isConnected);
   }
 
+  function setRowAction(row, handler, listeners) {
+    row.classList.add("clickable");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.addEventListener("click", handler);
+    listeners.push([row, "click", handler]);
+    var onKey = function (ev) {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      handler(ev);
+    };
+    row.addEventListener("keydown", onKey);
+    listeners.push([row, "keydown", onKey]);
+  }
+
+  function setRowExpanded(row, expanded, expandedTitle, collapsedTitle) {
+    row.setAttribute("aria-expanded", expanded ? "true" : "false");
+    row.title = expanded ? expandedTitle : collapsedTitle;
+  }
+
   function renderNode(node, depth, listeners, onTreeStateChange, root) {
     var wrap = document.createElement("div");
 
@@ -287,34 +308,45 @@
         });
       }
       if (!collapsed) buildChildren();
+      setRowExpanded(
+        row,
+        !collapsed,
+        "折叠目录：" + node.path,
+        "展开目录：" + node.path
+      );
       var onToggle = function () {
         var nowCollapsed = childWrap.classList.toggle("collapsed");
         twist.classList.toggle("open", !nowCollapsed);
         if (!nowCollapsed) buildChildren();
+        setRowExpanded(
+          row,
+          !nowCollapsed,
+          "折叠目录：" + node.path,
+          "展开目录：" + node.path
+        );
         if (typeof onTreeStateChange === "function") onTreeStateChange();
       };
-      row.classList.add("clickable");
-      row.addEventListener("click", onToggle);
-      listeners.push([row, "click", onToggle]);
+      setRowAction(row, onToggle, listeners);
       wrap.appendChild(childWrap);
     } else if (isTextName(node.name) || isImageName(node.name)) {
       // 可预览文件：点击切换预览
-      row.classList.add("clickable");
       var prevEl = null;
+      setRowExpanded(row, false, "收起预览：" + node.path, "预览文件：" + node.path);
       var onClick = function () {
         if (prevEl) { // 已展开 → 收起
           prevEl.remove();
           prevEl = null;
+          setRowExpanded(row, false, "收起预览：" + node.path, "预览文件：" + node.path);
           return;
         }
         prevEl = document.createElement("div");
         prevEl.className = "arc-prev";
         prevEl.innerHTML = '<div class="arc-prev-note">加载中…</div>';
         wrap.appendChild(prevEl);
+        setRowExpanded(row, true, "收起预览：" + node.path, "预览文件：" + node.path);
         loadPreview(node, prevEl, root);
       };
-      row.addEventListener("click", onClick);
-      listeners.push([row, "click", onClick]);
+      setRowAction(row, onClick, listeners);
     }
 
     return wrap;
@@ -547,6 +579,14 @@
             if (r) {
               var tw = r.querySelector(".arc-twist");
               if (tw) tw.classList.remove("open");
+              if (r.hasAttribute("aria-expanded")) {
+                setRowExpanded(
+                  r,
+                  false,
+                  r.title.replace(/^展开目录：/, "折叠目录："),
+                  r.title.replace(/^折叠目录：/, "展开目录：")
+                );
+              }
             }
           });
           updateActionState();
