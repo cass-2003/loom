@@ -2,6 +2,8 @@
 (function () {
   const $ = (s) => document.querySelector(s);
   let cache = { skills: [], playbooks: [] };
+  let ecosystemStatus = "idle"; // idle | loading | ready | error
+  let ecosystemError = "";
   const filters = { risk: "all", source: "all" };
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -35,6 +37,15 @@
     sel.innerHTML = options.map(opt =>
       `<option value="${esc(opt.value)}"${opt.value === value ? " selected" : ""}>${esc(opt.label)}</option>`).join("");
   }
+  function setControlState(el, state, enabledTitle) {
+    if (!el) return;
+    el.disabled = !state.enabled;
+    el.setAttribute("aria-disabled", state.enabled ? "false" : "true");
+    el.title = state.enabled ? enabledTitle : (state.reason || "当前不可用");
+  }
+  function refreshEcosystemActions() {
+    setControlState($("#eco-refresh"), ecosystemActionState("refresh"), "刷新生态入口");
+  }
   function renderRecovery() {
     const grid = $("#eco-recovery-grid");
     const next = $("#eco-next");
@@ -54,10 +65,20 @@
       .map(k => `${riskInfo(k).label} ${risks[k]}`)
       .join(" · ") || "无";
     const sourceText = Object.keys(sources).sort().map(k => `${k} ${sources[k]}`).join(" · ") || "无";
-    const recommended = cache.playbooks.find(p => (p.risk || "read") === "write")
-      || cache.playbooks[0] || cache.skills[0] || null;
+    const recommended = ecosystemStatus === "ready"
+      ? (cache.playbooks.find(p => (p.risk || "read") === "write")
+        || cache.playbooks[0] || cache.skills[0] || null)
+      : null;
+    const statusText = ecosystemStatus === "loading"
+      ? "扫描中"
+      : ecosystemStatus === "error"
+        ? `加载失败: ${ecosystemError || "未知错误"}`
+        : ecosystemStatus === "ready"
+          ? "已加载"
+          : "待加载";
     grid.innerHTML = [
       ["工作区", workspace],
+      ["状态", statusText],
       ["入口", `${cache.playbooks.length} Playbooks · ${cache.skills.length} Skills`],
       ["风险", riskText],
       ["来源", sourceText],
@@ -72,16 +93,26 @@
     setSelectOptions(sourceSel, sourceOptions, filters.source);
     const hasFilter = filters.risk !== "all" || filters.source !== "all";
     if (clear) clear.classList.toggle("hidden", !hasFilter);
-    next.textContent = recommended
+    next.textContent = ecosystemStatus === "loading"
+      ? "下一步：等待扫描完成；刷新期间不会使用旧入口创建任务或复制命令。"
+      : ecosystemStatus === "error"
+        ? `下一步：检查 .workbench 定义或刷新重试。${ecosystemError ? " 错误：" + ecosystemError : ""}`
+        : recommended
       ? `下一步：查看 ${recommended.title}，或创建任务记录验证过程。`
       : "下一步：在 .workbench/playbooks 或 .workbench/skills 中添加本地流程定义。";
+    refreshEcosystemActions();
   }
 
   async function loadEcosystem() {
     const list = $("#eco-list");
     const summary = $("#eco-summary");
     if (!list || !summary) return;
+    ecosystemStatus = "loading";
+    ecosystemError = "";
+    cache = { skills: [], playbooks: [] };
     list.innerHTML = `<div class="eco-loading">扫描中…</div>`;
+    summary.textContent = "扫描 Skills / Playbooks 中…";
+    renderRecovery();
     try {
       const data = await fetch("/api/ecosystem", { cache: "no-store" }).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -89,9 +120,16 @@
         skills: Array.isArray(data.skills) ? data.skills : [],
         playbooks: Array.isArray(data.playbooks) ? data.playbooks : [],
       };
+      ecosystemStatus = "ready";
+      ecosystemError = "";
       renderEcosystem();
     } catch (e) {
-      list.innerHTML = `<div class="eco-error">生态入口加载失败: ${esc(e && e.message ? e.message : e)}</div>`;
+      ecosystemStatus = "error";
+      ecosystemError = e && e.message ? e.message : String(e);
+      cache = { skills: [], playbooks: [] };
+      list.innerHTML = `<div class="eco-error">生态入口加载失败: ${esc(ecosystemError)}</div>`;
+      summary.textContent = "生态入口加载失败";
+      renderRecovery();
     }
   }
 
@@ -149,8 +187,13 @@
   }
 
   function ecosystemActionState(action, item) {
-    if (action === "refresh") return { enabled: true, reason: "" };
+    if (action === "refresh") {
+      if (ecosystemStatus === "loading") return { enabled: false, reason: "生态入口正在扫描" };
+      return { enabled: true, reason: "" };
+    }
     if (action === "focusRecovery") return { enabled: true, reason: "" };
+    if (ecosystemStatus === "loading") return { enabled: false, reason: "生态入口正在扫描" };
+    if (ecosystemStatus === "error") return { enabled: false, reason: ecosystemError || "生态入口加载失败" };
     if (action === "task" && !window.addWorkflowTask) {
       return { enabled: false, reason: "任务面板尚未就绪" };
     }
@@ -169,7 +212,7 @@
       if (window.setMsg) window.setMsg(st.reason || "当前不可用", "warn");
       return false;
     }
-    if (action === "refresh") { await loadEcosystem(); return true; }
+    if (action === "refresh") { await loadEcosystem(); return ecosystemStatus === "ready"; }
     if (action === "focusRecovery") {
       if (typeof switchView === "function") switchView("ecosystem");
       if (!cache.skills.length && !cache.playbooks.length) await loadEcosystem();
@@ -379,6 +422,7 @@
       parts.push(`<div class="eco-empty">${allItems().length ? "当前过滤没有匹配入口。" : "未发现本地 Skills / Playbooks。可在 <code>.workbench/playbooks</code> 放置 Markdown playbook。"}</div>`);
     }
     list.innerHTML = parts.join("");
+    refreshEcosystemActions();
     list.querySelectorAll(".eco-card").forEach(card => {
       card.addEventListener("click", async e => {
         const btn = e.target.closest("[data-act]");
@@ -394,7 +438,7 @@
 
   function initEcosystemPanel() {
     const refresh = $("#eco-refresh");
-    if (refresh) refresh.onclick = loadEcosystem;
+    if (refresh) refresh.onclick = () => runEcosystemAction("refresh");
     const riskSel = $("#eco-risk-filter");
     if (riskSel) riskSel.onchange = () => { filters.risk = riskSel.value || "all"; renderEcosystem(); };
     const sourceSel = $("#eco-source-filter");
@@ -418,6 +462,8 @@
       visible: visibleItems().length,
       risk: filters.risk,
       source: filters.source,
+      status: ecosystemStatus,
+      error: ecosystemError,
     }),
   };
   window.reloadEcosystem = loadEcosystem;
