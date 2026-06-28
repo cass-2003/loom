@@ -170,19 +170,24 @@
     const posEl = $("#status-pos"), langEl = $("#status-lang"),
           wordsEl = $("#status-words"), encEl = $("#status-enc");
     if (!posEl) return;
-    const isText = st.kind === "text" && !$("#editor-wrap").classList.contains("hidden");
-    if (!isText) {
+    const mainVisible = st.kind === "text" && !$("#editor-wrap").classList.contains("hidden");
+    const sideInfo = window.split && typeof window.split.activeText === "function"
+      ? window.split.activeText()
+      : null;
+    const sideFocused = !!(window.split && window.split.isSideFocused && window.split.isSideFocused() && sideInfo);
+    const ed = sideFocused ? $("#side-editor") : $("#editor");
+    const path = sideFocused ? sideInfo.path : st.current;
+    if (!ed || (!sideFocused && !mainVisible)) {
       [posEl, langEl, wordsEl, encEl].forEach(e => e.classList.add("hidden"));
       return;
     }
-    const ed = $("#editor");
     const val = ed.value;
     const caret = ed.selectionStart;
     const before = val.slice(0, caret);
     const line = before.split("\n").length;
     const col = caret - before.lastIndexOf("\n");
     posEl.textContent = `行 ${line}, 列 ${col}`;
-    langEl.textContent = langOf(st.current);
+    langEl.textContent = langOf(path);
     wordsEl.textContent = countWords(val) + " 字";
     encEl.textContent = "UTF-8";
     [posEl, langEl, wordsEl, encEl].forEach(e => e.classList.remove("hidden"));
@@ -195,8 +200,15 @@
     ["keyup", "click", "input", "scroll", "select"].forEach(ev =>
       ed.addEventListener(ev, updateStatusBar));
     ed.addEventListener("focus", updateStatusBar);
+    const sideEd = $("#side-editor");
+    if (sideEd) {
+      ["keyup", "click", "input", "scroll", "select"].forEach(ev =>
+        sideEd.addEventListener(ev, updateStatusBar));
+      sideEd.addEventListener("focus", updateStatusBar);
+    }
+    window.addEventListener("wb:active-editor-change", updateStatusBar);
     document.addEventListener("selectionchange", () => {
-      if (document.activeElement === ed) updateStatusBar();
+      if (document.activeElement === ed || document.activeElement === sideEd) updateStatusBar();
     });
   }
 

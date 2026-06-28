@@ -335,6 +335,7 @@
     }
     if (window.updateStatusFileAction) window.updateStatusFileAction();
     if (window.updateTopActionState) window.updateTopActionState();
+    if (window.updateStatusBar) window.updateStatusBar();
     window.dispatchEvent(new CustomEvent("wb:active-editor-change", {
       detail: { group: g, path: g === "side" ? side.active : wb().current },
     }));
@@ -518,6 +519,7 @@
         if (t && !t.dirty) { t.dirty = true; }
         renderSideTabs();
         sideGutter();
+        if (window.updateStatusBar) window.updateStatusBar();
       });
       ed.addEventListener("scroll", () => { const g = $("#side-gutter"); if (g) g.scrollTop = ed.scrollTop; });
       ed.addEventListener("focus", () => setFocus("side"));
