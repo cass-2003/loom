@@ -1636,23 +1636,24 @@ function updateTopActionState() {
 window.updateTopActionState = updateTopActionState;
 
 function updateWorkspaceActionState() {
-  const hasWs = !!currentRoot;
-  const reason = "请先打开工作区";
   [
-    ["#btn-new-file", "新建文件（根目录）"],
-    ["#btn-new-dir", "新建文件夹（根目录）"],
-    ["#btn-refresh", "刷新"],
-  ].forEach(([sel, title]) => {
+    ["#btn-new-file", "newFileRoot", "新建文件（根目录）"],
+    ["#btn-new-dir", "newFolderRoot", "新建文件夹（根目录）"],
+    ["#btn-refresh", "refreshTree", "刷新"],
+  ].forEach(([sel, action, title]) => {
     const btn = $(sel);
     if (!btn) return;
-    btn.disabled = !hasWs;
-    btn.title = hasWs ? title : reason;
-    btn.setAttribute("aria-disabled", hasWs ? "false" : "true");
+    const api = window.wbWorkspaceActions;
+    const st = api && api.actionState ? api.actionState(action) : workspaceActionState(action);
+    btn.disabled = !st.enabled;
+    btn.classList.toggle("disabled", !st.enabled);
+    btn.title = st.enabled ? title : (st.reason || "当前不可用");
+    btn.setAttribute("aria-disabled", st.enabled ? "false" : "true");
   });
   updateStatusFileAction();
   window.dispatchEvent(new CustomEvent("wb:workspace-state", {
     detail: {
-      hasWorkspace: hasWs,
+      hasWorkspace: !!currentRoot,
       root: currentRoot,
       roots: currentWorkspaceRoots.slice(),
       workspaceId: currentWorkspaceId,
