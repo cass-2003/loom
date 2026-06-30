@@ -1,161 +1,156 @@
-# 🛠 Loom
+# Loom
 
-一个零依赖的本地工作台：VS Code 风格三栏布局，文件树 + 多标签编辑器 + Markdown 实时预览 + Git 源代码管理 + 集成终端 + 工具箱。**纯 Python 标准库后端 + 原生 JS 前端，无任何第三方运行时依赖，完全离线可用。**
+A lightweight, local-first desktop workbench. VS Code-style layout with an integrated ecosystem inspired by Codex Desktop, Cursor, and Devin — project memory, task workflows, agent sessions, and skills/playbooks. **Pure Python stdlib backend + vanilla JS frontend, zero runtime dependencies, fully offline.**
 
-## 启动
+一个零依赖的本地工作台。VS Code 风格三栏布局 + Codex/Cursor/Devin 式生态骨架（项目记忆、任务工作流、Agent 会话、Skills/Playbooks）。纯 Python 标准库后端 + 原生 JS 前端，完全离线可用。
+
+## Quick Start
 
 ```bash
-# 默认恢复上次工作区；没有历史工作区时显示欢迎页
-python server.py
-
-# 指定根目录和端口
-python server.py D:\notes --port 8200
+python server.py                    # restore last workspace
+python server.py D:\projects        # open specific directory
+python server.py --port 8200        # custom port
 ```
 
-Windows 可直接双击 `start.bat`，或把任意文件夹**拖到 `start.bat` 上**以该文件夹为根启动。
-启动后浏览器打开 `http://127.0.0.1:8765/`（或你指定的端口）。
+On Windows, double-click `start.bat` or drag a folder onto it. Opens at `http://127.0.0.1:8765/`.
 
-## 打包为 exe（免装 Python）
-
-把整个工作台编译成一个独立的 `Loom.exe`，分发到任意 Windows 机器双击即用，目标机**无需安装 Python**：
+## Desktop App
 
 ```powershell
-pip install pyinstaller          # 仅构建期需要
+pip install pyinstaller pywebview    # build-time only
 powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 
-产物 `dist\Loom.exe`（约 77MB，内含 Python 运行时、pywebview、终端 PTY 组件与 `static/` 全部离线资源）。
-双击运行会打开原生无边框 Loom 窗口：优先恢复上次工作区；没有历史工作区时显示欢迎页，让你选择一个或多个文件夹。也可命令行指定工作区根目录：`Loom.exe D:\notes`。
-
-## 打包安装包
-
-生成 Windows 安装包（`Setup.exe`）时，优先使用仓库自带的一键脚本：
+Produces `dist\Loom.exe` (~77MB standalone). For an installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build_installer.ps1
+# -> installer\Output\Loom-Setup-0.1.0.exe
 ```
 
-这个脚本会先构建 `dist\Loom.exe`，再自动查找 Inno Setup 的 `ISCC.exe` 并生成安装包。
-默认产物位置：
+## Features
 
-```text
-installer\Output\Loom-Setup-0.1.0.exe
+### Editor Core
+
+- **Multi-tab editor** with dirty markers, unsaved-close confirmation, drag reorder
+- **`Ctrl+P` Quick Open** — fuzzy subsequence match with highlight
+- **`Ctrl+F` Find & Replace** — string/regex, case-sensitive, count, replace all
+- **Full-text search** — cross-file recursive, regex, results grouped by file
+- **Split pane editing** — horizontal/vertical, independent focus and state
+- **Line numbers** — synced scroll, current line highlight
+
+### Markdown
+
+- **Vditor WYSIWYG** editor — single editing surface, compact toolbar, embedded outline
+- **Mermaid** diagrams, **KaTeX** math, **TOC** navigation
+- **Export** to HTML / print to PDF
+- **Paste images** — auto-save to `assets/` and insert link
+- **Task lists** — click to toggle `[ ]` ⇄ `[x]` in preview, synced back to source
+
+### Source Control (Git)
+
+- Stage/unstage, commit (`Ctrl+Enter`), push, init
+- **Commit graph** — SVG multi-lane with branch/tag chips, inline file expansion, per-commit diff
+- File history, blame (per-line author coloring), branch create/checkout/delete, stash save/pop
+- Resizable sidebar with memory
+
+### Integrated Terminal
+
+- Collapsible bottom panel with ConPTY/winpty shell
+- Run current file (`.py` / `.js` / `.sh` / `.ps1`)
+- Task runner — auto-detect `package.json` scripts and `Makefile` targets
+- Commands execute on `127.0.0.1` only, with CSRF protection
+
+### File Viewers
+
+| Format | Capabilities |
+|--------|-------------|
+| PDF | Embedded pdf.js viewer |
+| EPUB | Paginated reader + TOC sidebar |
+| DOCX | Rendered document preview |
+| Excel/CSV | Sheet tabs, cell navigation |
+| Font | Glyph preview, custom text testing |
+| Image | Enhanced viewer (HEIC/PSD/TIFF support) |
+| Archive | ZIP/JAR browser with text/image preview |
+
+### Productivity
+
+- **Command Palette** (`Ctrl+Shift+P`) — 79+ capabilities, filter by risk/kind/source
+- **Settings** — font size, tab width, accent color, word wrap, auto-save
+- **Workspace memory** — restore tabs, theme, sidebar width on reopen
+- **Status bar** — line/col, word count, language, encoding, Git branch
+- **Notes / Todo** — add, edit, check, drag-reorder, persisted
+- **Toolbox** — JSON, Base64, URL, Hash, Diff, Regex, Color, UUID, Cron, Markdown table (12 tools)
+
+### Ecosystem (Codex/Cursor/Devin-inspired)
+
+| Surface | Description |
+|---------|-------------|
+| **Capability Registry** | 79+ registered actions with `requires`, `risk` labels, disabled reasons |
+| **Project Memory** | `state/*.md` visualized in UI — Requirements, Progress, Log, Memory |
+| **Task Workflows** | Goal → Plan → Evidence → Log → Status, multi-context creation |
+| **Agent Sessions** | Session brief/recovery packages, result import to tasks + memory |
+| **Skills / Playbooks** | `.workbench/` definitions, execution preview (view/copy only, no auto-exec) |
+| **Recovery Center** | Resume last task, view recent validation, recommended next step |
+
+## Architecture
+
+```
+loom/
+├─ server.py           # Backend — stdlib http.server (3400 lines)
+├─ desktop.py          # pywebview native window shell
+├─ AGENTS.md           # Project rules: boundaries, safety, validation
+├─ .workbench/         # Local ecosystem definitions
+│  ├─ playbooks/       #   Workflow playbooks
+│  └─ skills/          #   Skill definitions
+├─ docs/               # Roadmap, audit reports
+├─ state/              # Project memory (viewable/editable in UI)
+├─ scripts/            # 59 Playwright smoke tests
+└─ static/
+   ├─ app.js           # Core UI: file tree, tabs, editor, Markdown, Quick Open (3500 lines)
+   ├─ workbench.js     # Capability registry, command palette, settings (1500 lines)
+   ├─ project.js       # Project memory panel
+   ├─ tasks.js         # Task/Agent workflow panel
+   ├─ ecosystem.js     # Skills/Playbooks panel
+   ├─ git.js           # Source control
+   ├─ terminal.js      # Integrated terminal + task runner
+   ├─ viewers/         # 7 file viewers (PDF/EPUB/DOCX/Sheet/Font/Image/Archive)
+   └─ vendor/          # Bundled frontend libs (Vditor, xterm, highlight.js, KaTeX, Mermaid)
 ```
 
-如果本机还没安装 Inno Setup 6，需要先安装；脚本不再要求你手动把 `ISCC.exe` 加进 `PATH`。
+**Backend**: Pure Python standard library. No pip dependencies at runtime. Optional: `pywebview` (desktop shell), `pyinstaller` (packaging).
 
-## 浏览器烟测（开发验证）
+**Frontend**: Vanilla JS with IIFE modules. No build step, no bundler, no framework. 15 vendor libraries bundled locally in `static/vendor/`.
 
-Codex 桌面运行时自带的 Node 依赖使用 pnpm 嵌套目录。直接 `node smoke.js` 可能找不到 `playwright-core`，需要用仓库脚本补齐 `NODE_PATH`：
+## Security
+
+- All file I/O confined to workspace root — `../` traversal blocked via `resolve()` + `realpath()` containment check
+- Write/exec operations require **CSRF validation** (Content-Type + Origin + Host + Sec-Fetch-Site)
+- **DNS rebinding protection** — strict loopback Host whitelist
+- **CSP** — no `unsafe-inline` for scripts, `object-src 'none'`
+- Default bind `127.0.0.1` — non-loopback requires explicit `WORKBENCH_ALLOW_REMOTE=1`
+- Search timeout (10s), terminal input cap (1MB), atomic file writes
+- SheetJS output sanitized against XSS
+- 67 interactive buttons have `aria-label` for screen reader accessibility
+- **2 audit reports** with full findings and remediation tracking
+
+## Smoke Tests
+
+59 Playwright-driven browser smoke scripts covering: no-workspace state, Git/non-Git/empty-repo scenarios, Markdown, all 7 viewers, tasks, sessions, ecosystem, command palette, status bar, split pane, keyboard navigation, and action contract consistency.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run-browser-smoke.ps1 path\to\smoke.js
+powershell -ExecutionPolicy Bypass -File scripts\run-browser-smoke.ps1 scripts\cmdpalette-smoke.js
 ```
 
-脚本会优先使用 Codex runtime 的 Node，并把 `node_modules` 与 `.pnpm\node_modules` 加入解析路径；传入的 smoke 文件可以是仓库相对路径或绝对路径。
+## Design Principles
 
-## 功能
+- **Local-first** — no cloud services, no accounts, no telemetry
+- **Zero runtime deps** — stdlib Python backend, vendor-bundled frontend
+- **Offline-capable** — everything works without internet
+- **Safe by default** — Skills/Playbooks are view/copy only until a proper execution model exists
+- **Action contract** — every button either works or is disabled with a reason
+- **Single-user** — designed as a personal workstation, not a multi-tenant service
 
-VS Code 风格布局：**活动栏（图标）→ 侧边栏（随图标切换）→ 中间编辑区（标签栏 + 内容）→ 状态栏**，底部可折叠**集成终端**。
+## License
 
-### 编辑核心
-
-- **多标签页**：同时打开多个文件，脏标记圆点，中键 / × 关闭，未保存关闭二次确认。
-- **`Ctrl+P` 快速打开**：子序列模糊匹配，匹配字符高亮，↑↓ 选择，Enter 打开。
-- **行号槽**：与编辑区同步滚动，当前行高亮。
-- **`Ctrl+F` 文件内查找替换**：字符串 / 正则、区分大小写、计数、上一个/下一个、替换、全部替换。
-- **全文搜索**（活动栏 🔍）：跨文件递归匹配，正则 / 大小写开关，结果按文件分组，点击精确跳转到行。
-- **图片**：直接预览；二进制文件提示无法编辑。
-
-### 文件操作
-
-- 文件树右键菜单：新建文件 / 新建文件夹 / 重命名 / 删除（样式化模态 + 危险操作确认）。
-- 资源管理器顶部按钮：根目录新建文件 / 文件夹 / 刷新。
-- 重命名/删除联动更新已打开标签与编辑区。
-
-### 源代码管理（Git，仿 Cursor 侧栏）
-
-- **更改 / 暂存**：提交信息框 + 提交，`暂存的更改 / 更改` 可折叠分组（`M/A/D/U` 状态色）；文件行 hover 浮出 `打开 / 丢弃 / 暂存±`，单击看 diff，组级一键暂存/取消。`Ctrl+Enter` 快捷提交，可 `推送 / 初始化`。
-- **图形**：侧栏紧凑提交图——SVG 多 lane 节点 + 连线（HEAD 空心环）+ 单行消息 + 分支/标签胶囊；分支选择器切「所有分支 / 某分支」；悬浮弹详情卡；**点提交行内联展开改动文件，点文件看该提交的 diff**。
-- **深化**：单文件历史 · blame 逐行作者着色 · 分支新建/检出/删除 · stash 储藏/弹出。
-- 侧栏宽度可**拖动调节**（记忆到本地）。
-
-### Markdown 全家桶
-
-- 左源码右渲染**实时预览**，顶栏切换 `分屏 / 源码 / 预览`，代码块语法高亮。
-- **Mermaid** 流程图 · **KaTeX** 数学公式 · **大纲 TOC** 跳转 · 导出 **HTML / 打印 PDF**。
-- **任务清单**预览中可点击勾选，回写源码 `[ ] ⇄ [x]`。
-- **粘贴图片**自动存盘到 `assets/` 并插入 `![](...)` 链接。
-- 分屏下**编辑 ↔ 预览滚动同步**。
-
-### 生产力
-
-- **命令面板 `Ctrl+Shift+P`**：模糊搜索并执行全部动作。
-- **设置面板**：字号 / Tab 宽度 / 强调色 / 自动换行 / 自动保存（持久化）。
-- **工作区记忆**：重开自动恢复上次打开的标签、主题、侧栏宽度。
-- **状态栏**：行列、字数、语言/类型、编码、Git 分支。
-- **快捷键帮助**（`?`）。
-- **便签 / Todo**（活动栏 📓）：待办增删改勾选拖拽排序 + 自由便签，后端持久化。
-- **工具箱**（活动栏 🧰，纯前端）：JSON 格式化/压缩、Base64、URL 编解码、时间戳 ⇄ 日期、Hash（SHA-1/256/384/512）、字数统计、文本对比（diff）、正则测试器、颜色转换（HEX/RGB/HSL）、UUID 生成、Cron 解析、Markdown 表格生成。
-
-### 集成终端（本机）
-
-- 底部可折叠终端面板：命令输入 + 输出（stderr 标红）、命令历史（↑↓）、清屏、cwd 显示。
-- **运行当前文件**（`.py` / `.js` / `.sh` / `.ps1`）：编辑区按钮，输出进终端。
-- **任务运行器**：自动读取 `package.json` scripts 与 `Makefile` 目标，一键运行 npm / make。
-- ⚠️ 命令**仅在服务器本机 `127.0.0.1` 执行**，复用 CSRF + 路径约束 + 任务名白名单。UI 明确标注"在服务器本机执行命令"。
-
-## 安全
-
-- 所有文件读写、终端 cwd、运行文件均限制在根目录内，`..` 路径穿越被拒绝。
-- 写操作 / 命令执行经 **CSRF 校验**（要求 `Content-Type: application/json` + 同源 Origin/Host + `Sec-Fetch-Site`）。
-- 默认只监听 `127.0.0.1`，不对外网开放。
-- 保存使用字节写入，保留原始换行（不强制 CRLF）；文件切换有竞态令牌；图片 blob URL 及时释放。
-
-## 目录结构
-
-```
-workbench/
-├─ server.py          # 后端 (标准库 http.server)
-├─ desktop.py         # pywebview 桌面壳 (原生窗口)
-├─ start.bat          # Windows 一键启动
-├─ AGENTS.md          # 项目规则：产品边界/安全/验证/提交
-├─ Loom.spec     # PyInstaller 打包配置
-├─ build_exe.ps1      # 构建 EXE 脚本
-├─ build_installer.ps1# 构建安装包脚本
-├─ .workbench/        # 本地生态定义
-│  ├─ playbooks/      #   Playbook 流程定义
-│  └─ skills/         #   Skill 技能定义
-├─ docs/              # 项目文档
-│  ├─ 轻量生态化路线.md#   产品路线与阶段计划
-│  └─ audit/          #   审计报告
-├─ state/             # 项目记忆 (可在 UI 中查看/编辑)
-│  ├─ REQUIREMENTS.md
-│  ├─ PROGRESS.md
-│  ├─ LOG.md
-│  └─ MEMORY.md
-├─ scripts/           # 59 个 Playwright 烟测脚本
-├─ samples/           # 各格式测试文件
-├─ installer/         # Inno Setup 安装脚本
-└─ static/
-   ├─ index.html
-   ├─ style.css
-   ├─ app.js          # 核心 UI：文件树/标签/编辑/Markdown/Quick Open
-   ├─ workbench.js    # 能力注册表/命令面板/设置/状态栏
-   ├─ project.js      # 项目记忆面板
-   ├─ tasks.js        # 任务/Agent 面板
-   ├─ ecosystem.js    # Skills/Playbooks 面板
-   ├─ git.js          # 源代码管理
-   ├─ terminal.js     # 集成终端/任务运行器
-   ├─ split.js        # 分屏编辑
-   ├─ tools.js        # 工具箱 (12 个工具)
-   ├─ icons.js        # 线性图标集 (Lucide)
-   ├─ viewers/        # 文件查看器 (PDF/EPUB/DOCX/Sheet/Font/Image/Archive)
-   └─ vendor/         # 前端依赖 (Vditor/xterm/highlight.js/KaTeX/Mermaid)
-```
-
-## 技术约束
-
-- 后端只用 Python 标准库，无 `pip` 依赖。
-- 前端无 CDN，第三方库本地 vendor 到 `static/vendor/`。
-- 单用户本地开发工具，非多租户/公网服务。
+Private project.
