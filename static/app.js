@@ -3468,25 +3468,35 @@ async function chooseAndSwitchWorkspace() {
     } catch (e) { console.error(e); }
     return;
   }
-  // 浏览器版：多目录用分号分隔
-  const p = prompt("输入工作区文件夹路径（多个目录用分号 ; 分隔）：", currentRoot || "");
-  if (p && p.trim()) {
-    const roots = p.split(";").map(x => x.trim()).filter(Boolean);
-    await switchWorkspace(roots.length > 1 ? roots : roots[0]);
-  }
+  // 浏览器版：自定义模态输入路径
+  showModal({
+    title: "打开工作区",
+    sub: "多个目录用分号 ; 分隔",
+    placeholder: "D:\\projects 或 D:\\a;D:\\b",
+    value: currentRoot || "",
+    okLabel: "打开",
+    onSubmit: async (val) => {
+      const roots = val.split(";").map(x => x.trim()).filter(Boolean);
+      if (!roots.length) return "请输入文件夹路径";
+      await switchWorkspace(roots.length > 1 ? roots : roots[0]);
+      return null;
+    }
+  });
 }
 
-async function createAndSwitchWorkspace() {
-  const p = prompt("输入新文件夹路径（将创建并打开）：", "");
-  if (!p || !p.trim()) return false;
-  const path = p.trim();
-  const r = await fsPost("/api/create-workspace", { path });
-  if (r.error) {
-    setMsg(r.error, "err");
-    return false;
-  }
-  await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
-  return true;
+function createAndSwitchWorkspace() {
+  showModal({
+    title: "新建文件夹",
+    sub: "输入路径，将自动创建并打开",
+    placeholder: "D:\\new-project",
+    okLabel: "创建",
+    onSubmit: async (path) => {
+      const r = await fsPost("/api/create-workspace", { path });
+      if (r.error) return r.error;
+      await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
+      return null;
+    }
+  });
 }
 
 function workspaceActionState(action) {
