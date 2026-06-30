@@ -21,8 +21,9 @@
   <b>一个 Python 文件启动，一个 EXE 双击即用。</b>
 </p>
 
-<!-- TODO: 补截图 -->
-<!-- <p align="center"><img src="docs/screenshots/main.png" width="800"></p> -->
+<p align="center">
+  <img src="docs/screenshots/main.png" width="800" alt="Loom 主界面">
+</p>
 
 ## 🚀 快速开始
 
