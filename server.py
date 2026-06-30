@@ -242,9 +242,10 @@ def _now_iso() -> str:
 
 
 def current_workspace_roots() -> list[Path]:
-    if WORKSPACE_ROOTS:
-        return WORKSPACE_ROOTS[:]
-    return [ROOT] if ROOT is not None else []
+    with _CFG_LOCK:
+        if WORKSPACE_ROOTS:
+            return WORKSPACE_ROOTS[:]
+        return [ROOT] if ROOT is not None else []
 
 
 def has_workspace() -> bool:
@@ -269,8 +270,9 @@ def set_workspace_roots(roots: list[Path]):
             continue
         seen.add(key)
         uniq.append(rp)
-    WORKSPACE_ROOTS = uniq
-    ROOT = uniq[0] if uniq else None
+    with _CFG_LOCK:
+        WORKSPACE_ROOTS = uniq
+        ROOT = uniq[0] if uniq else None
 
 
 def _split_workspace_path(rel: str) -> tuple[int, str]:
@@ -1766,8 +1768,11 @@ class Handler(BaseHTTPRequestHandler):
         total_limit = self._SEARCH_TOTAL_LIMIT
         per_file = self._SEARCH_PER_FILE_LIMIT
         max_bytes = self._SEARCH_MAX_BYTES
+        t0 = time.monotonic()
 
         for root in current_workspace_roots():
+            if truncated:
+                break
             for dirpath, dirnames, filenames in os.walk(root):
                 dirnames[:] = [d for d in dirnames
                                if d not in skip and not d.startswith("$")
@@ -1821,6 +1826,11 @@ class Handler(BaseHTTPRequestHandler):
                         if file_hits >= per_file:
                             truncated = True
                             break
+                    if time.monotonic() - t0 > 10:
+                        truncated = True
+                        break
+                if truncated:
+                    break
         return self._json({"results": results, "truncated": truncated})
 
     def _api_save(self, body):
@@ -2815,6 +2825,8 @@ class Handler(BaseHTTPRequestHandler):
         data = body.get("data", "")
         if not isinstance(data, str):
             return self._err("data 必须是字符串")
+        if len(data) > 1048576:
+            return self._err("终端输入过大")
         with TERMS_LOCK:
             sess = TERMS.get(sid)
         if sess is None:

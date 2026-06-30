@@ -11,6 +11,20 @@
   var STYLE_ID = "wb-sheet-viewer-style";
   var _xlsxPromise = null;
 
+  var _SHEET_SAFE_TAGS = /^(TABLE|THEAD|TBODY|TFOOT|TR|TH|TD|BR|COL|COLGROUP|CAPTION)$/;
+  function sanitizeSheetHtml(html) {
+    var tpl = document.createElement("template");
+    tpl.innerHTML = String(html == null ? "" : html);
+    tpl.content.querySelectorAll("*").forEach(function (el) {
+      if (!_SHEET_SAFE_TAGS.test(el.tagName)) { el.remove(); return; }
+      for (var i = el.attributes.length - 1; i >= 0; i--) {
+        var n = el.attributes[i].name.toLowerCase();
+        if (n.startsWith("on")) el.removeAttribute(el.attributes[i].name);
+      }
+    });
+    return tpl.innerHTML;
+  }
+
   // —— 一次性确保 SheetJS 已加载 ——
   function ensureXLSX() {
     if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -114,7 +128,7 @@
     }
     // sheet_to_html 生成完整 <table>（含内联属性，外层样式用 CSS 变量覆盖）
     var html = XLSX.utils.sheet_to_html(ws, { id: "wb-sheet-table", editable: false });
-    bodyEl.innerHTML = html;
+    bodyEl.innerHTML = sanitizeSheetHtml(html);
     // 行列计数（来自 ref，如 "A1:D20"）
     if (metaEl) {
       var dims = "";
