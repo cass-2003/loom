@@ -167,6 +167,31 @@
       ? `下一步：查看 ${recommended.title}，按恢复卡里的验证项手动检查，并把输出/截图/任务日志作为证据记录。`
       : "下一步：在 .workbench/playbooks 或 .workbench/skills 中添加本地流程定义。";
     refreshEcosystemActions();
+    renderRecommendedCard();
+  }
+  function renderRecommendedCard() {
+    const host = $("#eco-recommended");
+    if (!host) return;
+    const recommended = currentRecommendedItem();
+    if (!recommended) { host.innerHTML = ""; return; }
+    const openState = ecosystemActionState("open", recommended);
+    const taskState = ecosystemActionState("task", recommended);
+    const copyState = ecosystemActionState("copy", recommended);
+    const desc = recommended.description || recommended.summary || "";
+    host.innerHTML = `<div class="eco-recommended-card">`
+      + `<b>${esc(recommended.title)}</b>`
+      + (desc ? `<span>${esc(desc)}</span>` : "")
+      + `<div class="eco-recommended-actions">`
+      + `<button data-act="open"${openState.enabled ? "" : ` disabled title="${esc(openState.reason)}"`}>查看定义</button>`
+      + `<button data-act="task"${taskState.enabled ? "" : ` disabled title="${esc(taskState.reason)}"`}>创建任务</button>`
+      + `<button data-act="copy"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason)}"`}>复制验证命令</button>`
+      + `</div></div>`;
+    host.querySelectorAll("button[data-act]").forEach(btn => {
+      btn.onclick = () => {
+        if (btn.disabled) return;
+        runEcosystemAction(btn.dataset.act, recommended);
+      };
+    });
   }
 
   async function loadEcosystem() {

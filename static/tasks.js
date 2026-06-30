@@ -331,6 +331,43 @@
       return true;
     }
   }
+  function collectRecentActions() {
+    const actions = [];
+    tasks.forEach(t => {
+      (t.log || []).forEach(entry => {
+        const m = String(entry).match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})/);
+        actions.push({ time: m ? m[1] : t.updatedAt || t.createdAt || "", source: t.title || t.id, content: entry, taskId: t.id });
+      });
+    });
+    sessions.forEach(s => {
+      (s.log || []).forEach(entry => {
+        const m = String(entry).match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})/);
+        actions.push({ time: m ? m[1] : s.updatedAt || s.createdAt || "", source: s.title || s.taskTitle || s.id, content: entry, taskId: s.taskId });
+      });
+    });
+    actions.sort((a, b) => String(b.time).localeCompare(String(a.time)));
+    return actions.slice(0, 5);
+  }
+  function renderTaskTimeline() {
+    const host = $("#task-timeline");
+    if (!host) return;
+    const items = collectRecentActions();
+    if (!items.length) { host.innerHTML = ""; return; }
+    host.innerHTML = items.map(a =>
+      `<div class="task-timeline-item" data-task="${esc(a.taskId || "")}">`
+      + `<span class="task-timeline-time">${esc(compactText(a.time, 16))}</span>`
+      + `<span class="task-timeline-source">${esc(compactText(a.source, 24))}</span>`
+      + `<span class="task-timeline-content">${esc(compactText(a.content, 80))}</span>`
+      + `</div>`).join("");
+    host.querySelectorAll(".task-timeline-item").forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.task;
+        if (!id) return;
+        const card = document.querySelector(`.task-card[data-id="${id}"]`);
+        if (card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      };
+    });
+  }
   function setSelectOptions(sel, options, value) {
     if (!sel) return;
     sel.innerHTML = options.map(opt =>
@@ -380,6 +417,7 @@
       ["会话日志", latestSessionSummary && latestSessionSummary.latestLog ? latestSessionSummary.latestLog : "暂无"],
       ["会话布局", sessionLayoutLine || "暂无"],
     ].map(([k, v]) => `<div class="task-recovery-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");
+    renderTaskTimeline();
     const sources = Array.from(new Set(tasks.map(taskSource))).sort();
     setSelectOptions(statusSel, [
       { value: "all", label: "全部" },

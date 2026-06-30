@@ -435,6 +435,32 @@
       copyPreview.onclick = copyRecommendedEcosystemPreview;
     }
   }
+  function renderRecoveryActions() {
+    const host = $("#project-recovery-actions");
+    if (!host) return;
+    const latestTask = taskRecoverySummary();
+    const lt = latestTask && latestTask.latestTask;
+    const recentVal = extractRecentValidation();
+    const road = roadmapSummary();
+    const focusState = taskActionState("focusRecovery", "任务恢复中心尚未就绪");
+    const valTitle = recentVal ? recentVal.title : "暂无验证记录";
+    const roadTitle = road.ready && road.goals[0] ? road.goals[0] : "路线文档暂不可用";
+    host.innerHTML = `<button class="project-recovery-action" data-act="continue-task"${focusState.enabled ? "" : ` disabled title="${esc(focusState.reason)}"`}>`
+      + `<b>继续上次任务</b><span>${esc(lt ? lt.title : "暂无进行中任务")}</span></button>`
+      + `<button class="project-recovery-action" data-act="view-validation"><b>查看最近验证</b>`
+      + `<span>${esc(valTitle)}</span></button>`
+      + `<button class="project-recovery-action" data-act="open-roadmap"${road.ready ? "" : ` disabled title="路线文档暂不可用"`}>`
+      + `<b>打开路线图</b><span>${esc(roadTitle)}</span></button>`;
+    const cont = host.querySelector("[data-act='continue-task']");
+    if (cont) cont.onclick = focusTasksRecovery;
+    const val = host.querySelector("[data-act='view-validation']");
+    if (val) val.onclick = () => {
+      const panel = $("#project-validation");
+      if (panel) panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+    const roadBtn = host.querySelector("[data-act='open-roadmap']");
+    if (roadBtn) roadBtn.onclick = () => setProjectDoc("roadmap");
+  }
   function renderRecovery() {
     const grid = $("#project-recovery-grid");
     const latest = $("#project-latest");
@@ -503,6 +529,7 @@
     }
     renderTaskContinuity();
     renderEcosystemContinuity();
+    renderRecoveryActions();
     const copyRoadmap = latest.querySelector("[data-act='copy-roadmap']");
     if (copyRoadmap) {
       copyRoadmap.onclick = copyRoadmapBrief;
