@@ -320,6 +320,7 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 window.escapeHtml = escapeHtml;
+window.escHtml = window.escHtml || escapeHtml;
 
 /* ============ 源代码管理侧栏 ============ */
 async function refreshGit() {

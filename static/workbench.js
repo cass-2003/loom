@@ -624,6 +624,7 @@
           }
         } });
     A({ id: "editor.find", name: "在文件中查找/替换", hint: "Ctrl+F", icon: "search",
+        risk: "write",
         enabled: () => {
           const api = window.wbFindActions;
           if (!api || !api.actionState) return "查找动作尚未就绪";
@@ -794,6 +795,7 @@
     }));
     // 关闭当前标签
     A({ id: "tab.closeCurrent", name: "关闭当前标签", hint: "", icon: "close",
+        risk: "write",
         enabled: () => {
           const api = window.wbTabActions;
           if (!api || !api.actionState) return "标签动作尚未就绪";
@@ -1026,9 +1028,19 @@
         } });
     A({ id: "task.fromCurrentFile", name: "任务: 从当前文件创建", hint: "Context", icon: "fileText",
         requires: ["workspace", "currentFile"], risk: "write",
+        enabled: () => {
+          if (!window.state || !state.current) return "需要打开文件";
+          if (!window.addWorkflowTask) return "任务面板尚未就绪";
+          return true;
+        },
         run: () => createTaskFromSeed(currentFileTaskSeed("file")) });
     A({ id: "task.fromMarkdown", name: "任务: 从当前 Markdown 创建验证任务", hint: "Markdown", icon: "markdown",
         requires: ["workspace", "markdown"], risk: "write",
+        enabled: () => {
+          if (!isMarkdownTab()) return "当前不是 Markdown 文件";
+          if (!window.addWorkflowTask) return "任务面板尚未就绪";
+          return true;
+        },
         run: () => createTaskFromSeed(currentFileTaskSeed("markdown")) });
     A({ id: "task.fromViewer", name: "任务: 从当前查看器创建验证任务", hint: "Viewer", icon: "listChecks",
         requires: ["workspace", "viewer"], risk: "write",
@@ -1043,6 +1055,11 @@
         } });
     A({ id: "task.fromGitChanges", name: "任务: 从 Git 变更创建审计任务", hint: "SCM", icon: "git",
         requires: ["workspace", "gitRepo", "gitChanges"], risk: "write",
+        enabled: () => {
+          if (!gitHasChanges()) return "没有可记录的 Git 变更";
+          if (!window.addWorkflowTask) return "任务面板尚未就绪";
+          return true;
+        },
         run: () => createTaskFromSeed(gitTaskSeed(), "没有可记录的 Git 变更") });
     A({ id: "task.refresh", name: "任务: 刷新任务列表", hint: "Agent", icon: "refresh",
         risk: "read",
@@ -1159,6 +1176,74 @@
         },
         run: () => {
           if (window.wbEcosystemActions && window.wbEcosystemActions.run) window.wbEcosystemActions.run("focusRecovery");
+        } });
+    A({ id: "git.stageAll", name: "Git: 暂存所有更改", hint: "SCM", icon: "plus",
+        requires: ["workspace", "gitRepo"], risk: "write",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("stageAll");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("stageAll");
+        } });
+    A({ id: "git.unstageAll", name: "Git: 取消暂存所有更改", hint: "SCM", icon: "minus",
+        requires: ["workspace", "gitRepo"], risk: "write",
+        enabled: () => {
+          const api = window.wbGitActions;
+          if (!api || !api.actionState) return "Git 状态尚未就绪";
+          const st = api.actionState("unstageAll");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbGitActions && window.wbGitActions.run) window.wbGitActions.run("unstageAll");
+        } });
+    A({ id: "terminal.toggle", name: "终端: 切换终端面板", hint: "Terminal", icon: "terminal",
+        requires: ["workspace"], risk: "read",
+        enabled: () => {
+          const api = window.wbTerminalActions;
+          if (!api || !api.actionState) return "终端尚未就绪";
+          const st = api.actionState("toggle");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbTerminalActions && window.wbTerminalActions.run) window.wbTerminalActions.run("toggle");
+        } });
+    A({ id: "terminal.new", name: "终端: 新建终端", hint: "Terminal", icon: "terminal",
+        requires: ["workspace"], risk: "exec",
+        enabled: () => {
+          const api = window.wbTerminalActions;
+          if (!api || !api.actionState) return "终端尚未就绪";
+          const st = api.actionState("new");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbTerminalActions && window.wbTerminalActions.run) window.wbTerminalActions.run("new");
+        } });
+    A({ id: "terminal.split", name: "终端: 拆分终端", hint: "Terminal", icon: "splitH",
+        requires: ["workspace"], risk: "exec",
+        enabled: () => {
+          const api = window.wbTerminalActions;
+          if (!api || !api.actionState) return "终端尚未就绪";
+          const st = api.actionState("split");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          if (window.wbTerminalActions && window.wbTerminalActions.run) window.wbTerminalActions.run("split");
+        } });
+    A({ id: "terminal.clear", name: "终端: 清屏", hint: "Terminal", icon: "eraser",
+        risk: "write",
+        enabled: () => {
+          const api = window.wbTerminalActions;
+          if (!api || !api.actionState) return "终端尚未就绪";
+          const s = api.summary && api.summary();
+          if (!s || s.collapsed) return "终端面板未展开";
+          return true;
+        },
+        run: () => {
+          const btn = document.querySelector("#term-clear");
+          if (btn) btn.click();
         } });
   }
 
