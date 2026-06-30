@@ -165,6 +165,47 @@
     if (/current file|当前文件|文件审计/.test(text)) return "file";
     return "manual";
   }
+  function parseExecPreview(logLines) {
+    if (!Array.isArray(logLines) || !logLines.length) return null;
+    const result = { risk: "", scope: "", requires: [], evidence: [], commands: [], verification: [] };
+    let found = false;
+    for (const line of logLines) {
+      const s = String(line).trim();
+      if (s.startsWith("Risk: ")) { result.risk = s.slice(6); found = true; }
+      else if (s.startsWith("Scope: ")) { result.scope = s.slice(7); found = true; }
+      else if (s.startsWith("Requires: ")) { result.requires.push(s.slice(10)); found = true; }
+      else if (s.startsWith("Evidence field: ")) { result.evidence.push(s.slice(16)); found = true; }
+      else if (s.startsWith("Command preview: ")) { result.commands.push(s.slice(17)); found = true; }
+      else if (s.startsWith("Verify: ")) { result.verification.push(s.slice(8)); found = true; }
+    }
+    return found ? result : null;
+  }
+  function renderExecPreview(preview) {
+    if (!preview) return "";
+    const riskInfo = window.describeWorkbenchRisk ? window.describeWorkbenchRisk(preview.risk) : { key: preview.risk || "read", label: preview.risk || "read" };
+    const copyBtn = (val) => `<button class="exec-copy" data-copy="${esc(val)}" title="Copy">${svgIcon("copy", 11)}</button>`;
+    const parts = ['<div class="task-exec-preview">'];
+    parts.push(`<b>Execution Preview</b>`);
+    parts.push(`<span class="exec-risk eco-risk ${esc(riskInfo.key)}">${esc(riskInfo.label)}</span>`);
+    if (preview.scope) parts.push(`<div class="exec-scope"><b>Scope</b> ${esc(preview.scope)}</div>`);
+    if (preview.commands.length) {
+      parts.push('<div class="exec-commands">');
+      preview.commands.forEach(c => parts.push(`<span>${esc(c)}${copyBtn(c)}</span>`));
+      parts.push('</div>');
+    }
+    if (preview.verification.length) {
+      parts.push('<div class="exec-verify">');
+      preview.verification.forEach(v => parts.push(`<span>${esc(v)}${copyBtn(v)}</span>`));
+      parts.push('</div>');
+    }
+    if (preview.evidence.length) {
+      parts.push('<div class="exec-evidence"><b>Evidence fields</b>');
+      preview.evidence.forEach(e => parts.push(`<span>${esc(e)}</span>`));
+      parts.push('</div>');
+    }
+    parts.push('</div>');
+    return parts.join("");
+  }
   const SOURCE_LABELS = {
     all: "全部",
     layout: "布局",
@@ -956,6 +997,7 @@
       : "记录目标、计划、执行日志和证据路径，后续可导出给 Agent / Playbook。";
     list.innerHTML = shown.map(t => {
       const plan = (t.plan || []).slice(0, 5).map(x => `<li>${esc(x)}</li>`).join("");
+      const execPreviewHtml = taskSource(t) === "playbook" ? renderExecPreview(parseExecPreview(t.log)) : "";
       const evidence = (t.evidence || []).slice(-4).map(x => `<li>${esc(x)}</li>`).join("");
       const logLines = Array.isArray(t.log) ? t.log : [];
       const logPreview = logLines.length > 4
@@ -971,6 +1013,7 @@
         <h3>${esc(t.title)}</h3>
         <p class="task-goal">${esc(t.goal || "未填写目标")}</p>
         <div class="task-section"><b>Plan</b><ol>${plan || "<li>未填写</li>"}</ol></div>
+        ${execPreviewHtml}
         <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
         <div class="task-section"><b>Log</b><ul>${log || "<li>暂无</li>"}</ul></div>
         <div class="task-actions">
@@ -988,6 +1031,15 @@
     }).join("");
     list.querySelectorAll(".task-card").forEach(card => {
       const id = card.dataset.id;
+      card.querySelectorAll(".exec-copy[data-copy]").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          const val = btn.dataset.copy;
+          navigator.clipboard.writeText(val).then(() => {
+            if (window.setMsg) setMsg("已复制", "ok");
+          }).catch(() => prompt("复制：", val));
+        });
+      });
       card.addEventListener("click", e => {
         const btn = e.target.closest("button[data-act]");
         if (!btn) return;

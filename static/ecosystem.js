@@ -322,6 +322,11 @@
     if (action === "task") {
       const plan = stepsFromContent(item);
       const preview = previewPlan(item);
+      const firstCmd = preview.commands[0] || "";
+      const firstVerify = preview.verification[0] || "";
+      const nextHint = firstCmd
+        ? `Review execution preview, then run: ${firstCmd}` + (firstVerify ? ` — verify with: ${firstVerify}` : "")
+        : "Review the execution preview, then copy commands or run checks manually with evidence logging.";
       await window.addWorkflowTask({
         title: item.title,
         goal: item.summary || item.description || `Run ${item.title}`,
@@ -337,8 +342,12 @@
           `Scope: ${preview.scope}`,
           ...preview.requires.map(x => `Requires: ${x}`),
           ...preview.evidence.map(x => `Evidence field: ${x}`),
+          ...preview.commands.map(x => `Command preview: ${x}`),
+          ...preview.verification.map(x => `Verify: ${x}`),
+          "Timeout: manual",
+          "Cancel: close terminal / Ctrl+C",
         ],
-        next: "Review the execution preview, then copy commands or run checks manually with evidence logging.",
+        next: nextHint,
       });
       return true;
     }
@@ -421,6 +430,23 @@
       "## Evidence Fields",
       "",
       ...p.evidence.map(x => `- ${x}`),
+      "",
+      "## Timeout & Cancel",
+      "",
+      "- Timeout: manual (no auto-execution)",
+      "- Cancel: close terminal or Ctrl+C",
+      "",
+      "## Evidence Schema",
+      "",
+      "```json",
+      "{",
+      '  "command_output": "string - stdout/stderr capture",',
+      '  "screenshot_path": "string - browser or desktop screenshot",',
+      '  "artifact_path": "string - build output or generated file",',
+      '  "validation_result": "pass|fail|skip",',
+      '  "timestamp": "ISO 8601"',
+      "}",
+      "```",
     ];
     return lines.join("\n");
   }
