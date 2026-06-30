@@ -1,13 +1,26 @@
 static/vendor/
 __pycache__/
-.workbench/*
-!.workbench/skills/
-!.workbench/skills/**
-!.workbench/playbooks/
-!.workbench/playbooks/**
-!.workbench/README.md
 build/
 dist/
 *.spec
 installer/Output/
+
+# 内部文件（不推送到公开仓库）
 .claude/
+.workbench/
+AGENTS.md
+state/
+scripts/
+samples/
+docs/audit/
+docs/INDEX.md
+docs/安全审计与加固总结.md
+docs/轻量生态化路线.md
+md-demo.md
+make_icon.py
+
+# 杂项
+*.csv
+*.json
+!package.json
+openai-plugins-src/
