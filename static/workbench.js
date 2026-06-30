@@ -955,6 +955,18 @@
         run: () => {
           if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("focusRecovery");
         } });
+    A({ id: "project.refresh", name: "项目记忆: 刷新", hint: "Project", icon: "refresh",
+        risk: "read",
+        enabled: () => {
+          const api = window.wbProjectActions;
+          if (!api || !api.actionState) return "项目记忆尚未就绪";
+          const st = api.actionState("refresh");
+          return st.enabled ? true : st.reason;
+        },
+        run: () => {
+          typeof switchView === "function" && switchView("project");
+          if (window.wbProjectActions && window.wbProjectActions.run) window.wbProjectActions.run("refresh");
+        } });
     [
       ["requirements", "Requirements"],
       ["progress", "Progress"],

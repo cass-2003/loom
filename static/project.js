@@ -12,6 +12,7 @@
   let latestRecordTarget = "progress";
   let roadmap = null;
   let projectLoaded = false;
+  let projectRefreshing = false;
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
@@ -28,6 +29,8 @@
     const body = $("#project-body");
     const doc = $("#project-doc");
     if (!body || !doc) return;
+    projectRefreshing = true;
+    refreshProjectRefreshButton();
     doc.textContent = "加载中…";
     try {
       const data = await fetch("/api/project-state", { cache: "no-store" }).then(r => r.json());
@@ -46,6 +49,8 @@
       doc.textContent = "项目记忆加载失败: " + (e && e.message ? e.message : e);
     } finally {
       projectLoaded = true;
+      projectRefreshing = false;
+      refreshProjectRefreshButton();
     }
   }
 
@@ -80,6 +85,11 @@
     if (action === "focusRecovery") {
       return { enabled: true, reason: "" };
     }
+    if (action === "refresh") {
+      if (!hasWorkspace()) return { enabled: false, reason: "请先打开工作区" };
+      if (projectRefreshing) return { enabled: false, reason: "项目记忆正在刷新" };
+      return { enabled: true, reason: "" };
+    }
     if ((action === "edit" || action === "append") && !hasWorkspace()) {
       return { enabled: false, reason: "请先打开工作区" };
     }
@@ -103,7 +113,11 @@
       ? window.wbTaskActions.actionState(action)
       : { enabled: false, reason: fallback || "任务面板尚未就绪" };
   }
+  function refreshProjectRefreshButton() {
+    setProjectButtonState($("#project-refresh"), projectActionState("refresh"), "刷新项目记忆");
+  }
   function refreshProjectActions() {
+    refreshProjectRefreshButton();
     setProjectButtonState(
       $("#project-open-source"),
       projectActionState("edit", active),
@@ -536,8 +550,11 @@
       setProjectButtonState(copyRoadmap, projectActionState("copyRoadmap"), "复制路线");
     }
     if (openLatest) {
-      openLatest.disabled = !top;
-      openLatest.title = top ? "打开最近记录来源" : "暂无最近记录";
+      setProjectButtonState(
+        openLatest,
+        { enabled: !!top, reason: top ? "" : "暂无最近记录" },
+        "打开最近记录来源"
+      );
       openLatest.onclick = () => {
         if (latestRecordTarget) setProjectDoc(latestRecordTarget);
       };
@@ -690,7 +707,15 @@
 
   function initProjectMemory() {
     const refresh = $("#project-refresh");
-    if (refresh) refresh.onclick = loadProjectState;
+    if (refresh) refresh.onclick = () => {
+      const st = projectActionState("refresh");
+      if (!st.enabled) {
+        if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+        refreshProjectRefreshButton();
+        return;
+      }
+      loadProjectState();
+    };
     const openSource = $("#project-open-source");
     if (openSource) openSource.onclick = () => openProjectStateFile(active);
     const decision = $("#project-add-decision");
@@ -706,6 +731,17 @@
   window.wbProjectActions = {
     actionState: projectActionState,
     run: async (action, name) => {
+      if (action === "refresh") {
+        const st = projectActionState("refresh");
+        if (!st.enabled) {
+          if (window.setMsg) setMsg(st.reason || "当前不可用", "warn");
+          refreshProjectRefreshButton();
+          return false;
+        }
+        await loadProjectState();
+        if (window.setMsg) setMsg("项目记忆已刷新", "ok");
+        return true;
+      }
       if (!docs.length || action === "focusRecovery" || (action === "copyRoadmap" && !roadmap)) await loadProjectState();
       const st = projectActionState(action, name);
       if (!st.enabled) {
