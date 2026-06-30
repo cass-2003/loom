@@ -33,6 +33,7 @@ UninstallDisplayName={#MyAppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=force
 
 [Languages]
 Name: "chs"; MessagesFile: "{#SrcDir}\installer\ChineseSimplified.isl"

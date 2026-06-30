@@ -116,19 +116,42 @@ VS Code 风格布局：**活动栏（图标）→ 侧边栏（随图标切换）
 
 ```
 workbench/
-├─ server.py          # 后端 (标准库 http.server)：文件/搜索/Git/终端/上传/便签 API
+├─ server.py          # 后端 (标准库 http.server)
+├─ desktop.py         # pywebview 桌面壳 (原生窗口)
 ├─ start.bat          # Windows 一键启动
+├─ AGENTS.md          # 项目规则：产品边界/安全/验证/提交
+├─ Workbench.spec     # PyInstaller 打包配置
+├─ build_exe.ps1      # 构建 EXE 脚本
+├─ build_installer.ps1# 构建安装包脚本
+├─ .workbench/        # 本地生态定义
+│  ├─ playbooks/      #   Playbook 流程定义
+│  └─ skills/         #   Skill 技能定义
+├─ docs/              # 项目文档
+│  ├─ 轻量生态化路线.md#   产品路线与阶段计划
+│  └─ audit/          #   审计报告
+├─ state/             # 项目记忆 (可在 UI 中查看/编辑)
+│  ├─ REQUIREMENTS.md
+│  ├─ PROGRESS.md
+│  ├─ LOG.md
+│  └─ MEMORY.md
+├─ scripts/           # 59 个 Playwright 烟测脚本
+├─ samples/           # 各格式测试文件
+├─ installer/         # Inno Setup 安装脚本
 └─ static/
    ├─ index.html
    ├─ style.css
-   ├─ app.js          # 视图/文件树/标签/编辑/预览/diff/Markdown/搜索跳转
-   ├─ git.js          # 源代码管理（图形/提交详情/历史/blame/分支/stash）
-   ├─ search.js       # 全文搜索视图
-   ├─ workbench.js    # 命令面板/设置/工作区记忆/状态栏
-   ├─ terminal.js     # 集成终端/运行文件/任务运行器
-   ├─ tools.js        # 工具箱（12 个工具）
+   ├─ app.js          # 核心 UI：文件树/标签/编辑/Markdown/Quick Open
+   ├─ workbench.js    # 能力注册表/命令面板/设置/状态栏
+   ├─ project.js      # 项目记忆面板
+   ├─ tasks.js        # 任务/Agent 面板
+   ├─ ecosystem.js    # Skills/Playbooks 面板
+   ├─ git.js          # 源代码管理
+   ├─ terminal.js     # 集成终端/任务运行器
+   ├─ split.js        # 分屏编辑
+   ├─ tools.js        # 工具箱 (12 个工具)
    ├─ icons.js        # 线性图标集 (Lucide)
-   └─ vendor/         # marked + highlight.js + katex + mermaid (本地, 离线)
+   ├─ viewers/        # 文件查看器 (PDF/EPUB/DOCX/Sheet/Font/Image/Archive)
+   └─ vendor/         # 前端依赖 (Vditor/xterm/highlight.js/KaTeX/Mermaid)
 ```
 
 ## 技术约束
