@@ -1,4 +1,4 @@
-# 🛠 Workbench
+# 🛠 Loom
 
 一个零依赖的本地工作台：VS Code 风格三栏布局，文件树 + 多标签编辑器 + Markdown 实时预览 + Git 源代码管理 + 集成终端 + 工具箱。**纯 Python 标准库后端 + 原生 JS 前端，无任何第三方运行时依赖，完全离线可用。**
 
@@ -17,15 +17,15 @@ Windows 可直接双击 `start.bat`，或把任意文件夹**拖到 `start.bat` 
 
 ## 打包为 exe（免装 Python）
 
-把整个工作台编译成一个独立的 `Workbench.exe`，分发到任意 Windows 机器双击即用，目标机**无需安装 Python**：
+把整个工作台编译成一个独立的 `Loom.exe`，分发到任意 Windows 机器双击即用，目标机**无需安装 Python**：
 
 ```powershell
 pip install pyinstaller          # 仅构建期需要
 powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 
-产物 `dist\Workbench.exe`（约 77MB，内含 Python 运行时、pywebview、终端 PTY 组件与 `static/` 全部离线资源）。
-双击运行会打开原生无边框 Workbench 窗口：优先恢复上次工作区；没有历史工作区时显示欢迎页，让你选择一个或多个文件夹。也可命令行指定工作区根目录：`Workbench.exe D:\notes`。
+产物 `dist\Loom.exe`（约 77MB，内含 Python 运行时、pywebview、终端 PTY 组件与 `static/` 全部离线资源）。
+双击运行会打开原生无边框 Loom 窗口：优先恢复上次工作区；没有历史工作区时显示欢迎页，让你选择一个或多个文件夹。也可命令行指定工作区根目录：`Loom.exe D:\notes`。
 
 ## 打包安装包
 
@@ -35,11 +35,11 @@ powershell -ExecutionPolicy Bypass -File build_exe.ps1
 powershell -ExecutionPolicy Bypass -File build_installer.ps1
 ```
 
-这个脚本会先构建 `dist\Workbench.exe`，再自动查找 Inno Setup 的 `ISCC.exe` 并生成安装包。
+这个脚本会先构建 `dist\Loom.exe`，再自动查找 Inno Setup 的 `ISCC.exe` 并生成安装包。
 默认产物位置：
 
 ```text
-installer\Output\Workbench-Setup-0.1.0.exe
+installer\Output\Loom-Setup-0.1.0.exe
 ```
 
 如果本机还没安装 Inno Setup 6，需要先安装；脚本不再要求你手动把 `ISCC.exe` 加进 `PATH`。
@@ -120,7 +120,7 @@ workbench/
 ├─ desktop.py         # pywebview 桌面壳 (原生窗口)
 ├─ start.bat          # Windows 一键启动
 ├─ AGENTS.md          # 项目规则：产品边界/安全/验证/提交
-├─ Workbench.spec     # PyInstaller 打包配置
+├─ Loom.spec     # PyInstaller 打包配置
 ├─ build_exe.ps1      # 构建 EXE 脚本
 ├─ build_installer.ps1# 构建安装包脚本
 ├─ .workbench/        # 本地生态定义

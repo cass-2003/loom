@@ -1,6 +1,6 @@
-# Build Workbench installer:
-# 1) build dist\Workbench.exe
-# 2) compile installer\Workbench.iss with Inno Setup
+# Build Loom installer:
+# 1) build dist\Loom.exe
+# 2) compile installer\Loom.iss with Inno Setup
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File build_installer.ps1
@@ -42,14 +42,14 @@ if (-not $iscc) {
 }
 
 Write-Host "[2/2] Building installer..." -ForegroundColor Cyan
-& $iscc "$PSScriptRoot\installer\Workbench.iss"
+& $iscc "$PSScriptRoot\installer\Loom.iss"
 $isExit = $LASTEXITCODE
 if ($isExit -ne 0) {
     Write-Host "[FAIL] Installer build failed (ISCC exit=$isExit)" -ForegroundColor Red
     exit $isExit
 }
 
-$setup = Get-Item "$PSScriptRoot\installer\Output\Workbench-Setup-0.1.0.exe" -ErrorAction SilentlyContinue
+$setup = Get-Item "$PSScriptRoot\installer\Output\Loom-Setup-0.1.0.exe" -ErrorAction SilentlyContinue
 if (-not $setup) {
     Write-Host "[FAIL] Installer output was not found." -ForegroundColor Red
     exit 1

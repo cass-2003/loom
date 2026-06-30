@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workbench 桌面版入口。
+"""Loom 桌面版入口。
 
 把本地工作台包成一个**无边框原生窗口程序**（pywebview + 系统 WebView2 内核）：
 去掉操作系统标题栏，由前端自绘一套跟随主题的标题栏与窗口按钮；
@@ -67,7 +67,7 @@ class WindowApi:
             pass
         try:
             import ctypes
-            return ctypes.windll.user32.FindWindowW(None, "Workbench")
+            return ctypes.windll.user32.FindWindowW(None, "Loom")
         except Exception:
             return 0
 
@@ -142,7 +142,7 @@ def _fatal(msg):
     try:
         if sys.platform == "win32":
             import ctypes
-            ctypes.windll.user32.MessageBoxW(0, str(msg), "Workbench", 0x10)
+            ctypes.windll.user32.MessageBoxW(0, str(msg), "Loom", 0x10)
         else:
             print(msg, file=sys.stderr)
     except Exception:
@@ -195,7 +195,7 @@ def main():
 
     api = WindowApi()
     win = webview.create_window(
-        "Workbench",
+        "Loom",
         f"http://{host}:{port}/",
         js_api=api,
         frameless=True,        # 去掉系统标题栏，前端自绘

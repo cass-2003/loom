@@ -1,11 +1,11 @@
-; Workbench installer script (Inno Setup 6.5+)
+; Loom installer script (Inno Setup 6.5+)
 ; ASCII-only on purpose: all user-facing Chinese text comes from the language files
 ; (ChineseSimplified.isl / built-in {cm:...} messages), so this script needs no BOM.
 
-#define MyAppName "Workbench"
+#define MyAppName "Loom"
 #define MyAppVersion "0.1.0"
-#define MyAppPublisher "Workbench"
-#define MyAppExeName "Workbench.exe"
+#define MyAppPublisher "Loom"
+#define MyAppExeName "Loom.exe"
 #define SrcDir RemoveBackslashUnlessRoot(ExtractFileDir(ExtractFileDir(SourcePath)))
 
 [Setup]
@@ -26,7 +26,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#SrcDir}\installer\Output
-OutputBaseFilename=Workbench-Setup-{#MyAppVersion}
+OutputBaseFilename=Loom-Setup-{#MyAppVersion}
 SetupIconFile={#SrcDir}\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
@@ -48,7 +48,7 @@ Source: "{#SrcDir}\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Desktop entry follows Workbench's IDE-style workspace restore: explicit CLI root
+; Desktop entry follows Loom's IDE-style workspace restore: explicit CLI root
 ; > previous workspace > welcome screen. Do not force Documents as a fake root.
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{userdocs}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workbench - 本地工作台后端 (纯标准库)
+"""Loom - 本地工作台后端 (纯标准库)
 
 用法:
     python server.py [工作根目录] [--port 8765]
@@ -71,11 +71,11 @@ _CFG_LOCK = threading.Lock()
 
 
 def _config_dir() -> Path:
-    """全局配置目录：打包版用 %APPDATA%/Workbench，脚本版用 ~/.workbench。
+    """全局配置目录：打包版用 %APPDATA%/Loom，脚本版用 ~/.workbench。
     跨会话持久化「最近工作区列表 / 上次活动根」，与 exe 升级解耦、多用户隔离。"""
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
-        return Path(base) / "Workbench"
+        return Path(base) / "Loom"
     return Path.home() / ".workbench"
 
 
@@ -355,8 +355,8 @@ EXEC_TIMEOUT = 120  # 命令执行超时（秒）
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 def _python_interp():
-    """跑 .py 用的解释器。打包(frozen)时 sys.executable 是 Workbench.exe，
-    拿它跑脚本只会再开一个 Workbench；此时改去 PATH 找真 python。"""
+    """跑 .py 用的解释器。打包(frozen)时 sys.executable 是 Loom.exe，
+    拿它跑脚本只会再开一个 Loom；此时改去 PATH 找真 python。"""
     if not getattr(sys, "frozen", False) and sys.executable:
         return sys.executable
     import shutil
@@ -1307,7 +1307,7 @@ def classify(p: Path) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Workbench/0.1"
+    server_version = "Loom/0.1"
 
     def log_message(self, fmt, *args):
         pass  # 安静
@@ -3415,7 +3415,7 @@ def main():
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"
-    print(f"Workbench 已启动")
+    print(f"Loom 已启动")
     print(f"  根目录: {ROOT}")
     print(f"  地址:   {url}")
     print("  Ctrl+C 退出")
