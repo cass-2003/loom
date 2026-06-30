@@ -211,7 +211,7 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 }
 .node-row:hover { background: var(--hover); }
 .node-row.context { outline: 1px solid var(--border); color: var(--text); }
-.node-row.active { background: var(--sel); color: #fff; }
+.node-row.active { background: var(--sel); color: var(--text); }
 .node-row .twist { width: 14px; height: 14px; display: flex; align-items: center;
   color: var(--muted); transition: transform .12s; }
 .node-row .twist.open { transform: rotate(90deg); }
@@ -226,7 +226,7 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 .ic-code { color: var(--accent); }
 .ic-md { color: var(--cyan); }
 .ic-img { color: var(--purple); }
-.ic-text { color: #9aa5ce; }
+.ic-text { color: var(--muted); }
 .ic-bin { color: var(--muted); }
 
 /* 文件树内联输入框 */
@@ -1239,7 +1239,6 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .sr-fico.ic-md { color: var(--cyan); }
 .sr-fico.ic-img { color: var(--purple); }
 .sr-fico.ic-code { color: var(--accent); }
-.sr-fico.ic-text { color: #9aa5ce; }
 .sr-fname { color: var(--text); white-space: nowrap; }
 .sr-fdir { color: var(--muted); font-size: 11px; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }

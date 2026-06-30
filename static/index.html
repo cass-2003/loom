@@ -16,53 +16,53 @@
   <!-- 顶栏 -->
   <header id="topbar">
     <div class="brand pywebview-drag-region"><span class="brand-dot"></span>Workbench</div>
-    <button id="btn-open-folder" class="btn ghost icon-only" title="打开文件夹"><span class="i" data-icon="folderOpen"></span></button>
+    <button id="btn-open-folder" class="btn ghost icon-only" title="打开文件夹" aria-label="打开文件夹"><span class="i" data-icon="folderOpen"></span></button>
     <div class="crumb" id="crumb"></div>
     <div class="drag-space pywebview-drag-region"></div>
     <div class="top-actions">
       <!-- Markdown 增强：大纲 / 导出（仅 .md 显示） -->
       <div id="md-toolbar" class="md-toolbar hidden">
         <div class="md-tocwrap">
-          <button id="btn-toc" class="btn ghost" title="大纲目录"><span class="i" data-icon="list"></span>大纲</button>
+          <button id="btn-toc" class="btn ghost" title="大纲目录" aria-label="大纲目录"><span class="i" data-icon="list"></span>大纲</button>
           <div id="toc-menu" class="toc-menu hidden"></div>
         </div>
         <div class="md-tocwrap">
-          <button id="btn-md-export" class="btn ghost" title="导出 / 打印"><span class="i" data-icon="download"></span>导出</button>
+          <button id="btn-md-export" class="btn ghost" title="导出 / 打印" aria-label="导出 / 打印"><span class="i" data-icon="download"></span>导出</button>
           <div id="export-menu" class="toc-menu hidden">
             <div class="toc-act" data-act="html"><span class="i" data-icon="download"></span>导出为 HTML</div>
             <div class="toc-act" data-act="print"><span class="i" data-icon="printer"></span>打印 / 另存 PDF</div>
           </div>
         </div>
       </div>
-      <button id="btn-cmdpalette" class="btn ghost icon-only" title="命令面板 (Ctrl+Shift+P)"><span class="i" data-icon="command"></span></button>
-      <button id="btn-help" class="btn ghost icon-only" title="快捷键帮助 (?)"><span class="i" data-icon="help"></span></button>
-      <button id="btn-settings" class="btn ghost icon-only" title="设置"><span class="i" data-icon="gear"></span></button>
-      <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色"></button>
-      <button id="btn-view-edit" class="btn ghost" title="仅 Markdown 源码视图可切换" disabled>分屏</button>
-      <button id="btn-save" class="btn" title="当前视图不可保存" disabled><span class="i" data-icon="save"></span>保存</button>
+      <button id="btn-cmdpalette" class="btn ghost icon-only" title="命令面板 (Ctrl+Shift+P)" aria-label="命令面板"><span class="i" data-icon="command"></span></button>
+      <button id="btn-help" class="btn ghost icon-only" title="快捷键帮助 (?)" aria-label="快捷键帮助"><span class="i" data-icon="help"></span></button>
+      <button id="btn-settings" class="btn ghost icon-only" title="设置" aria-label="设置"><span class="i" data-icon="gear"></span></button>
+      <button id="btn-theme" class="btn ghost icon-only" title="切换深浅色" aria-label="切换深浅色"></button>
+      <button id="btn-view-edit" class="btn ghost" title="仅 Markdown 源码视图可切换" aria-label="分屏" disabled>分屏</button>
+      <button id="btn-save" class="btn" title="当前视图不可保存" aria-label="保存" disabled><span class="i" data-icon="save"></span>保存</button>
     </div>
     <div id="winctrls" class="winctrls desktop-only">
-      <button id="win-min" class="winbtn" title="最小化"><span class="i" data-icon="minus"></span></button>
-      <button id="win-max" class="winbtn" title="最大化 / 还原"><span class="i" data-icon="winMax"></span></button>
-      <button id="win-close" class="winbtn winbtn-close" title="关闭"><span class="i" data-icon="close"></span></button>
+      <button id="win-min" class="winbtn" title="最小化" aria-label="最小化"><span class="i" data-icon="minus"></span></button>
+      <button id="win-max" class="winbtn" title="最大化 / 还原" aria-label="最大化 / 还原"><span class="i" data-icon="winMax"></span></button>
+      <button id="win-close" class="winbtn winbtn-close" title="关闭" aria-label="关闭"><span class="i" data-icon="close"></span></button>
     </div>
   </header>
 
   <div id="main">
     <!-- 活动栏 -->
     <nav id="activitybar">
-      <button class="act active" data-view="files" data-icon="folder" title="资源管理器"></button>
-      <button class="act" data-view="git" data-icon="git" title="源代码管理">
+      <button class="act active" data-view="files" data-icon="folder" title="资源管理器" aria-label="资源管理器"></button>
+      <button class="act" data-view="git" data-icon="git" title="源代码管理" aria-label="源代码管理">
         <span class="badge hidden" id="git-badge">0</span>
       </button>
-      <button class="act" data-view="search" data-icon="search" title="搜索"></button>
-      <button class="act" data-view="notes" data-icon="checkSquare" title="便签 / Todo"></button>
-      <button class="act" data-view="tools" data-icon="tools" title="工具箱"></button>
-      <button class="act" data-view="project" data-icon="notebook" title="项目记忆"></button>
-      <button class="act" data-view="tasks" data-icon="listChecks" title="任务 / Agent"></button>
-      <button class="act" data-view="ecosystem" data-icon="blocks" title="Skills / Playbooks"></button>
+      <button class="act" data-view="search" data-icon="search" title="搜索" aria-label="搜索"></button>
+      <button class="act" data-view="notes" data-icon="checkSquare" title="便签 / Todo" aria-label="便签 / Todo"></button>
+      <button class="act" data-view="tools" data-icon="tools" title="工具箱" aria-label="工具箱"></button>
+      <button class="act" data-view="project" data-icon="notebook" title="项目记忆" aria-label="项目记忆"></button>
+      <button class="act" data-view="tasks" data-icon="listChecks" title="任务 / Agent" aria-label="任务 / Agent"></button>
+      <button class="act" data-view="ecosystem" data-icon="blocks" title="Skills / Playbooks" aria-label="Skills / Playbooks"></button>
       <span class="activity-spacer"></span>
-      <button id="act-sidebar-toggle" class="act chrome-act" data-icon="sidebarRight" title="折叠侧栏"></button>
+      <button id="act-sidebar-toggle" class="act chrome-act" data-icon="sidebarRight" title="折叠侧栏" aria-label="折叠侧栏"></button>
     </nav>
 
     <!-- 侧边栏 -->
@@ -72,9 +72,9 @@
         <div class="side-head">
           <span>资源管理器</span>
           <div class="head-actions">
-            <button id="btn-new-file" class="icon-btn" data-icon="filePlus" title="新建文件（根目录）"></button>
-            <button id="btn-new-dir" class="icon-btn" data-icon="folderPlus" title="新建文件夹（根目录）"></button>
-            <button id="btn-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
+            <button id="btn-new-file" class="icon-btn" data-icon="filePlus" title="新建文件（根目录）" aria-label="新建文件（根目录）"></button>
+            <button id="btn-new-dir" class="icon-btn" data-icon="folderPlus" title="新建文件夹（根目录）" aria-label="新建文件夹（根目录）"></button>
+            <button id="btn-refresh" class="icon-btn" data-icon="refresh" title="刷新" aria-label="刷新"></button>
           </div>
         </div>
         <div id="tree"></div>
@@ -85,8 +85,8 @@
         <div class="side-head">
           <span>源代码管理</span>
           <div class="head-actions">
-            <button id="git-push" class="icon-btn" data-icon="upload" title="推送"></button>
-            <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新"></button>
+            <button id="git-push" class="icon-btn" data-icon="upload" title="推送" aria-label="推送"></button>
+            <button id="git-refresh" class="icon-btn" data-icon="refresh" title="刷新" aria-label="刷新"></button>
           </div>
         </div>
         <div id="git-body">
@@ -107,7 +107,7 @@
               <span class="scm-title">暂存的更改</span>
               <span class="scm-count" id="git-staged-count">0</span>
               <span class="scm-group-actions">
-                <button class="scm-gact" data-act="unstage-all" title="取消全部暂存">−</button>
+                <button class="scm-gact" data-act="unstage-all" title="取消全部暂存" aria-label="取消全部暂存">−</button>
               </span>
             </div>
             <div id="git-staged" class="scm-list"></div>
@@ -119,7 +119,7 @@
               <span class="scm-title">更改</span>
               <span class="scm-count hidden" id="git-changes-count">0</span>
               <span class="scm-group-actions">
-                <button class="scm-gact" data-act="stage-all" title="暂存全部更改">+</button>
+                <button class="scm-gact" data-act="stage-all" title="暂存全部更改" aria-label="暂存全部更改">+</button>
               </span>
             </div>
             <div id="git-files" class="scm-list"></div>
@@ -131,7 +131,7 @@
               <span class="scm-title">储藏 (Stash)</span>
               <span class="scm-count hidden" id="git-stash-count">0</span>
               <span class="scm-group-actions">
-                <button class="scm-gact" id="git-stash-save" title="储藏当前更改（含未跟踪）">+</button>
+                <button class="scm-gact" id="git-stash-save" title="储藏当前更改（含未跟踪）" aria-label="储藏当前更改（含未跟踪）">+</button>
               </span>
             </div>
             <div id="git-stash-list" class="scm-list"></div>
@@ -142,12 +142,12 @@
               <span class="scm-twist" data-icon="chevron"></span>
               <span class="scm-title">图形</span>
               <span class="scm-head-extra">
-                <button id="git-branch-filter" class="git-branch-filter" title="筛选要查看的分支/标签">
+                <button id="git-branch-filter" class="git-branch-filter" title="筛选要查看的分支/标签" aria-label="筛选要查看的分支/标签">
                   <span class="gbf-label">全部</span>
                   <span class="gbf-caret" data-icon="chevron"></span>
                 </button>
                 <select id="git-branch-sel" class="git-branch-sel hidden" title="选择要查看的分支"></select>
-                <button id="git-branch-ops" class="icon-btn" data-icon="branch" title="分支操作（新建/检出/删除）"></button>
+                <button id="git-branch-ops" class="icon-btn" data-icon="branch" title="分支操作（新建/检出/删除）" aria-label="分支操作（新建/检出/删除）"></button>
               </span>
             </div>
             <div id="git-log" class="scm-list git-graph"></div>
@@ -165,8 +165,8 @@
                    placeholder="搜索全文…">
           </div>
           <div class="search-opts">
-            <button id="search-case" class="search-opt" title="区分大小写">Aa</button>
-            <button id="search-regex" class="search-opt" title="使用正则表达式">.*</button>
+            <button id="search-case" class="search-opt" title="区分大小写" aria-label="区分大小写">Aa</button>
+            <button id="search-regex" class="search-opt" title="使用正则表达式" aria-label="使用正则表达式">.*</button>
           </div>
         </div>
         <div id="search-summary" class="search-summary"></div>
@@ -183,7 +183,7 @@
           <div class="notes-add">
             <input id="todo-input" type="text" spellcheck="false" autocomplete="off"
                    placeholder="添加待办，回车确认…">
-            <button id="todo-add" class="notes-add-btn" data-icon="plus" title="添加"></button>
+            <button id="todo-add" class="notes-add-btn" data-icon="plus" title="添加" aria-label="添加"></button>
           </div>
           <div id="todo-list" class="todo-list"></div>
           <div class="notes-section">
@@ -208,17 +208,17 @@
         <div class="side-head">
           <span>项目记忆</span>
           <div class="head-actions">
-            <button id="project-open-source" class="icon-btn" data-icon="fileText" title="打开当前记忆文件"></button>
-            <button id="project-add-decision" class="icon-btn" data-icon="check" title="追加决策记录"></button>
-            <button id="project-add-validation" class="icon-btn" data-icon="play" title="追加验证记录"></button>
-            <button id="project-refresh" class="icon-btn" data-icon="refresh" title="刷新项目记忆"></button>
+            <button id="project-open-source" class="icon-btn" data-icon="fileText" title="打开当前记忆文件" aria-label="打开当前记忆文件"></button>
+            <button id="project-add-decision" class="icon-btn" data-icon="check" title="追加决策记录" aria-label="追加决策记录"></button>
+            <button id="project-add-validation" class="icon-btn" data-icon="play" title="追加验证记录" aria-label="追加验证记录"></button>
+            <button id="project-refresh" class="icon-btn" data-icon="refresh" title="刷新项目记忆" aria-label="刷新项目记忆"></button>
           </div>
         </div>
         <div id="project-body">
           <section class="project-recovery" id="project-recovery">
             <div class="project-recovery-head">
               <span>项目上下文</span>
-              <button id="project-open-latest" class="task-mini" data-icon="fileText" title="打开最近记录来源"></button>
+              <button id="project-open-latest" class="task-mini" data-icon="fileText" title="打开最近记录来源" aria-label="打开最近记录来源"></button>
             </div>
             <div class="project-recovery-grid" id="project-recovery-grid"></div>
             <div class="project-latest" id="project-latest"></div>
@@ -238,8 +238,8 @@
         <div class="side-head">
           <span>任务 / Agent</span>
           <div class="head-actions">
-            <button id="task-new" class="icon-btn" data-icon="plus" title="新建任务"></button>
-            <button id="task-refresh" class="icon-btn" data-icon="refresh" title="刷新任务"></button>
+            <button id="task-new" class="icon-btn" data-icon="plus" title="新建任务" aria-label="新建任务"></button>
+            <button id="task-refresh" class="icon-btn" data-icon="refresh" title="刷新任务" aria-label="刷新任务"></button>
           </div>
         </div>
         <div id="tasks-body">
@@ -247,8 +247,8 @@
             <div class="task-recovery-head">
               <span>恢复上下文</span>
               <div class="task-recovery-actions">
-                <button id="task-copy-recovery" class="task-mini" data-icon="copy" title="复制恢复 brief"></button>
-                <button id="task-clear-filter" class="task-mini hidden" data-icon="close" title="清除任务过滤"></button>
+                <button id="task-copy-recovery" class="task-mini" data-icon="copy" title="复制恢复 brief" aria-label="复制恢复 brief"></button>
+                <button id="task-clear-filter" class="task-mini hidden" data-icon="close" title="清除任务过滤" aria-label="清除任务过滤"></button>
               </div>
             </div>
             <div class="task-recovery-grid" id="task-recovery-grid"></div>
@@ -268,7 +268,7 @@
           <section class="session-panel">
             <div class="session-head">
               <span>Agent Sessions</span>
-              <button id="session-refresh" class="task-mini" data-icon="refresh" title="刷新会话"></button>
+              <button id="session-refresh" class="task-mini" data-icon="refresh" title="刷新会话" aria-label="刷新会话"></button>
             </div>
             <div id="session-empty" class="session-empty">还没有会话。可以从任务卡创建会话，再把外部 Agent / CLI 的结果导入回来。</div>
             <div id="session-list" class="session-list"></div>
@@ -281,7 +281,7 @@
         <div class="side-head">
           <span>Skills / Playbooks</span>
           <div class="head-actions">
-            <button id="eco-refresh" class="icon-btn" data-icon="refresh" title="刷新生态入口"></button>
+            <button id="eco-refresh" class="icon-btn" data-icon="refresh" title="刷新生态入口" aria-label="刷新生态入口"></button>
           </div>
         </div>
         <div id="eco-body">
@@ -289,7 +289,7 @@
           <section class="eco-recovery" id="eco-recovery">
             <div class="eco-recovery-head">
               <span>生态上下文</span>
-              <button id="eco-clear-filter" class="task-mini hidden" data-icon="close" title="清除生态过滤"></button>
+              <button id="eco-clear-filter" class="task-mini hidden" data-icon="close" title="清除生态过滤" aria-label="清除生态过滤"></button>
             </div>
             <div class="eco-recovery-grid" id="eco-recovery-grid"></div>
             <div class="eco-filter-row">
@@ -334,16 +334,16 @@
             <div class="find-row">
               <input id="find-input" type="text" spellcheck="false" autocomplete="off" placeholder="查找">
               <span id="find-count" class="find-count">无结果</span>
-              <button id="find-regex" class="find-opt" title="使用正则表达式">.*</button>
-              <button id="find-case" class="find-opt" title="区分大小写">Aa</button>
-              <button id="find-prev" class="find-btn" title="上一个 (Shift+Enter)" data-icon="chevron"></button>
-              <button id="find-next" class="find-btn" title="下一个 (Enter)" data-icon="chevron"></button>
-              <button id="find-close" class="find-btn" title="关闭 (Esc)" data-icon="close"></button>
+              <button id="find-regex" class="find-opt" title="使用正则表达式" aria-label="使用正则表达式">.*</button>
+              <button id="find-case" class="find-opt" title="区分大小写" aria-label="区分大小写">Aa</button>
+              <button id="find-prev" class="find-btn" title="上一个 (Shift+Enter)" aria-label="上一个" data-icon="chevron"></button>
+              <button id="find-next" class="find-btn" title="下一个 (Enter)" aria-label="下一个" data-icon="chevron"></button>
+              <button id="find-close" class="find-btn" title="关闭 (Esc)" aria-label="关闭查找" data-icon="close"></button>
             </div>
             <div class="find-row">
               <input id="replace-input" type="text" spellcheck="false" autocomplete="off" placeholder="替换">
-              <button id="replace-one" class="find-btn text" title="替换">替换</button>
-              <button id="replace-all" class="find-btn text" title="全部替换">全部</button>
+              <button id="replace-one" class="find-btn text" title="替换" aria-label="替换">替换</button>
+              <button id="replace-all" class="find-btn text" title="全部替换" aria-label="全部替换">全部</button>
             </div>
           </div>
           <div id="editor-gutter" aria-hidden="true"></div>
@@ -406,8 +406,8 @@
           <!-- 任务下拉（送进当前聚焦窗格） -->
           <div class="term-task-wrap">
             <select id="term-task-sel" class="term-task-sel" title="npm / make 任务"></select>
-            <button id="term-task-create" class="icon-btn" data-icon="listChecks" title="从终端上下文创建任务"></button>
-            <button id="term-task-run" class="icon-btn" data-icon="play" title="运行选中任务"></button>
+            <button id="term-task-create" class="icon-btn" data-icon="listChecks" title="从终端上下文创建任务" aria-label="从终端上下文创建任务"></button>
+            <button id="term-task-run" class="icon-btn" data-icon="play" title="运行选中任务" aria-label="运行选中任务"></button>
           </div>
           <!-- ===== 右侧工具栏（VS Code 风格图标条）===== -->
           <div class="term-toolbar" id="term-toolbar">
@@ -415,21 +415,21 @@
             <span class="term-active-shell" id="term-active-shell" title="当前终端的 Shell"></span>
             <!-- 新建终端分裂按钮：左主体（当前默认 shell）+ 右下拉箭头（选 shell） -->
             <span class="term-split-btn" id="term-new-split">
-              <button class="tb-btn tb-main" id="term-new" title="新建终端"><span class="i" data-icon="plus"></span></button>
-              <button class="tb-btn tb-caret" id="term-new-caret" title="选择 Shell 新建终端"><span class="i" data-icon="chevron"></span></button>
+              <button class="tb-btn tb-main" id="term-new" title="新建终端" aria-label="新建终端"><span class="i" data-icon="plus"></span></button>
+              <button class="tb-btn tb-caret" id="term-new-caret" title="选择 Shell 新建终端" aria-label="选择 Shell 新建终端"><span class="i" data-icon="chevron"></span></button>
               <!-- shell 下拉菜单（点击下拉箭头弹出） -->
               <div class="term-shell-menu hidden" id="term-shell-menu"></div>
             </span>
             <!-- 拆分终端 -->
-            <button class="tb-btn" id="term-split" title="拆分终端 (Ctrl+Shift+5)"><span class="i" data-icon="splitH"></span></button>
+            <button class="tb-btn" id="term-split" title="拆分终端 (Ctrl+Shift+5)" aria-label="拆分终端"><span class="i" data-icon="splitH"></span></button>
             <!-- 显隐右侧终端列表 -->
-            <button class="tb-btn" id="term-list-toggle" title="切换终端列表"><span class="i" data-icon="sidebarRight"></span></button>
+            <button class="tb-btn" id="term-list-toggle" title="切换终端列表" aria-label="切换终端列表"><span class="i" data-icon="sidebarRight"></span></button>
             <!-- 杀掉当前活动终端 -->
-            <button class="tb-btn" id="term-clear" title="清屏（仅当前窗格）"><span class="i" data-icon="eraser"></span></button>
-            <button class="tb-btn" id="term-kill" title="关闭当前终端"><span class="i" data-icon="trash"></span></button>
-            <button class="tb-btn" id="term-dock" title="终端停靠：底部 / 右侧"><span class="i" data-icon="columns"></span></button>
-            <button class="tb-btn" id="term-maximize" title="向上铺满文件区 / 还原"><span class="i" data-icon="winMax"></span></button>
-            <button class="tb-btn" id="term-collapse" title="折叠 / 展开"><span class="i" data-icon="chevron"></span></button>
+            <button class="tb-btn" id="term-clear" title="清屏（仅当前窗格）" aria-label="清屏"><span class="i" data-icon="eraser"></span></button>
+            <button class="tb-btn" id="term-kill" title="关闭当前终端" aria-label="关闭当前终端"><span class="i" data-icon="trash"></span></button>
+            <button class="tb-btn" id="term-dock" title="终端停靠：底部 / 右侧" aria-label="终端停靠：底部 / 右侧"><span class="i" data-icon="columns"></span></button>
+            <button class="tb-btn" id="term-maximize" title="向上铺满文件区 / 还原" aria-label="向上铺满文件区 / 还原"><span class="i" data-icon="winMax"></span></button>
+            <button class="tb-btn" id="term-collapse" title="折叠 / 展开" aria-label="折叠 / 展开"><span class="i" data-icon="chevron"></span></button>
           </div>
         </div>
         <!-- 终端主体：左挂载区 + 右终端列表 -->
@@ -467,7 +467,7 @@
         <label>风险 <select id="cp-risk-filter"></select></label>
         <label>类型 <select id="cp-kind-filter"></select></label>
         <label>来源 <select id="cp-source-filter"></select></label>
-        <button id="cp-clear-filter" class="task-mini hidden" data-icon="close" title="清除命令过滤"></button>
+        <button id="cp-clear-filter" class="task-mini hidden" data-icon="close" title="清除命令过滤" aria-label="清除命令过滤"></button>
       </div>
       <div id="cp-summary" class="cp-summary"></div>
       <div id="cp-list"></div>
@@ -479,7 +479,7 @@
     <div class="settings-box">
       <div class="settings-head">
         <span class="settings-title"><span class="i" data-icon="gear"></span>设置</span>
-        <button id="settings-close" class="icon-btn" data-icon="close" title="关闭"></button>
+        <button id="settings-close" class="icon-btn" data-icon="close" title="关闭" aria-label="关闭设置"></button>
       </div>
       <div class="settings-body">
         <div class="set-row">
@@ -525,7 +525,7 @@
     <div class="help-box">
       <div class="settings-head">
         <span class="settings-title"><span class="i" data-icon="help"></span>快捷键</span>
-        <button id="help-close" class="icon-btn" data-icon="close" title="关闭"></button>
+        <button id="help-close" class="icon-btn" data-icon="close" title="关闭" aria-label="关闭帮助"></button>
       </div>
       <div id="help-body" class="help-body"></div>
     </div>
