@@ -1,17 +1,32 @@
 /* Workbench 前端 */
 const $ = (s) => document.querySelector(s);
 const api = {
-  tree: (p) => fetch(`/api/tree?path=${encodeURIComponent(p)}`).then(r => r.json()),
-  file: (p) => fetch(`/api/file?path=${encodeURIComponent(p)}`),
-  projectFile: (name) => fetch(`/api/project-state/open?name=${encodeURIComponent(name)}`),
+  tree: (p) => fetch(`/api/tree?path=${encodeURIComponent(p)}`).then(r => {
+    if (!r.ok) return { error: `HTTP ${r.status}`, entries: [] };
+    return r.json();
+  }).catch(() => ({ error: "网络错误", entries: [] })),
+  file: (p) => fetch(`/api/file?path=${encodeURIComponent(p)}`).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r;
+  }),
+  projectFile: (name) => fetch(`/api/project-state/open?name=${encodeURIComponent(name)}`).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r;
+  }),
   save: (p, c) => fetch(`/api/save`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: p, content: c }),
-  }).then(r => r.json()),
+  }).then(r => {
+    if (!r.ok) return { error: `HTTP ${r.status}` };
+    return r.json();
+  }).catch(() => ({ error: "网络错误" })),
   saveProjectFile: (name, c) => fetch(`/api/project-state/save`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, content: c }),
-  }).then(r => r.json()),
+  }).then(r => {
+    if (!r.ok) return { error: `HTTP ${r.status}` };
+    return r.json();
+  }).catch(() => ({ error: "网络错误" })),
 };
 
 // 同源 POST 帮手（带 CSRF 必需的 Content-Type + 同源 Origin）
@@ -19,7 +34,10 @@ function fsPost(url, obj) {
   return fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(obj),
-  }).then(r => r.json());
+  }).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 }
 
 const state = {
@@ -1263,7 +1281,13 @@ async function openFile(path, row, opts) {
   // 请求令牌：连续切换文件时，只让最后一次请求生效，丢弃过期响应
   const token = ++state.openSeq;
   const projectKey = projectStateKey(path);
-  const res = projectKey ? await api.projectFile(projectKey) : await api.file(path);
+  let res;
+  try {
+    res = projectKey ? await api.projectFile(projectKey) : await api.file(path);
+  } catch (e) {
+    if (token === state.openSeq) setMsg("打开失败: " + e.message, "err");
+    return;
+  }
   if (token !== state.openSeq) return;
   const ctype = res.headers.get("Content-Type") || "";
 
@@ -2644,12 +2668,14 @@ function fileSaveActionState(action) {
   return { enabled: true, reason: "" };
 }
 
+let _saving = false;
 async function save() {
-  if (!state.current) return;
-  const path = state.current;          // 在 await 前固定目标路径，避免存盘往返中切换标签存错文件
+  if (_saving || !state.current) return;
+  _saving = true;
+  try {
+  const path = state.current;
   let content;
   if (state.kind === "md") {
-    // Vditor 未就绪 / 实例当前不是这个文件时 getValue 会返回空串——别用它覆盖文件（防截断）
     if (!vd.inst || !vd.ready || vd.curPath !== path) { setMsg("编辑器尚未就绪，请稍候再保存", "warn"); return; }
     content = vditorGetValue();
   } else if (state.kind === "text") content = $("#editor").value;
@@ -2666,7 +2692,8 @@ async function save() {
   renderTabs();
   setMsg(`已保存 · ${fmtSize(res.size)}`, "ok");
   if (projectKey && window.reloadProjectMemory) window.reloadProjectMemory();
-  if (activeView === "git") refreshGit();  // 保存后刷新 Git 状态
+  if (activeView === "git") refreshGit();
+  } finally { _saving = false; }
 }
 // 焦点在副分屏组时存副组，否则存主组
 function saveRouted() {
@@ -2913,7 +2940,11 @@ function qoChoose(idx) {
   openFile(it.path, true);  // 传 true 触发树高亮
 }
 
-$("#qo-input").addEventListener("input", (e) => qoRender(e.target.value));
+let _qoTimer = null;
+$("#qo-input").addEventListener("input", (e) => {
+  clearTimeout(_qoTimer);
+  _qoTimer = setTimeout(() => qoRender(e.target.value), 50);
+});
 $("#qo-input").addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown") { e.preventDefault(); qoSetSel(qoSel + 1); }
   else if (e.key === "ArrowUp") { e.preventDefault(); qoSetSel(qoSel - 1); }
