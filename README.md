@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.svg" width="80" alt="Loom">
+  <img src="static/favicon.png" width="80" alt="Loom">
 </p>
 
 <h1 align="center">Loom</h1>
