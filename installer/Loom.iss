@@ -3,7 +3,7 @@
 ; (ChineseSimplified.isl / built-in {cm:...} messages), so this script needs no BOM.
 
 #define MyAppName "Loom"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.3.1"
 #define MyAppPublisher "Loom"
 #define MyAppExeName "Loom.exe"
 #define SrcDir RemoveBackslashUnlessRoot(ExtractFileDir(ExtractFileDir(SourcePath)))
