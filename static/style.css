@@ -2355,8 +2355,8 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-toolbar {
   min-height: 31px;
   padding: 2px 12px;
-  border-bottom: 1px solid var(--border-soft);
-  background: var(--toolbar-bg-color, #171717);
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--toolbar-background-color, #171717);
   gap: 0;
   overflow: visible;
   flex-wrap: wrap;
@@ -2374,8 +2374,8 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-toolbar .vditor-toolbar__item button,
 #vditor .vditor-toolbar .vditor-toolbar__item span,
 #vditor .vditor-toolbar .vditor-toolbar__item svg {
-  color: #b0b0b4;
-  fill: #b0b0b4;
+  color: var(--toolbar-icon-color, #b0b0b4);
+  fill: var(--toolbar-icon-color, #b0b0b4);
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button {
   display: inline-flex;
@@ -2386,12 +2386,6 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   border-radius: 4px;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button svg { width: 15px; height: 15px; }
-:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item button,
-:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item span,
-:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item svg {
-  color: #4b4f56;
-  fill: #4b4f56;
-}
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
   position: relative;
   display: inline-flex;
@@ -2399,23 +2393,21 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   justify-content: center;
   width: 25px;
   height: 26px;
-  color: #b0b0b4;
+  color: var(--toolbar-icon-color, #b0b0b4);
   border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
 }
-:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
-  color: #4b4f56;
-}
 #vditor .vditor-toolbar .vditor-toolbar__item button:hover,
 #vditor .vditor-toolbar .vditor-toolbar__item button:hover span,
 #vditor .vditor-toolbar .vditor-toolbar__item button:hover svg {
-  color: var(--text); fill: var(--text);
-  background: var(--hover);
+  color: var(--toolbar-icon-hover-color, var(--front-color, #fff));
+  fill: var(--toolbar-icon-hover-color, var(--front-color, #fff));
+  background: var(--toolbar-hover-background-color, rgba(127,127,127,.15));
 }
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"]:hover {
-  color: var(--text);
-  background: var(--hover);
+  color: var(--toolbar-icon-hover-color, var(--front-color));
+  background: var(--toolbar-hover-background-color, rgba(127,127,127,.15));
 }
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] input[type="file"] {
   position: absolute;
@@ -2427,25 +2419,25 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button:disabled,
 #vditor .vditor-toolbar .vditor-toolbar__item button.vditor-menu--disabled {
-  color: var(--muted);
+  color: var(--second-color, #666);
   cursor: not-allowed;
   opacity: .5;
   background: transparent;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button:disabled:hover,
 #vditor .vditor-toolbar .vditor-toolbar__item button.vditor-menu--disabled:hover {
-  color: var(--muted);
+  color: var(--second-color, #666);
   background: transparent;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button.vditor-menu--current,
 #vditor .vditor-toolbar .vditor-toolbar__item button.vditor-menu--active {
-  color: var(--accent2);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--toolbar-icon-hover-color, var(--link-color, #58a6ff));
+  background: var(--toolbar-active-background-color, rgba(127,127,127,.15));
 }
 #vditor .vditor-toolbar .vditor-toolbar__divider {
   height: 16px;
   margin: 5px 6px;
-  border-left-color: var(--border);
+  border-left-color: var(--border-color, #333);
 }
 #vditor .vditor-content {
   min-height: 0;
@@ -2454,14 +2446,14 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-outline {
   width: clamp(184px, 15vw, 232px);
   padding: 8px 6px 10px 8px;
-  border-right: 1px solid var(--border-soft);
-  background: var(--panel-bg-color, var(--bg-color, #171717));
-  color: var(--second-color, var(--text-dim));
+  border-right: 1px solid var(--border-color, #333);
+  background: var(--outline-bg-color, var(--bg-color, #171717));
+  color: var(--second-color, #999);
   overflow: hidden;
   flex-shrink: 0;
 }
 #vditor .vditor-outline.outline-pulse {
-  box-shadow: inset -2px 0 0 var(--accent), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: inset -2px 0 0 var(--link-color, #58a6ff), 0 0 0 1px color-mix(in srgb, var(--link-color, #58a6ff) 35%, transparent);
 }
 #vditor .vditor-outline__content {
   padding: 0;
@@ -2490,7 +2482,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   margin: 1px 0;
   padding: 3px 7px;
   border-radius: 4px;
-  color: var(--text-dim);
+  color: var(--second-color, #999);
   font-size: 12px;
   line-height: 17px;
   transition: background .12s, color .12s;
@@ -2500,14 +2492,14 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 }
 #vditor .vditor-outline__content span[data-target-id]:hover,
 #vditor .vditor-outline__item:hover {
-  background: var(--hover);
-  color: var(--text);
+  background: var(--outline-hover-bg, rgba(127,127,127,.12));
+  color: var(--front-color, #fff);
 }
 #vditor .vditor-outline__action,
 #vditor .vditor-outline__placeholder {
   width: 14px;
   min-width: 14px;
-  color: var(--muted);
+  color: var(--second-color, #666);
 }
 #vditor .vditor-outline__content span[data-target-id] > span:last-child {
   min-width: 0;
@@ -2518,13 +2510,8 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-outline__content span.vditor-outline__item--active,
 #vditor .vditor-outline__item--current,
 #vditor .vditor-outline__item.vditor-outline__item--current {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: #d8ecff;
-}
-:root[data-theme="light"] #vditor .vditor-outline__content span.vditor-outline__item--active,
-:root[data-theme="light"] #vditor .vditor-outline__item--current,
-:root[data-theme="light"] #vditor .vditor-outline__item.vditor-outline__item--current {
-  color: #0969da;
+  background: var(--outline-active-bg, rgba(127,127,127,.18));
+  color: var(--link-color, var(--front-color, #58a6ff));
 }
 #vditor .vditor-wysiwyg,
 #vditor .vditor-ir {
@@ -2579,22 +2566,18 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-reset blockquote {
   margin-left: 0;
   padding: 7px 14px;
-  border-left: 3px solid #2eaadc;
+  border-left: 3px solid var(--blockquote-border, #2eaadc);
   border-radius: 0;
-  background: #222222;
-  color: var(--text-dim);
+  background: var(--blockquote-bg, transparent);
+  color: var(--blockquote-color, var(--second-color));
 }
 #vditor .vditor-reset code:not(.hljs) {
   padding: .16em .36em;
   border-radius: 4px;
-  color: #b8d8ff;
-  background: color-mix(in srgb, var(--bg3) 72%, #1f2937);
+  color: var(--code-fg-color, #b8d8ff);
+  background: var(--code-bg-color, #1f2937);
   font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   font-size: .88em;
-}
-:root[data-theme="light"] #vditor .vditor-reset code:not(.hljs) {
-  color: #0550ae;
-  background: #eff2f5;
 }
 #vditor .vditor-reset pre {
   border-radius: 8px;
@@ -2603,17 +2586,17 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-reset table {
   overflow: hidden;
   border-radius: 0;
-  background: #141414;
+  background: var(--table-body-bg, var(--bg-color));
 }
 #vditor .vditor-reset table th,
 #vditor .vditor-reset table td {
-  border-color: var(--border);
+  border-color: var(--table-border, var(--border-color, #333));
 }
 #vditor .vditor-reset hr {
   height: 1px;
   margin: 26px 0;
   border: none;
-  background: var(--border);
+  background: var(--hr-bg, var(--border-color, #333));
 }
 @media (max-width: 860px) {
   #vditor .vditor-outline { width: 168px; }
