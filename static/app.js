@@ -2065,7 +2065,7 @@ function printMarkdown() {
 // 用惰性 <template> 解析(不触发资源加载/脚本执行)，移除危险元素并剥离所有 on* 事件属性
 // 与 javascript:/vbscript:/data:text/html 类 URL，使 Markdown/文本内容里的 <img onerror=…>
 // 之类无法经 innerHTML 触发脚本（再经同源 /api/exec 升级为本机命令执行）。
-const SANITIZE_DROP = new Set(["SCRIPT","IFRAME","OBJECT","EMBED","LINK","META","BASE","FORM","INPUT","BUTTON","TEXTAREA","SELECT","OPTION","FRAME","FRAMESET"]);
+const SANITIZE_DROP = new Set(["SCRIPT","IFRAME","OBJECT","EMBED","LINK","META","BASE","FORM","INPUT","BUTTON","TEXTAREA","SELECT","OPTION","FRAME","FRAMESET","SVG","MATH","FOREIGNOBJECT","TEMPLATE","NOSCRIPT","STYLE"]);
 const SANITIZE_URL_ATTRS = ["href","src","action","formaction","poster","background"];
 function sanitizeHtml(html) {
   const tpl = document.createElement("template");
@@ -3215,7 +3215,8 @@ async function switchWorkspace(pathOrRoots) {
     || (window.split && typeof window.split.hasUnsaved === "function" && window.split.hasUnsaved());
   if (anyDirty && !confirm("有未保存的修改，切换工作目录将丢弃它们。确定继续？")) return;
   const body = Array.isArray(pathOrRoots) ? { roots: pathOrRoots } : { path: pathOrRoots };
-  const r = await fsPost("/api/set-root", body);
+  let r;
+  try { r = await fsPost("/api/set-root", body); } catch (e) { setMsg("切换工作区失败: " + (e.message || e), "err"); return; }
   if (r.error) { setMsg(r.error, "err"); return; }
   await reloadRoot(r.workspace || { path: r.root, roots: r.workspaceRoots || [r.root], id: r.workspaceId }, r.recent);
 }
