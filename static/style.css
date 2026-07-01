@@ -2346,57 +2346,11 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 .tab-run-btn:hover { background: var(--accent-press); }
 .tab-run-btn .icn { color: var(--on-accent); }
 
-/* ===== Workbench Markdown / Vditor：贴近 vscode-office 的编辑器布局 ===== */
+/* ===== Workbench Markdown / Vditor ===== */
+/* 颜色变量由 Vditor 主题 CSS（Auto.css / Light.css / Github Dark.css 等）控制，
+   不在这里覆盖，否则会阻止用户通过 Theme 下拉/toggle 独立切换深浅色。 */
 #vditor.vditor {
-  --toolbar-background-color: var(--bg2);
-  --toolbar-icon-color: var(--text-dim);
-  --toolbar-hover-background-color: var(--hover);
-  --toolbar-hover-color: var(--text);
-  --toolbar-active-background-color: color-mix(in srgb, var(--accent) 18%, transparent);
-  --toolbar-active-color: var(--accent2);
-  --panel-background-color: var(--panel);
-  --bg-color: var(--bg);
-  --second-bg-color: var(--bg2);
-  --border-color: var(--border-soft);
-  --front-color: var(--text);
-  --second-color: var(--text-dim);
-  --list-hover-color: var(--hover);
-  --link-color: #8ab4ff;
-  --blockquote-color: var(--text-dim);
-  --textarea-background-color: var(--bg);
-  --textarea-text-color: var(--text);
-  --code-bg-color: color-mix(in srgb, var(--bg3) 72%, #151d2a);
-  --ir-heading-color: var(--accent2);
-  --ir-bi-color: #f2d77a;
-  --ir-link-color: #8ab4ff;
-  --ir-title-color: #b8d8ff;
-  --ir-bracket-color: #8ab4ff;
   height: 100%;
-}
-:root[data-theme="light"] #vditor.vditor {
-  --toolbar-background-color: var(--bg2);
-  --toolbar-icon-color: var(--text-dim);
-  --toolbar-hover-background-color: var(--hover);
-  --toolbar-hover-color: var(--text);
-  --toolbar-active-background-color: color-mix(in srgb, var(--accent) 14%, transparent);
-  --panel-background-color: #fff;
-  --bg-color: #fff;
-  --second-bg-color: #f6f8fa;
-  --front-color: #24292f;
-  --second-color: #57606a;
-  --link-color: #0969da;
-  --blockquote-color: #57606a;
-  --textarea-background-color: #fff;
-  --textarea-text-color: #24292f;
-  --code-bg-color: #f6f8fa;
-  --ir-heading-color: #0969da;
-  --ir-bi-color: #8250df;
-  --ir-link-color: #0969da;
-  --ir-title-color: #0550ae;
-  --ir-bracket-color: #0969da;
-}
-:root[data-theme="light"] #vditor .vditor-reset blockquote {
-  background: var(--blockquote-bg-color, #f6f8fa);
 }
 #vditor .vditor-toolbar {
   min-height: 31px;

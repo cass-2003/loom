@@ -131,7 +131,7 @@ function vditorTheme() {
 function vditorEditorTheme() {
   const saved = localStorage.getItem("loom-vditor-editor-theme");
   if (saved) return saved;
-  return isLightTheme() ? "Light" : "Auto";
+  return isLightTheme() ? "Light" : "Github Dark";
 }
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
 // 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
