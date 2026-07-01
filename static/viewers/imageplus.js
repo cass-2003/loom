@@ -50,11 +50,7 @@
   // 当前挂载状态（供 unmount 清理）
   let mountState = null; // { host, objectUrls:[], destroyed:bool }
 
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  const escHtml = window.escHtml;
 
   // 居中 + 适应容器的舞台容器
   function makeStage(host) {

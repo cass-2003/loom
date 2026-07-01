@@ -1,10 +1,7 @@
 /* Workbench 黏合层：命令面板 + 设置 + 工作区记忆 + 快捷键帮助 + 状态栏 */
 (function () {
   const $ = (s) => document.querySelector(s);
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  const esc = window.escHtml;
 
   // ================= 设置 =================
   const SET_KEY = "wb-settings";

@@ -315,12 +315,8 @@ function statusLetter(code) {
   if (code.includes("R")) return ["R", "g-mod"];
   return ["M", "g-mod"];
 }
-function escapeHtml(s) {
-  return (s || "").replace(/[&<>"]/g, c =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
+const escapeHtml = window.escHtml;
 window.escapeHtml = escapeHtml;
-window.escHtml = window.escHtml || escapeHtml;
 
 /* ============ 源代码管理侧栏 ============ */
 async function refreshGit() {

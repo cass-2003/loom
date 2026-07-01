@@ -8,10 +8,7 @@
   let refreshAddState = null;
 
   function el(id) { return document.getElementById(id); }
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  const esc = window.escHtml;
   function newId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }

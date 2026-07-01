@@ -11,10 +11,7 @@
   };
 
   function el(id) { return document.getElementById(id); }
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  const esc = window.escHtml;
   // 文件图标（复用 fileIcon）
   function iconFor(name) {
     const kind = (typeof guessKind === "function") ? guessKind(name) : "text";

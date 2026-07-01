@@ -407,11 +407,7 @@
     });
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  const escapeHtml = window.escHtml;
 
   // —— 查看器实现 ——
   var state = { listeners: [], root: null };
