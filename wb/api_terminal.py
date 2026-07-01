@@ -5,7 +5,6 @@ import os
 import re
 import secrets
 import time
-from pathlib import Path
 
 import wb.state
 from wb.constants import IMAGE_EXTS, EXEC_TIMEOUT

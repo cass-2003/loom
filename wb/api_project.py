@@ -12,7 +12,7 @@ from wb.paths import (safe_resolve, current_workspace_roots, has_workspace,
                       workspace_relpath, atomic_write_bytes)
 from wb.config import (load_config, save_config, set_workspace_roots,
                        _workspace_payload, _now_iso, _touch_recent_workspace,
-                       _annotate_recent_workspaces, _norm_root_str)
+                       _annotate_recent_workspaces)
 
 
 class ProjectMixin:
@@ -559,6 +559,24 @@ class ProjectMixin:
         from wb.run import run_shell
         cwd = current_workspace_roots()[0] if current_workspace_roots() else wb.state.ROOT or Path(".")
         code, stdout, stderr = run_shell(cmd, cwd, timeout=30)
+        try:
+            roots = current_workspace_roots()
+            if roots:
+                log_dir = roots[0] / "state"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_file = log_dir / "PLAYBOOK-LOG.md"
+                import datetime
+                ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                status = "✓" if code == 0 else "✗"
+                entry = f"| {ts} | {step_name} | {os.path.basename(path)} | {status} | exit {code} |\n"
+                if not log_file.exists():
+                    header = "# Playbook 执行日志\n\n| 时间 | 步骤 | 文件 | 状态 | 退出码 |\n|------|------|------|------|--------|\n"
+                    log_file.write_text(header + entry, encoding="utf-8")
+                else:
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(entry)
+        except OSError:
+            pass
         return self._json({
             "ok": code == 0,
             "step": step_name,

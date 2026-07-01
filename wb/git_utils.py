@@ -1,6 +1,5 @@
 """Git 辅助函数。"""
 import subprocess
-from pathlib import Path
 
 from wb.constants import _NO_WINDOW
 
