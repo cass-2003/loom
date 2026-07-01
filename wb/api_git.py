@@ -101,10 +101,21 @@ class GitMixin:
         head_code, _, _ = run_git(["rev-parse", "--verify", "HEAD"], repo)
         # 唯一文件数（一个文件可能同时在两组）作为徽标计数
         changed = len({e["repoPath"] for e in staged + unstaged})
+        all_repos = []
+        from wb.paths import current_workspace_roots
+        for root in current_workspace_roots():
+            if (root / ".git").exists():
+                try: all_repos.append({"path": workspace_relpath(root), "abs": str(root)})
+                except ValueError: pass
+            else:
+                for r in _scan_repos_down(root, max_depth=2, limit=20):
+                    try: all_repos.append({"path": workspace_relpath(r), "abs": str(r)})
+                    except ValueError: pass
         return self._json({"repo": repo_rel, "repoPath": str(repo),
                            "branch": branch, "hasHead": head_code == 0,
                            "ahead": ahead, "behind": behind,
-                           "staged": staged, "unstaged": unstaged, "changed": changed})
+                           "staged": staged, "unstaged": unstaged, "changed": changed,
+                           "allRepos": all_repos})
 
     def _api_git_diff(self, rel):
         try:
