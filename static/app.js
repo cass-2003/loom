@@ -3468,7 +3468,7 @@ async function chooseAndSwitchWorkspace() {
     } catch (e) { console.error(e); }
     return;
   }
-  // 浏览器版：展开欢迎页内联路径输入
+  // 浏览器版：展开欢迎页内联路径输入（浏览器安全限制无法获取系统绝对路径）
   const wrap = $("#welcome-path-input");
   if (wrap) {
     wrap.classList.remove("hidden");
