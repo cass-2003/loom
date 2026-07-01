@@ -129,6 +129,8 @@ function vditorTheme() {
 // 这些 editor-theme 配色块（Light / Github Dark 等）已内联打包进 vditor/dist/index.css
 // （选择器形如 #vditor[data-editor-theme=Github\ Dark]{--bg-color:#0d1117;...}），无需额外引 CSS。
 function vditorEditorTheme() {
+  const saved = localStorage.getItem("loom-vditor-editor-theme");
+  if (saved) return saved;
   return isLightTheme() ? "Light" : "Github Dark";
 }
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
@@ -138,6 +140,8 @@ function vditorMermaidTheme() {
 }
 // 代码块高亮主题（codeMirrorTheme 用于 ``` 块的代码主题）
 function vditorCodeTheme() {
+  const saved = localStorage.getItem("loom-vditor-code-theme");
+  if (saved) return saved;
   return isLightTheme() ? "Github" : "One Dark";
 }
 
@@ -166,6 +170,100 @@ async function vditorUploadHandler(files) {
     }
   }
   return null;  // 阻止默认上传
+}
+
+// 双击/Ctrl+点击链接在新窗口打开（学习自 vscode-office）
+function vditorOpenLink() {
+  const isCompose = (e) => e.ctrlKey || e.metaKey;
+  const handleClick = (e) => {
+    let el = e.target;
+    const isSpecial = ["dblclick", "auxclick"].includes(e.type);
+    if (!isCompose(e) && !isSpecial) return;
+    if (el.tagName === "A" && el.href) {
+      window.open(el.href, "_blank");
+      e.preventDefault();
+    } else if (el.tagName === "IMG") {
+      const parent = el.parentElement;
+      if (parent?.tagName === "A" && parent.href) {
+        window.open(parent.href, "_blank"); e.preventDefault(); return;
+      }
+      if (el.src?.startsWith("http")) { window.open(el.src, "_blank"); e.preventDefault(); }
+    }
+  };
+  const wy = document.querySelector(".vditor-wysiwyg");
+  if (wy) { wy.addEventListener("dblclick", handleClick); wy.addEventListener("click", handleClick); }
+  const ir = document.querySelector(".vditor-ir");
+  if (ir) ir.addEventListener("click", (e) => {
+    let el = e.target;
+    if (el.classList.contains("vditor-ir__marker--link")) {
+      window.open(el.textContent, "_blank"); e.preventDefault();
+    }
+  });
+}
+
+// 自动配对括号/引号（学习自 vscode-office autoSymbol）
+function vditorAutoSymbol() {
+  const pairs = { "(": ")", "{": "}", '"': '"' };
+  const el = document.querySelector(".vditor-wysiwyg");
+  if (!el) return;
+  el.addEventListener("keydown", (e) => {
+    if (e.isComposing) return;
+    const closing = pairs[e.key];
+    if (!closing) return;
+    const sel = document.getSelection();
+    if (sel && sel.toString()) return;
+    document.execCommand("insertText", false, closing);
+    sel.modify("move", "left", "character");
+  });
+}
+
+// Vditor 右键上下文菜单（学习自 vscode-office createContextMenu）
+function vditorContextMenu() {
+  const menu = document.getElementById("vditor-ctx-menu");
+  if (!menu) return;
+  const hide = () => { menu.hidden = true; };
+  document.addEventListener("mousedown", (e) => { if (!menu.contains(e.target)) hide(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
+  const wy = document.querySelector(".vditor-wysiwyg");
+  if (!wy) return;
+  wy.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    menu.hidden = false;
+    let x = e.clientX, y = e.clientY;
+    const rect = menu.getBoundingClientRect();
+    if (x + 180 > window.innerWidth) x = window.innerWidth - 184;
+    if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4;
+    menu.style.left = x + "px"; menu.style.top = y + "px";
+  });
+  const getSelHtml = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return "";
+    const c = document.createElement("div");
+    for (let i = 0; i < sel.rangeCount; i++) c.appendChild(sel.getRangeAt(i).cloneContents());
+    return c.innerHTML;
+  };
+  menu.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]"); if (!btn) return;
+    hide();
+    const act = btn.dataset.action;
+    if (act === "copy") document.execCommand("copy");
+    else if (act === "copyHtml") {
+      const html = getSelHtml();
+      if (html && navigator.clipboard?.write) {
+        navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([html], { type: "text/plain" }),
+        })]);
+      }
+    } else if (act === "paste") {
+      if (window.getSelection()?.toString()) document.execCommand("delete");
+      navigator.clipboard.readText().then(t => { if (t) document.execCommand("insertText", false, t); });
+    } else if (act === "selectAll") {
+      const reset = document.querySelector(".vditor-wysiwyg pre.vditor-reset");
+      if (reset) { const r = document.createRange(); r.selectNodeContents(reset); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+    }
+  });
+  hydrateIcons(menu);
 }
 
 // 懒创建 Vditor 实例（首次打开 md 时）
@@ -210,6 +308,8 @@ function ensureVditor(initialValue, onReady) {
     tab: "\t",
     placeholder: "开始书写 Markdown...",
     upload: { accept: "image/*", handler: vditorUploadHandler },
+    changeEditorTheme(theme) { localStorage.setItem("loom-vditor-editor-theme", theme); },
+    changeCodeTheme(theme) { localStorage.setItem("loom-vditor-code-theme", theme); },
     input() {
       // 标记当前 md 标签为脏（复用现有 dirty 机制）
       if (!vd.ready) return;
@@ -220,12 +320,15 @@ function ensureVditor(initialValue, onReady) {
     after() {
       vd.ready = true;
       if (vd.pending != null) { vd.inst.setValue(vd.pending); vd.pending = null; }
-      const m = vd.pendingMount; vd.pendingMount = null;   // 跑"最新"挂载，而非首建时的陈旧闭包
+      const m = vd.pendingMount; vd.pendingMount = null;
       if (m) m();
       if (typeof vd.inst.restoreDocumentSession === "function") {
         try { vd.inst.restoreDocumentSession(true); } catch (_) {}
       }
       applyMarkdownToolbarState();
+      vditorOpenLink();
+      vditorAutoSymbol();
+      vditorContextMenu();
     },
   });
 }

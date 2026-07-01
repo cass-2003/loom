@@ -2836,3 +2836,15 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 .eco-recommended-actions button:hover { border-color: var(--accent); color: var(--text); }
 .eco-recommended-actions button:disabled { opacity: .55; cursor: not-allowed; }
 .eco-recommended-actions button:disabled:hover { border-color: var(--border-soft); color: var(--accent2); }
+
+/* Vditor 右键菜单 */
+.vditor-ctx-menu { position: fixed; z-index: 10000; min-width: 160px; padding: 4px 0;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg-alt);
+  box-shadow: 0 4px 12px rgba(0,0,0,.35); font-size: 13px; }
+.vditor-ctx-menu[hidden] { display: none !important; }
+.vditor-ctx-menu button { display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 14px; border: none; background: transparent; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer; }
+.vditor-ctx-menu button:hover { background: var(--accent); color: var(--on-accent, #fff); }
+.vditor-ctx-menu button .i { width: 14px; height: 14px; flex-shrink: 0; opacity: .7; }
+.vditor-ctx-menu hr { border: none; border-top: 1px solid var(--border-soft); margin: 4px 0; }
