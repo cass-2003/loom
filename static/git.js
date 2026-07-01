@@ -374,22 +374,25 @@ async function refreshGit() {
     return;
   }
 
-  // 多仓库选择器
-  const repoSel = document.querySelector("#git-repo-selector");
-  if (repoSel) {
-    gjson("/api/git/repos").then(rd => {
+  // 多仓库选择器 — 异步加载所有子仓库
+  (async function loadRepoSelector() {
+    const repoSel = document.querySelector("#git-repo-selector");
+    if (!repoSel) return;
+    try {
+      const rd = await gjson("/api/git/repos");
       if (!rd.repos || rd.repos.length <= 1) { repoSel.classList.add("hidden"); return; }
       repoSel.classList.remove("hidden");
       const curRepo = d.repoPath || d.repo || "";
-      repoSel.innerHTML = `<select id="git-repo-pick" title="切换仓库">`
+      repoSel.innerHTML = `<label style="font-size:11px;color:var(--muted);padding:0 2px">仓库</label><select id="git-repo-pick" title="切换仓库">`
         + rd.repos.map(r => `<option value="${escapeHtml(r.abs)}"${r.abs === curRepo || curRepo.endsWith(r.path) ? " selected" : ""}>${escapeHtml(r.path)}</option>`).join("")
         + `</select>`;
-      document.querySelector("#git-repo-pick").onchange = function () {
+      const pick = document.querySelector("#git-repo-pick");
+      if (pick) pick.onchange = function () {
         if (window.openFile) window.openFile(this.value + "/.");
         setTimeout(refreshGit, 300);
       };
-    }).catch(() => {});
-  }
+    } catch (e) { /* ignore */ }
+  })();
 
   const branch = d.branch || "(无分支)";
   gitState.branch = branch;
