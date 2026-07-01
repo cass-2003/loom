@@ -21,6 +21,7 @@ make_icon.py
 
 # 杂项
 *.csv
-*.json
-!package.json
+local-skill-winners.json
+current-winner-slugs.csv
+openai-plugin-licensed-skills.csv
 openai-plugins-src/
