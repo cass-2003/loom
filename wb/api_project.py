@@ -529,18 +529,18 @@ class ProjectMixin:
         step_name = str(body.get("step") or "").strip()
         if not path or not step_name:
             return self._err("缺少 path 或 step")
-        target = None
-        for root in current_workspace_roots():
-            candidate = safe_resolve(root, path)
-            if candidate and candidate.is_file():
-                target = candidate
-                break
-        if not target:
+        try:
+            target = safe_resolve(path)
+        except (PermissionError, ValueError):
+            target = None
+        if not target or not target.is_file():
             candidate = (wb.state.BUNDLE_DIR / path).resolve()
             if candidate.is_file() and wb.state.BUNDLE_DIR in candidate.parents:
                 target = candidate
-        if not target:
-            return self._err("Playbook 文件未找到")
+            else:
+                return self._err("Playbook 文件未找到")
+        if "playbooks" not in target.parts:
+            return self._err("仅允许执行 playbooks 目录下的文件")
         try:
             text = target.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):

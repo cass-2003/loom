@@ -136,15 +136,15 @@ class TerminalMixin:
         if kind == "npm":
             if not (ROOT / "package.json").is_file():
                 return self._err("根目录无 package.json")
-            cmd = f"npm run {name}"
+            argv = ["npm", "run", name]
         elif kind == "make":
             if not (ROOT / "Makefile").is_file():
                 return self._err("根目录无 Makefile")
-            cmd = f"make {name}"
+            argv = ["make", name]
         else:
             return self._err("kind 必须是 npm 或 make")
-        code, out, err = run_shell(cmd, ROOT, 300)
-        return self._json({"code": code, "stdout": out, "stderr": err, "cmd": cmd})
+        code, out, err = run_argv(argv, ROOT, 300)
+        return self._json({"code": code, "stdout": out, "stderr": err, "cmd": " ".join(argv)})
 
     def _api_tasks(self, rel):
         """GET /api/tasks —— 读 ROOT/package.json scripts 与 Makefile 目标。"""

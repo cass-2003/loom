@@ -20,7 +20,7 @@ class Handler(FilesMixin, GitMixin, TerminalMixin, ProjectMixin, BaseHTTPRequest
         pass
 
     _CSP = ("default-src 'self'; "
-            "script-src 'self' 'unsafe-eval'; "
+            "script-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
             "font-src 'self' data:; "
