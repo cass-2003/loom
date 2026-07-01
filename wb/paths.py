@@ -1,8 +1,6 @@
 """路径安全与工作区路径解析。"""
 import os
 import re
-import sys
-import subprocess
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -130,22 +128,3 @@ def find_repo(start: Path):
         if c == base_root:
             break
     return None
-
-
-def _kill_proc_tree(p):
-    """杀掉进程及其整棵子树。"""
-    if sys.platform == "win32":
-        try:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
-                           capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        except Exception:
-            pass
-    else:
-        import signal
-        try:
-            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
-        except Exception:
-            try:
-                p.kill()
-            except Exception:
-                pass

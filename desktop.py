@@ -13,7 +13,10 @@ from pathlib import Path
 
 import webview
 
-import server
+from http.server import ThreadingHTTPServer
+from wb.config import load_config, set_workspace_roots
+from wb.handler import Handler
+from wb.shell import TERMS, TERMS_LOCK
 
 
 class WindowApi:
@@ -160,7 +163,7 @@ def resolve_workspace_roots():
             p = Path(a).resolve()
             if p.is_dir():
                 return [p]
-    cfg = server.load_config()
+    cfg = load_config()
     cur = cfg.get("currentWorkspace") if isinstance(cfg.get("currentWorkspace"), dict) else None
     if cur and isinstance(cur.get("roots"), list):
         roots = []
@@ -180,13 +183,13 @@ def resolve_workspace_roots():
 
 
 def main():
-    server.set_workspace_roots(resolve_workspace_roots())
+    set_workspace_roots(resolve_workspace_roots())
     host = "127.0.0.1"
 
     # 直接绑定端口 0 让 OS 分配再读回实际端口——消除"先探测再绑定"之间的 TOCTOU/撞端口，
     # 且把绑定 OSError 捕获后弹窗提示（--windowed 无控制台，否则静默崩溃）。
     try:
-        httpd = server.ThreadingHTTPServer((host, 0), server.Handler)
+        httpd = ThreadingHTTPServer((host, 0), Handler)
     except OSError as e:
         _fatal(f"无法启动本地服务（端口绑定失败）：{e}")
         return
@@ -210,9 +213,9 @@ def main():
     finally:
         # 关窗时清理所有终端会话，杀掉子 shell / winpty agent，避免孤儿进程泄漏
         try:
-            with server.TERMS_LOCK:
-                sessions = list(server.TERMS.values())
-                server.TERMS.clear()
+            with TERMS_LOCK:
+                sessions = list(TERMS.values())
+                TERMS.clear()
             for sess in sessions:
                 try:
                     sess.close()
