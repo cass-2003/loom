@@ -214,11 +214,10 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 .node-row:hover { background: var(--hover); }
 .node-row.context { outline: 1px solid var(--border); color: var(--text); }
 .node-row.active { background: var(--sel); color: var(--text); }
-.node-row .twist { width: 14px; height: 14px; display: flex; align-items: center;
-  color: var(--muted); transition: transform .12s; }
+.node-row .twist { width: 14px; min-width: 14px; height: 14px; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; color: var(--muted); transition: transform .12s; }
 .node-row .twist.open { transform: rotate(90deg); }
-.node-row .twist:empty { width: 14px; }
-.node-row .ico { display: flex; align-items: center; }
+.node-row .ico { display: flex; align-items: center; flex-shrink: 0; width: 16px; min-width: 16px; }
 .node-name { overflow: hidden; text-overflow: ellipsis; }
 .node-children { padding-left: 14px; }
 .muted { color: var(--muted); }
