@@ -1099,6 +1099,7 @@
           <button data-act="verified">验证通过</button>
           <button data-act="blocked">阻塞</button>
           <button data-act="log">追加日志</button>
+          <button data-act="expand">展开子任务</button>
           <button data-act="evidence">追加证据</button>
           <button data-act="session">创建会话</button>
           <button data-act="sessionBrief">复制会话 brief</button>
@@ -1129,6 +1130,31 @@
         else if (act === "sessionBrief") copySessionBrief(id);
         else if (act === "import") importAgentResult(null, id);
         else if (act === "memory") appendTaskToMemory(id);
+        else if (act === "expand") {
+          const t = tasks.find(x => x.id === id);
+          if (!t) return;
+          const idx = tasks.indexOf(t);
+          const now = new Date().toISOString().slice(0, 19);
+          const subs = [];
+          for (let i = 1; i <= 3; i++) {
+            const sub = {
+              id: nowId(),
+              title: `${t.title} - 子任务 ${i}`,
+              status: "todo",
+              goal: "",
+              plan: [],
+              evidence: [],
+              log: [],
+              depends_on: i === 1 ? [] : [subs[i - 2].id],
+              next: "",
+              createdAt: now,
+              updatedAt: now,
+            };
+            subs.push(sub);
+          }
+          tasks.splice(idx + 1, 0, ...subs);
+          saveTasks("已展开为 3 个子任务");
+        }
         else setTaskStatus(id, act);
       });
     });
