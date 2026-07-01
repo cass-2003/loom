@@ -2429,7 +2429,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   flex-wrap: wrap;
 }
 #vditor .vditor-toolbar .vditor-hint,
-#vditor .vditor-toolbar .vditor-panel--arrow { z-index: 100; }
+#vditor .vditor-toolbar .vditor-panel--arrow { z-index: 100; top: 100%; }
 #vditor .vditor-toolbar .vditor-toolbar__item {
   height: 26px;
   min-width: 25px;
