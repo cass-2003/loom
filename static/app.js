@@ -1789,8 +1789,7 @@ window.showDiffView = function (name, diffText) {
   ++state.openSeq;  // 作废可能在途的 openFile，避免其覆盖 diff 视图
   revokeImage();
   hideAllViews();
-  const esc = window.escapeHtml || (s => s);
-  $("#diff-head").innerHTML = svgIcon("branch", 14) + `<span>${esc(name)}</span>`;
+  $("#diff-head").innerHTML = svgIcon("branch", 14) + `<span>${escHtml(name)}</span>`;
   const body = $("#diff-body");
   body.innerHTML = "";
   for (const line of diffText.split("\n")) {
@@ -3635,9 +3634,9 @@ updateWorkspaceActionState();
       if (snap.main && Array.isArray(snap.main.tabs)) {
         const paths = snap.main.tabs.map(t => t.path).filter(Boolean);
         if (paths.length && window.openFile) {
-          paths.forEach(p => window.openFile(p));
+          paths.forEach(p => { try { window.openFile(p); } catch (_) {} });
           if (snap.main.active && window.openFile) {
-            setTimeout(() => window.openFile(snap.main.active), 100);
+            setTimeout(() => { try { window.openFile(snap.main.active); } catch (_) {} }, 100);
           }
         }
       }

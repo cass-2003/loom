@@ -391,14 +391,9 @@
       let m;
       while ((m = re.exec(item.content || "")) !== null) blocks.push(m[1]);
       if (!blocks.length) { if (window.setMsg) window.setMsg("该 Playbook 没有可执行的命名步骤", "warn"); return false; }
-      let stepName;
-      if (blocks.length === 1) {
-        stepName = blocks[0];
-      } else if (window.showModal) {
-        stepName = await window.showModal("选择要执行的步骤", blocks.join(", "));
-      } else {
-        stepName = prompt("输入步骤名: " + blocks.join(", "));
-      }
+      const stepName = blocks.length === 1
+        ? blocks[0]
+        : prompt("选择要执行的步骤:\n" + blocks.map((b, i) => `${i + 1}. ${b}`).join("\n") + "\n\n输入步骤名:");
       if (!stepName || !blocks.includes(stepName.trim())) {
         if (stepName !== null && window.setMsg) window.setMsg("无效步骤名", "warn");
         return false;
@@ -410,12 +405,12 @@
           body: JSON.stringify({ path: item.path, step: stepName.trim() })
         });
         const data = await resp.json();
-        if (data.error) { if (window.setMsg) window.setMsg(data.error, "error"); return false; }
+        if (data.error) { if (window.setMsg) window.setMsg(data.error, "err"); return false; }
         const msg = data.ok ? `步骤 ${stepName} 成功 (exit ${data.code})` : `步骤 ${stepName} 失败 (exit ${data.code})`;
-        if (window.setMsg) window.setMsg(msg, data.ok ? "ok" : "error");
+        if (window.setMsg) window.setMsg(msg, data.ok ? "ok" : "err");
         return data.ok;
       } catch (e) {
-        if (window.setMsg) window.setMsg("执行请求失败: " + e.message, "error");
+        if (window.setMsg) window.setMsg("执行请求失败: " + e.message, "err");
         return false;
       }
     }

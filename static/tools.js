@@ -285,7 +285,7 @@ const TOOLS = [
         <div class="tool-row"><button class="btn" id="t-diff-go">对比</button></div>
         <div class="tool-diff" id="t-diff-out"></div>`;
       const out = box.querySelector("#t-diff-out");
-      const esc = window.escapeHtml || (s => s);
+      const esc = window.escHtml || (s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])));
       // 逐行 LCS diff
       const lcsDiff = (a, b) => {
         const n = a.length, m = b.length;
@@ -344,7 +344,7 @@ const TOOLS = [
         <div class="tool-out" id="t-re-info"></div>
         <label>高亮结果</label>
         <div class="tool-diff" id="t-re-out"></div>`;
-      const esc = window.escapeHtml || (s => s);
+      const esc = window.escHtml || (s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])));
       const pat = box.querySelector("#t-re-pat");
       const txt = box.querySelector("#t-re-txt");
       const out = box.querySelector("#t-re-out");

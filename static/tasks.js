@@ -33,7 +33,10 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }).then(r => r.json());
+    }).then(r => {
+      if (!r.ok) return { error: "HTTP " + r.status };
+      return r.json();
+    }).catch(e => ({ error: e.message || "网络错误" }));
   }
 
   function nowSessionId() {
