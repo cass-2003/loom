@@ -348,9 +348,20 @@ async function refreshGit() {
     stagedSec.classList.add("hidden");
     changesCount.classList.add("hidden");
     commitLabel.textContent = "提交";
-    filesEl.innerHTML = hasWorkspace
-      ? `<div class="scm-empty">不在 Git 仓库内<button class="btn ghost" id="git-init" style="margin-top:10px">初始化仓库</button></div>`
-      : `<div class="scm-empty">未打开工作区，打开文件夹后可使用 Git</div>`;
+    if (!hasWorkspace) {
+      filesEl.innerHTML = `<div class="scm-empty">未打开工作区，打开文件夹后可使用 Git</div>`;
+    } else {
+      filesEl.innerHTML = `<div class="scm-empty">不在 Git 仓库内<button class="btn ghost" id="git-init" style="margin-top:10px">初始化仓库</button><div id="git-sub-repos"></div></div>`;
+      gjson("/api/git/repos").then(rd => {
+        const el = document.querySelector("#git-sub-repos");
+        if (!el || !rd.repos || !rd.repos.length) return;
+        el.innerHTML = `<div style="margin-top:12px;font-size:12px;color:var(--muted)">发现子目录仓库：</div>`
+          + rd.repos.map(r => `<button class="btn ghost" style="margin-top:4px;font-size:12px" data-repo="${escapeHtml(r.abs)}">${escapeHtml(r.path)}</button>`).join("");
+        el.querySelectorAll("button").forEach(btn => {
+          btn.onclick = () => window.switchWorkspace && window.switchWorkspace(btn.dataset.repo);
+        });
+      }).catch(() => {});
+    }
     badge.classList.add("hidden");
     stBranch.textContent = "";
     setStatusBranchState({ enabled: false, reason: hasWorkspace ? "当前目录不在 Git 仓库内" : "请先打开工作区" });

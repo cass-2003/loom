@@ -116,7 +116,7 @@ def atomic_write_bytes(fp: Path, data: bytes):
 
 
 def find_repo(start: Path):
-    """从 start 向上找包含 .git 的目录。"""
+    """从 start 向上找包含 .git 的目录；找不到则向下扫描子目录（深度 2）。"""
     d = start if start.is_dir() else start.parent
     _, base_root = _workspace_root_for_path(d)
     if base_root is None:
@@ -127,4 +127,30 @@ def find_repo(start: Path):
             return c
         if c == base_root:
             break
-    return None
+    return _scan_repos_down(base_root, max_depth=2, limit=1)[0] if base_root else None
+
+
+def _scan_repos_down(root: Path, max_depth: int = 2, limit: int = 20):
+    """向下扫描子目录中的 git 仓库（BFS，限深度和数量）。"""
+    repos = []
+    try:
+        queue = [(root, 0)]
+        while queue and len(repos) < limit:
+            cur, depth = queue.pop(0)
+            if depth > max_depth:
+                continue
+            try:
+                for child in sorted(cur.iterdir()):
+                    if not child.is_dir() or child.name.startswith("."):
+                        continue
+                    if (child / ".git").exists():
+                        repos.append(child)
+                        if len(repos) >= limit:
+                            break
+                    elif depth + 1 <= max_depth:
+                        queue.append((child, depth + 1))
+            except (PermissionError, OSError):
+                continue
+    except (PermissionError, OSError):
+        pass
+    return repos

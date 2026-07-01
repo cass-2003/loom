@@ -165,6 +165,8 @@ class Handler(FilesMixin, GitMixin, TerminalMixin, ProjectMixin, BaseHTTPRequest
                 qs.get("regex", ["0"])[0] == "1",
                 qs.get("case", ["0"])[0] == "1",
             )
+        if path == "/api/git/repos":
+            return self._api_git_repos()
         if path == "/api/git/status":
             return self._api_git_status(qs.get("path", [""])[0])
         if path == "/api/git/diff":

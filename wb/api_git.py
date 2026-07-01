@@ -5,7 +5,7 @@ from pathlib import Path
 
 import wb.state
 from wb.git_utils import run_git
-from wb.paths import safe_resolve, find_repo, workspace_relpath
+from wb.paths import safe_resolve, find_repo, workspace_relpath, _scan_repos_down
 
 
 class GitMixin:
@@ -30,6 +30,26 @@ class GitMixin:
                         "message": "当前目录不在 git 仓库内"})
             return None
         return repo
+
+    def _api_git_repos(self):
+        """GET /api/git/repos — 扫描工作区中的所有 git 仓库。"""
+        from wb.paths import current_workspace_roots
+        repos = []
+        for root in current_workspace_roots():
+            if (root / ".git").exists():
+                try:
+                    rel = workspace_relpath(root)
+                except ValueError:
+                    rel = str(root)
+                repos.append({"path": rel, "abs": str(root), "isRoot": True})
+            else:
+                for r in _scan_repos_down(root, max_depth=2, limit=20):
+                    try:
+                        rel = workspace_relpath(r)
+                    except ValueError:
+                        rel = str(r)
+                    repos.append({"path": rel, "abs": str(r), "isRoot": False})
+        return self._json({"repos": repos})
 
     def _api_git_status(self, rel):
         repo = self._resolve_repo(rel)
