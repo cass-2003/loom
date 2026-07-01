@@ -200,7 +200,7 @@ function ensureVditor(initialValue, onReady) {
     toolbar: [
       "outline", "headings", "bold", "italic", "strike", "link", "|",
       "upload", "|",
-      "editor-theme", "editor-theme-toggle", "|",
+      "editor-theme", "|",
       "list", "ordered-list", "check", "table", "|",
       "quote", "line", "code", "inline-code", "|",
       "undo", "redo", "|",
