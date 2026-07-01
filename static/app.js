@@ -232,11 +232,31 @@ function vditorOpenLink() {
   });
 }
 
+// CodeMirror 代码块检测——在代码块内跳过自定义键盘拦截
+function isInsideCodeMirror(target) {
+  const node = target?.nodeType === 1 ? target : target?.parentElement;
+  return !!node?.closest?.(".vditor-code-block--cm .cm-editor");
+}
+
+// Ctrl+scroll 缩放编辑器内容（学习自 vscode-office zoomElement）
+function vditorZoom() {
+  const zoomBase = Math.pow(1.12, 1 / 100);
+  window.addEventListener("wheel", (e) => {
+    if (!e.ctrlKey || e.metaKey) return;
+    const el = document.querySelector(".vditor-reset");
+    if (!el) return;
+    e.preventDefault();
+    const cur = el.style.zoom ? parseFloat(el.style.zoom) : 100;
+    const factor = Math.pow(zoomBase, -e.deltaY);
+    const next = Math.min(2000, Math.max(25, cur * factor));
+    el.style.zoom = `${next}%`;
+  }, { passive: false });
+}
+
 // 自动配对 + 快捷键 + 粘贴修复（学习自 vscode-office autoSymbol）
 function vditorAutoSymbol() {
   const pairs = { "(": ")", "{": "}", '"': '"' };
   const isCompose = (e) => e.ctrlKey || e.metaKey;
-  // execCommand('delete') 延迟补丁——修复 Vditor 删除时序 bug
   const _exec = document.execCommand.bind(document);
   document.execCommand = (cmd, ...args) => {
     if (cmd === "delete") { setTimeout(() => _exec(cmd, ...args)); }
@@ -244,14 +264,14 @@ function vditorAutoSymbol() {
   };
   window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
-    // Ctrl+S → 触发保存
     if (isCompose(e) && e.code === "KeyS") {
       e.preventDefault(); e.stopPropagation();
       document.getElementById("btn-save")?.click();
       return;
     }
-    // Ctrl+V → 修复 Vditor 粘贴（先删选中文本）
+    // Ctrl+V — 跳过 CodeMirror 代码块（让 CM 自己处理粘贴）
     if (isCompose(e) && e.code === "KeyV") {
+      if (isInsideCodeMirror(e.target) || isInsideCodeMirror(document.activeElement)) return;
       const wy = document.querySelector(".vditor-wysiwyg");
       if (!wy?.contains(document.activeElement) && document.activeElement !== wy) return;
       if (e.shiftKey) {
@@ -262,9 +282,10 @@ function vditorAutoSymbol() {
       }
       return;
     }
-    // 自动配对括号/引号
+    // 自动配对——跳过 CodeMirror 代码块
     const closing = pairs[e.key];
     if (!closing) return;
+    if (isInsideCodeMirror(e.target) || isInsideCodeMirror(document.activeElement)) return;
     const wy = document.querySelector(".vditor-wysiwyg");
     if (!wy?.contains(document.activeElement) && document.activeElement !== wy) return;
     const sel = document.getSelection();
@@ -396,6 +417,7 @@ function ensureVditor(initialValue, onReady) {
       vditorOpenLink();
       vditorAutoSymbol();
       vditorContextMenu();
+      vditorZoom();
     },
   });
 }
