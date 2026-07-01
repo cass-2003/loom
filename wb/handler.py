@@ -34,6 +34,7 @@ class Handler(FilesMixin, GitMixin, TerminalMixin, ProjectMixin, BaseHTTPRequest
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
 
     def _json(self, obj, status=200):
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")

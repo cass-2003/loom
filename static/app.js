@@ -726,7 +726,8 @@ function findRow(path) {
   return document.querySelector(`#tree .node-row[data-path="${cssEsc(path)}"]`);
 }
 function cssEsc(s) {
-  return window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&");
+  if (window.CSS && CSS.escape) return CSS.escape(s);
+  return s.replace(/[^\w-]/g, function (c) { return "\\" + c; });
 }
 
 // 整树刷新，尽量保留 state.expanded 展开状态
