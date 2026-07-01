@@ -414,7 +414,7 @@ function ensureVditor(initialValue, onReady) {
       "list", "ordered-list", "check", "table", "|",
       "quote", "line", "code", "inline-code", "|",
       "undo", "redo", "|",
-      "find", "edit-mode", "code-theme", "help",
+      "find", "edit-mode", "code-theme",
     ],
     tab: "\t",
     placeholder: "开始书写 Markdown...",

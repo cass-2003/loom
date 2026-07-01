@@ -642,12 +642,7 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 body.markdown-active #content,
 body.markdown-active #content-body,
 body.markdown-active #vditor {
-  background: #111111;
-}
-:root[data-theme="light"] body.markdown-active #content,
-:root[data-theme="light"] body.markdown-active #content-body,
-:root[data-theme="light"] body.markdown-active #vditor {
-  background: #ffffff;
+  background: var(--bg-color, var(--bg));
 }
 body.markdown-active #btn-view-edit {
   display: none;
@@ -2400,30 +2395,14 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   --ir-title-color: #0550ae;
   --ir-bracket-color: #0969da;
 }
-:root[data-theme="light"] #vditor .vditor-toolbar {
-  background: #f6f8fa;
-}
-:root[data-theme="light"] #vditor .vditor-content,
-:root[data-theme="light"] #vditor .vditor-wysiwyg,
-:root[data-theme="light"] #vditor .vditor-ir,
-:root[data-theme="light"] #vditor .vditor-wysiwyg pre.vditor-reset,
-:root[data-theme="light"] #vditor .vditor-ir pre.vditor-reset {
-  background: #ffffff;
-}
-:root[data-theme="light"] #vditor .vditor-outline {
-  background: #f6f8fa;
-}
 :root[data-theme="light"] #vditor .vditor-reset blockquote {
-  background: #f6f8fa;
-}
-:root[data-theme="light"] #vditor .vditor-reset table {
-  background: #ffffff;
+  background: var(--blockquote-bg-color, #f6f8fa);
 }
 #vditor .vditor-toolbar {
   min-height: 31px;
   padding: 2px 12px;
   border-bottom: 1px solid var(--border-soft);
-  background: #171717;
+  background: var(--toolbar-bg-color, #171717);
   gap: 0;
   overflow: visible;
   flex-wrap: wrap;
@@ -2516,14 +2495,14 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 }
 #vditor .vditor-content {
   min-height: 0;
-  background: #111111;
+  background: var(--bg-color, #111111);
 }
 #vditor .vditor-outline {
   width: clamp(184px, 15vw, 232px);
   padding: 8px 6px 10px 8px;
   border-right: 1px solid var(--border-soft);
-  background: #171717;
-  color: var(--text-dim);
+  background: var(--panel-bg-color, var(--bg-color, #171717));
+  color: var(--second-color, var(--text-dim));
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -2595,7 +2574,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 }
 #vditor .vditor-wysiwyg,
 #vditor .vditor-ir {
-  background: #111111;
+  background: var(--bg-color, #111111);
 }
 #vditor .vditor-wysiwyg pre.vditor-reset,
 #vditor .vditor-ir pre.vditor-reset {
@@ -2603,8 +2582,8 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   max-width: none;
   margin: 0 auto;
   padding: 24px clamp(38px, 4.8vw, 88px) 78px;
-  color: var(--text);
-  background: #111111;
+  color: var(--front-color, var(--text));
+  background: var(--bg-color, #111111);
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 15.5px;
   line-height: 1.68;
@@ -2612,14 +2591,9 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-reset h1,
 #vditor .vditor-reset h2,
 #vditor .vditor-reset h3 {
-  color: #f0f6fc;
+  color: var(--heading-color, var(--front-color, #f0f6fc));
   font-weight: 720;
   letter-spacing: .01em;
-}
-:root[data-theme="light"] #vditor .vditor-reset h1,
-:root[data-theme="light"] #vditor .vditor-reset h2,
-:root[data-theme="light"] #vditor .vditor-reset h3 {
-  color: #1f2328;
 }
 #vditor .vditor-reset h1 {
   margin: .1em 0 .7em;
