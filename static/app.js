@@ -131,7 +131,7 @@ function vditorTheme() {
 function vditorEditorTheme() {
   const saved = localStorage.getItem("loom-vditor-editor-theme");
   if (saved) return saved;
-  return isLightTheme() ? "Light" : "Github Dark";
+  return isLightTheme() ? "Light" : "Auto";
 }
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
 // 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
@@ -299,7 +299,7 @@ function ensureVditor(initialValue, onReady) {
     toolbar: [
       "outline", "headings", "bold", "italic", "strike", "link", "|",
       "upload", "|",
-      "editor-theme", "|",
+      "editor-theme-label", "editor-theme", "editor-theme-toggle", "|",
       "list", "ordered-list", "check", "table", "|",
       "quote", "line", "code", "inline-code", "|",
       "undo", "redo", "|",
