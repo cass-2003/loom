@@ -2499,6 +2499,8 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   border-right: 1px solid var(--border-soft);
   background: #171717;
   color: var(--text-dim);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 #vditor .vditor-outline.outline-pulse {
   box-shadow: inset -2px 0 0 var(--accent), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
@@ -2534,6 +2536,9 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   font-size: 12px;
   line-height: 17px;
   transition: background .12s, color .12s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #vditor .vditor-outline__content span[data-target-id]:hover,
 #vditor .vditor-outline__item:hover {
