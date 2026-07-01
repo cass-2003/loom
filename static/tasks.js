@@ -666,6 +666,7 @@
           plan: lines("扫描现状\n实现最小闭环\n运行验证\n记录结果"),
           evidence: [],
           log: [],
+          depends_on: [],
           next: "",
           createdAt: now,
           updatedAt: now,
@@ -687,6 +688,7 @@
       plan: Array.isArray(seed && seed.plan) ? seed.plan : [],
       evidence: Array.isArray(seed && seed.evidence) ? seed.evidence : [],
       log: Array.isArray(seed && seed.log) ? seed.log : [],
+      depends_on: Array.isArray(seed && seed.depends_on) ? seed.depends_on : [],
       next: String(seed && seed.next || "").trim(),
       createdAt: now,
       updatedAt: now,
@@ -1029,9 +1031,27 @@
     });
   }
 
+  function taskById(id) { return tasks.find(x => x.id === id) || null; }
+  function hasPendingDeps(t) {
+    if (!t || !Array.isArray(t.depends_on) || !t.depends_on.length) return false;
+    return t.depends_on.some(d => { const dep = taskById(d); return dep && dep.status !== "verified"; });
+  }
+  function depsLabel(t) {
+    if (!t || !Array.isArray(t.depends_on) || !t.depends_on.length) return "";
+    return t.depends_on.map(d => {
+      const dep = taskById(d);
+      const name = dep ? dep.title : d;
+      const done = dep && dep.status === "verified";
+      return done ? name : name + " (!)";
+    }).join(", ");
+  }
   function setTaskStatus(id, status) {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
+    if (status === "running" && hasPendingDeps(t)) {
+      if (window.setMsg) setMsg("前置任务未完成，无法开始", "warn");
+      return;
+    }
     t.status = status;
     saveTasks("已更新任务状态");
   }
@@ -1050,6 +1070,8 @@
     list.innerHTML = shown.map(t => {
       const plan = (t.plan || []).slice(0, 5).map(x => `<li>${esc(x)}</li>`).join("");
       const execPreviewHtml = taskSource(t) === "playbook" ? renderExecPreview(parseExecPreview(t.log)) : "";
+      const locked = hasPendingDeps(t);
+      const depsHtml = depsLabel(t) ? `<div class="task-deps${locked ? " task-deps-locked" : ""}"><b>Depends on</b> ${esc(depsLabel(t))}</div>` : "";
       const evidence = (t.evidence || []).slice(-4).map(x => `<li>${esc(x)}</li>`).join("");
       const logLines = Array.isArray(t.log) ? t.log : [];
       const logPreview = logLines.length > 4
@@ -1064,12 +1086,13 @@
         </div>
         <h3>${esc(t.title)}</h3>
         <p class="task-goal">${esc(t.goal || "未填写目标")}</p>
+        ${depsHtml}
         <div class="task-section"><b>Plan</b><ol>${plan || "<li>未填写</li>"}</ol></div>
         ${execPreviewHtml}
         <div class="task-section"><b>Evidence</b><ul>${evidence || "<li>暂无</li>"}</ul></div>
         <div class="task-section"><b>Log</b><ul>${log || "<li>暂无</li>"}</ul></div>
         <div class="task-actions">
-          <button data-act="running">开始</button>
+          <button data-act="running"${locked ? ' disabled title="前置任务未完成"' : ""}>开始</button>
           <button data-act="verified">验证通过</button>
           <button data-act="blocked">阻塞</button>
           <button data-act="log">追加日志</button>

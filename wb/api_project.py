@@ -251,6 +251,8 @@ class ProjectMixin:
             "plan": self._text_list(item.get("plan"), item_limit=180, count_limit=24),
             "evidence": self._text_list(item.get("evidence"), item_limit=260, count_limit=30),
             "log": self._text_list(item.get("log"), item_limit=500, count_limit=80),
+            "depends_on": [str(d) for d in item.get("depends_on", []) if isinstance(d, str)][:10],
+            "complexity": str(item.get("complexity", ""))[:10] if item.get("complexity") else "",
             "next": str(item.get("next") or "").strip()[:500],
             "createdAt": str(item.get("createdAt") or now)[:32],
             "updatedAt": str(item.get("updatedAt") or now)[:32],
@@ -266,6 +268,7 @@ class ProjectMixin:
         if len(raw) > 80:
             return self._err("任务数量过多")
         now = _now_iso()
+        existing = {t["id"]: t for t in self._load_workflow_tasks()}
         tasks = []
         for item in raw:
             if isinstance(item, dict):
@@ -274,6 +277,20 @@ class ProjectMixin:
             clean = self._clean_workflow_task(item)
             if clean:
                 tasks.append(clean)
+        task_map = {t["id"]: t for t in tasks}
+        for t in tasks:
+            old = existing.get(t["id"])
+            old_status = old["status"] if old else "todo"
+            if old_status == "todo" and t["status"] == "running" and t["depends_on"]:
+                pending = [
+                    d for d in t["depends_on"]
+                    if d in task_map and task_map[d]["status"] != "verified"
+                ]
+                if pending:
+                    names = ", ".join(
+                        task_map[d].get("title", d) for d in pending
+                    )
+                    return self._err(f"前置任务未完成: {names}")
         err = self._save_workflow_tasks(tasks)
         if err:
             return err
