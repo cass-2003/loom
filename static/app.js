@@ -181,7 +181,8 @@ function ensureVditor(initialValue, onReady) {
   vd.pendingMount = onReady || null;
   vd.inst = new Vditor("vditor", {
     cdn: "/static/vendor/vditor",
-    mode: "wysiwyg",                  // 跟 vscode-office 一样默认进入完整所见即所得
+    mode: "wysiwyg",
+    height: "100%",
     value: initialValue || "",
     cache: { enable: false },
     theme: vditorTheme(),
