@@ -25,4 +25,4 @@ WORKSPACE_ROOTS: list[Path] = []
 NO_WORKSPACE = None
 
 # 配置文件读写锁
-_CFG_LOCK = threading.Lock()
+_CFG_LOCK = threading.RLock()
