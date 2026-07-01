@@ -132,7 +132,7 @@ function vditorEditorTheme() {
   const mode = isLightTheme() ? "light" : "dark";
   const saved = localStorage.getItem("loom-vditor-editor-theme-" + mode);
   if (saved) return saved;
-  return isLightTheme() ? "Light" : "Github Dark";
+  return "Auto";
 }
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
 // 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
@@ -436,6 +436,8 @@ function ensureVditor(initialValue, onReady) {
     },
     after() {
       vd.ready = true;
+      // 清理旧格式 localStorage 和不可用的 Auto 主题
+      ["loom-vditor-editor-theme","loom-vditor-code-theme","loom-vditor-mermaid-theme"].forEach(k => localStorage.removeItem(k));
       if (vd.pending != null) { vd.inst.setValue(vd.pending); vd.pending = null; }
       const m = vd.pendingMount; vd.pendingMount = null;
       if (m) m();

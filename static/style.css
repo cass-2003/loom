@@ -2347,10 +2347,103 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 .tab-run-btn .icn { color: var(--on-accent); }
 
 /* ===== Workbench Markdown / Vditor ===== */
-/* 颜色变量由 Vditor 主题 CSS（Auto.css / Light.css / Github Dark.css 等）控制，
-   不在这里覆盖，否则会阻止用户通过 Theme 下拉/toggle 独立切换深浅色。 */
+/* Auto.css 的 --vscode-* 变量在非 VS Code 环境不存在，这里提供等价映射 */
 #vditor.vditor {
   height: 100%;
+  --vscode-editor-background: #0d1117;
+  --vscode-editor-foreground: #adbac7;
+  --vscode-foreground: #adbac7;
+  --vscode-dropdown-background: #2d333b;
+  --vscode-editorWidget-background: #2d333b;
+  --vscode-input-placeholderForeground: #768390;
+  --vscode-textSeparator-foreground: #444c56;
+  --vscode-widget-border: #444c56;
+  --vscode-panel-border: #444c56;
+  --vscode-textLink-foreground: #539bf5;
+  --vscode-list-hoverBackground: rgba(99,110,123,.4);
+  --vscode-icon-foreground: #adbac7;
+  --vscode-editorGroupHeader-tabsBackground: #161b22;
+  --vscode-sideBar-background: #0f131a;
+  --vscode-textBlockQuote-border: #444c56;
+  --vscode-textBlockQuote-background: transparent;
+  --vscode-keybindingTable-headerBackground: #21262d;
+  --vscode-textCodeBlock-background: #1c2128;
+  --vscode-textPreformat-foreground: #adbac7;
+  --vscode-editorCursor-foreground: #539bf5;
+  --vscode-editorLineNumber-foreground: rgba(173,186,199,.55);
+  --vscode-editorLineNumber-activeForeground: #adbac7;
+  --vscode-scrollbarSlider-background: rgba(173,186,199,.3);
+  --vscode-scrollbarSlider-hoverBackground: rgba(173,186,199,.44);
+  --vscode-badge-background: rgba(173,186,199,.08);
+  --vscode-errorForeground: #f14c4c;
+  --vscode-descriptionForeground: #768390;
+  --vscode-tab-inactiveForeground: #768390;
+  --vscode-editor-selectionBackground: rgba(83,155,245,.35);
+  --vscode-editor-lineHighlightBackground: #282d35;
+  --vscode-editor-foldBackground: #233041;
+  --vscode-focusBorder: #539bf5;
+  --vscode-input-background: #2d333b;
+  --vscode-menu-selectionBackground: rgba(99,110,123,.4);
+  --vscode-charts-red: #f85149;
+  --vscode-charts-blue: #539bf5;
+  --vscode-charts-green: #57ab5a;
+  --vscode-charts-yellow: #c69026;
+  --vscode-charts-orange: #da702c;
+  --vscode-charts-purple: #986ee2;
+  --vscode-charts-foreground: #adbac7;
+  --vscode-symbolIcon-keywordForeground: #c586c0;
+  --vscode-symbolIcon-enumeratorForeground: #d7ba7d;
+  --vscode-symbolIcon-stringForeground: #ce9178;
+  --vscode-symbolIcon-operatorForeground: #569cd6;
+  --vscode-symbolIcon-numberForeground: #b5cea8;
+}
+:root[data-theme="light"] #vditor.vditor {
+  --vscode-editor-background: #fff;
+  --vscode-editor-foreground: #24292f;
+  --vscode-foreground: #24292f;
+  --vscode-dropdown-background: #f6f8fa;
+  --vscode-editorWidget-background: #f6f8fa;
+  --vscode-input-placeholderForeground: #6e7781;
+  --vscode-textSeparator-foreground: #d0d7de;
+  --vscode-widget-border: #d0d7de;
+  --vscode-panel-border: #d0d7de;
+  --vscode-textLink-foreground: #0969da;
+  --vscode-list-hoverBackground: #e8eef3;
+  --vscode-icon-foreground: #24292f;
+  --vscode-editorGroupHeader-tabsBackground: #f6f8fa;
+  --vscode-sideBar-background: #f6f8fa;
+  --vscode-textBlockQuote-border: #d0d7de;
+  --vscode-textBlockQuote-background: transparent;
+  --vscode-keybindingTable-headerBackground: #e8ecf0;
+  --vscode-textCodeBlock-background: #f0f2f5;
+  --vscode-textPreformat-foreground: #24292f;
+  --vscode-editorCursor-foreground: #24292f;
+  --vscode-editorLineNumber-foreground: rgba(27,31,36,.35);
+  --vscode-editorLineNumber-activeForeground: #24292f;
+  --vscode-scrollbarSlider-background: rgba(51,51,51,.3);
+  --vscode-scrollbarSlider-hoverBackground: rgba(51,51,51,.44);
+  --vscode-badge-background: rgba(51,51,51,.08);
+  --vscode-errorForeground: #e51400;
+  --vscode-descriptionForeground: #57606a;
+  --vscode-tab-inactiveForeground: #57606a;
+  --vscode-editor-selectionBackground: rgba(4,81,165,.35);
+  --vscode-editor-lineHighlightBackground: #e5e7e9;
+  --vscode-editor-foldBackground: #d4dfeb;
+  --vscode-focusBorder: #0969da;
+  --vscode-input-background: #f6f8fa;
+  --vscode-menu-selectionBackground: #e8eef3;
+  --vscode-charts-red: #cf222e;
+  --vscode-charts-blue: #0969da;
+  --vscode-charts-green: #116329;
+  --vscode-charts-yellow: #9a6700;
+  --vscode-charts-orange: #bc4c00;
+  --vscode-charts-purple: #8250df;
+  --vscode-charts-foreground: #24292f;
+  --vscode-symbolIcon-keywordForeground: #660e7a;
+  --vscode-symbolIcon-enumeratorForeground: #0033b3;
+  --vscode-symbolIcon-stringForeground: #008000;
+  --vscode-symbolIcon-operatorForeground: #0000ff;
+  --vscode-symbolIcon-numberForeground: #008000;
 }
 #vditor .vditor-toolbar {
   min-height: 31px;
