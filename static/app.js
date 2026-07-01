@@ -351,6 +351,25 @@ function vditorContextMenu() {
   hydrateIcons(menu);
 }
 
+// 导出 PDF（通过浏览器打印对话框）
+function vditorExportPdf() {
+  const content = document.querySelector(".vditor-wysiwyg pre.vditor-reset");
+  if (!content) return;
+  const html = content.innerHTML;
+  const w = window.open("", "_blank");
+  if (!w) { alert("请允许弹窗以导出 PDF"); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>导出 PDF</title>
+<style>body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;padding:40px 60px;line-height:1.7;color:#222}
+h1,h2,h3{margin-top:1.4em}code{background:#f4f4f4;padding:2px 5px;border-radius:3px;font-size:90%}
+pre{background:#f6f8fa;padding:16px;border-radius:6px;overflow-x:auto}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px}
+blockquote{border-left:4px solid #ddd;margin:0;padding:0 16px;color:#555}
+img{max-width:100%}@media print{body{padding:0}}</style></head>
+<body>${html}</body></html>`);
+  w.document.close();
+  setTimeout(() => { w.print(); }, 300);
+}
+
 // 懒创建 Vditor 实例（首次打开 md 时）
 function ensureVditor(initialValue, onReady) {
   if (vd.inst) {
@@ -383,7 +402,14 @@ function ensureVditor(initialValue, onReady) {
     },
     toolbar: [
       "outline", "headings", "bold", "italic", "strike", "link", "|",
-      "upload", "|",
+      "upload",
+      {
+        name: "export-pdf",
+        tip: "Export to PDF",
+        icon: '<svg viewBox="0 0 16 16" width="15" height="15"><path fill="currentColor" d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM10 4a1 1 0 0 0 1 1h2.5L10 1.5V4zM4.603 14.087a.8.8 0 0 1-.437-.1.8.8 0 0 1-.271-.248.9.9 0 0 1-.136-.37 1.5 1.5 0 0 1-.034-.336V12h.6v1.005q0 .226.075.39a.5.5 0 0 0 .214.252.7.7 0 0 0 .36.084q.31 0 .46-.19a.8.8 0 0 0 .148-.512V12h.6v1.033q0 .594-.293.9t-.832.303zm1.855-.088V12h.906q.416 0 .692.168a1.1 1.1 0 0 1 .41.472q.136.303.136.697 0 .398-.137.7a1.1 1.1 0 0 1-.41.469q-.277.164-.7.164zm.6-.48h.29q.495 0 .715-.281.222-.283.222-.801 0-.515-.22-.793a.7.7 0 0 0-.709-.283H7.06zm2.39.48V12h2.09v.488H10.3v.694h1.4v.488h-1.4v.939z"/></svg>',
+        click() { vditorExportPdf(); },
+      },
+      "|",
       "editor-theme-label", "editor-theme", "editor-theme-toggle", "|",
       "list", "ordered-list", "check", "table", "|",
       "quote", "line", "code", "inline-code", "|",

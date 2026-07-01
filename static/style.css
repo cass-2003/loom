@@ -2434,10 +2434,21 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   min-width: 25px;
   margin: 0;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button {
-  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 5px;
+  color: #b0b0b4;
   border-radius: 4px;
+}
+#vditor .vditor-toolbar .vditor-toolbar__item button svg { width: 15px; height: 15px; }
+:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item button {
+  color: #4b4f56;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
   position: relative;
@@ -2446,10 +2457,13 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   justify-content: center;
   width: 25px;
   height: 26px;
-  color: var(--text-dim);
+  color: #b0b0b4;
   border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
+}
+:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
+  color: #4b4f56;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button:hover {
   color: var(--text);
