@@ -3468,20 +3468,13 @@ async function chooseAndSwitchWorkspace() {
     } catch (e) { console.error(e); }
     return;
   }
-  // 浏览器版：自定义模态输入路径
-  showModal({
-    title: "打开工作区",
-    sub: "多个目录用分号 ; 分隔",
-    placeholder: "D:\\projects 或 D:\\a;D:\\b",
-    value: currentRoot || "",
-    okLabel: "打开",
-    onSubmit: async (val) => {
-      const roots = val.split(";").map(x => x.trim()).filter(Boolean);
-      if (!roots.length) return "请输入文件夹路径";
-      await switchWorkspace(roots.length > 1 ? roots : roots[0]);
-      return null;
-    }
-  });
+  // 浏览器版：展开欢迎页内联路径输入
+  const wrap = $("#welcome-path-input");
+  if (wrap) {
+    wrap.classList.remove("hidden");
+    const inp = $("#welcome-path");
+    if (inp) { inp.value = currentRoot || ""; inp.focus(); inp.select(); }
+  }
 }
 
 function createAndSwitchWorkspace() {
@@ -3570,6 +3563,20 @@ function bindWelcomeButtons() {
 
   const newBtn = $("#welcome-new");
   if (newBtn) newBtn.onclick = () => wbWorkspaceActions.run("create");
+
+  const pathGo = $("#welcome-path-go");
+  const pathInp = $("#welcome-path");
+  const submitPath = async () => {
+    if (!pathInp) return;
+    const val = pathInp.value.trim();
+    if (!val) return;
+    const roots = val.split(";").map(x => x.trim()).filter(Boolean);
+    await switchWorkspace(roots.length > 1 ? roots : roots[0]);
+  };
+  if (pathGo) pathGo.onclick = submitPath;
+  if (pathInp) pathInp.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); submitPath(); }
+  });
 }
 
 hydrateIcons();   // 把 data-icon 占位换成 SVG
