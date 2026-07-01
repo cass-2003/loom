@@ -2839,7 +2839,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 
 /* Vditor 右键菜单 */
 .vditor-ctx-menu { position: fixed; z-index: 10000; min-width: 160px; padding: 4px 0;
-  border: 1px solid var(--border); border-radius: 6px; background: var(--bg-alt);
+  border: 1px solid var(--border); border-radius: 6px; background: #252526;
   box-shadow: 0 4px 12px rgba(0,0,0,.35); font-size: 13px; }
 .vditor-ctx-menu[hidden] { display: none !important; }
 .vditor-ctx-menu button { display: flex; align-items: center; gap: 8px; width: 100%;
@@ -2848,3 +2848,4 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 .vditor-ctx-menu button:hover { background: var(--accent); color: var(--on-accent, #fff); }
 .vditor-ctx-menu button .i { width: 14px; height: 14px; flex-shrink: 0; opacity: .7; }
 .vditor-ctx-menu hr { border: none; border-top: 1px solid var(--border-soft); margin: 4px 0; }
+:root[data-theme="light"] .vditor-ctx-menu { background: #f3f3f3; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
