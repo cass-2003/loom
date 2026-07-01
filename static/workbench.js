@@ -120,6 +120,9 @@
       settings = Object.assign({}, DEFAULTS);
       persistSettings(); applySettings(); renderSettingsUI();
     };
+    fetch("/api/config").then(r => r.json()).then(d => {
+      if (d.version) { const v = $("#set-version"); if (v) v.textContent = "Loom v" + d.version; }
+    }).catch(() => {});
   }
 
   // ---- 自动保存：监听编辑器输入，防抖后调 save ----

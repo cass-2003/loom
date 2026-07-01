@@ -33,6 +33,7 @@ class ProjectMixin:
             "workspaceRoots": roots,
             "workspaceId": cur.get("id") if isinstance(cur, dict) else None,
             "hasWorkspace": has_workspace(),
+            "version": "0.3.1",
         })
 
     def _workspace_state_dir(self) -> Path:

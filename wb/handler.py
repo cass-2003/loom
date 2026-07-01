@@ -14,7 +14,7 @@ from wb.api_project import ProjectMixin
 
 
 class Handler(FilesMixin, GitMixin, TerminalMixin, ProjectMixin, BaseHTTPRequestHandler):
-    server_version = "Loom/0.1"
+    server_version = "Loom/0.3.1"
 
     def log_message(self, fmt, *args):
         pass
