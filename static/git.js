@@ -322,7 +322,9 @@ function statusLetter(code) {
   if (code.includes("R")) return ["R", "g-mod"];
   return ["M", "g-mod"];
 }
-const escapeHtml = window.escHtml;
+function escapeHtml(s) {
+  return (window.escHtml || (t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))))(s);
+}
 window.escapeHtml = escapeHtml;
 
 /* ============ 源代码管理侧栏 ============ */
