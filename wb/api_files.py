@@ -126,7 +126,7 @@ class FilesMixin:
         ".pytest_cache", "dist", "build", ".next", ".nuxt", "target",
         ".idea", ".vscode", ".cache", "System Volume Information",
     }
-    _FLAT_LIMIT = 2000
+    _FLAT_LIMIT = 8000
 
     def _api_files_flat(self):
         out = []
