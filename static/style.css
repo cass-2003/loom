@@ -2362,7 +2362,13 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   flex-wrap: wrap;
 }
 #vditor .vditor-toolbar .vditor-hint,
-#vditor .vditor-toolbar .vditor-panel--arrow { z-index: 100; top: 100%; }
+#vditor .vditor-toolbar .vditor-panel--arrow {
+  z-index: 100; top: 100%;
+  background: var(--panel-background-color, var(--second-bg-color, #252526));
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow, 0 4px 12px rgba(0,0,0,.35));
+}
 #vditor .vditor-toolbar .vditor-toolbar__item {
   height: 26px;
   min-width: 25px;
