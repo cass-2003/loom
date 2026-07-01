@@ -182,9 +182,9 @@
       + `<b>${esc(recommended.title)}</b>`
       + (desc ? `<span>${esc(desc)}</span>` : "")
       + `<div class="eco-recommended-actions">`
-      + `<button data-act="open"${openState.enabled ? "" : ` disabled title="${esc(openState.reason)}"`}>查看定义</button>`
-      + `<button data-act="task"${taskState.enabled ? "" : ` disabled title="${esc(taskState.reason)}"`}>创建任务</button>`
-      + `<button data-act="copy"${copyState.enabled ? "" : ` disabled title="${esc(copyState.reason)}"`}>复制验证命令</button>`
+      + `<button data-act="open" title="${openState.enabled ? "在编辑器中打开定义" : esc(openState.reason)}"${openState.enabled ? "" : " disabled"}>查看定义</button>`
+      + `<button data-act="task" title="${taskState.enabled ? "基于此项创建任务" : esc(taskState.reason)}"${taskState.enabled ? "" : " disabled"}>创建任务</button>`
+      + `<button data-act="copy" title="${copyState.enabled ? "复制验证命令到剪贴板" : esc(copyState.reason)}"${copyState.enabled ? "" : " disabled"}>复制验证命令</button>`
       + `</div></div>`;
     host.querySelectorAll("button[data-act]").forEach(btn => {
       btn.onclick = () => {
@@ -225,10 +225,11 @@
   }
 
   function renderItem(item) {
-    const actionButton = (action, label) => {
+    const actionButton = (action, label, tip) => {
       const st = ecosystemActionState(action, item);
-      const disabled = st.enabled ? "" : ` disabled aria-disabled="true" title="${esc(st.reason || "当前不可用")}"`;
-      return `<button class="eco-open" data-act="${esc(action)}"${disabled}>${esc(label)}</button>`;
+      const disabled = st.enabled ? "" : ` disabled aria-disabled="true"`;
+      const t = st.enabled ? (tip || label) : (st.reason || "当前不可用");
+      return `<button class="eco-open" data-act="${esc(action)}" title="${esc(t)}"${disabled}>${esc(label)}</button>`;
     };
     const ver = item.verification && item.verification.length
       ? `<div class="eco-lines"><b>验证</b>${item.verification.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "";
@@ -250,12 +251,12 @@
       <p>${esc(desc)}</p>
       ${scope}${inputs}${req}${commands}${ver}
       <div class="eco-actions">
-        ${actionButton("open", item.source === "builtin" ? "查看定义" : "打开定义")}
-        ${actionButton("preview", "执行预览")}
-        ${actionButton("copy-preview", "复制预览包")}
-        ${actionButton("task", "创建任务")}
-        ${actionButton("copy", "复制验证命令")}
-        ${item.kind === "playbook" ? actionButton("run-step", "▶ 运行步骤") : ""}
+        ${actionButton("open", item.source === "builtin" ? "查看定义" : "打开定义", "在编辑器中打开定义文件")}
+        ${actionButton("preview", "执行预览", "预览执行效果")}
+        ${actionButton("copy-preview", "复制预览包", "复制预览内容到剪贴板")}
+        ${actionButton("task", "创建任务", "基于此项创建任务")}
+        ${actionButton("copy", "复制验证命令", "复制验证命令到剪贴板")}
+        ${item.kind === "playbook" ? actionButton("run-step", "▶ 运行步骤", "执行 Playbook 中的代码步骤") : ""}
       </div>
     </article>`;
   }

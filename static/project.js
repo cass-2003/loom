@@ -1,11 +1,11 @@
 /* Workbench 项目记忆面板：读取 state/*.md，作为生态化 Phase 1 的可视入口。 */
 (function () {
   const DOCS = [
-    { name: "requirements", label: "Requirements" },
-    { name: "progress", label: "Progress" },
-    { name: "log", label: "Log" },
-    { name: "memory", label: "Memory" },
-    { name: "roadmap", label: "Roadmap", readonly: true },
+    { name: "requirements", label: "Requirements", tip: "项目需求文档" },
+    { name: "progress", label: "Progress", tip: "项目进度记录" },
+    { name: "log", label: "Log", tip: "操作日志" },
+    { name: "memory", label: "Memory", tip: "项目记忆 / 上下文" },
+    { name: "roadmap", label: "Roadmap", readonly: true, tip: "路线图（只读）" },
   ];
   let docs = [];
   let active = "progress";
@@ -58,7 +58,7 @@
     const host = $("#project-tabs");
     if (!host) return;
     host.innerHTML = DOCS.map(d =>
-      `<button class="project-tab${d.name === active ? " active" : ""}" data-name="${esc(d.name)}">${esc(d.label)}</button>`
+      `<button class="project-tab${d.name === active ? " active" : ""}" data-name="${esc(d.name)}" title="${esc(d.tip || d.label)}">${esc(d.label)}</button>`
     ).join("");
     host.querySelectorAll(".project-tab").forEach(btn => {
       btn.onclick = () => {
@@ -459,11 +459,11 @@
     const focusState = taskActionState("focusRecovery", "任务恢复中心尚未就绪");
     const valTitle = recentVal ? recentVal.title : "暂无验证记录";
     const roadTitle = road.ready && road.goals[0] ? road.goals[0] : "路线文档暂不可用";
-    host.innerHTML = `<button class="project-recovery-action" data-act="continue-task"${focusState.enabled ? "" : ` disabled title="${esc(focusState.reason)}"`}>`
+    host.innerHTML = `<button class="project-recovery-action" data-act="continue-task" title="恢复最近的进行中任务"${focusState.enabled ? "" : ` disabled`}>`
       + `<b>继续上次任务</b><span>${esc(lt ? lt.title : "暂无进行中任务")}</span></button>`
-      + `<button class="project-recovery-action" data-act="view-validation"><b>查看最近验证</b>`
+      + `<button class="project-recovery-action" data-act="view-validation" title="查看最近一次验证结果"><b>查看最近验证</b>`
       + `<span>${esc(valTitle)}</span></button>`
-      + `<button class="project-recovery-action" data-act="open-roadmap"${road.ready ? "" : ` disabled title="路线文档暂不可用"`}>`
+      + `<button class="project-recovery-action" data-act="open-roadmap" title="打开项目路线图"${road.ready ? "" : ` disabled`}>`
       + `<b>打开路线图</b><span>${esc(roadTitle)}</span></button>`;
     const cont = host.querySelector("[data-act='continue-task']");
     if (cont) cont.onclick = focusTasksRecovery;
@@ -519,9 +519,9 @@
     }
     if (road.ready) {
       latest.innerHTML += `<div class="project-roadmap-brief"><b>下一阶段路线</b>`
-        + `<button data-target="roadmap">${esc(road.goals[0] || "查看路线")}</button>`
+        + `<button data-target="roadmap" title="跳转到路线图标签页">${esc(road.goals[0] || "查看路线")}</button>`
         + `<span>${esc(road.summary)}</span>`
-        + `<button class="project-copy-roadmap" data-act="copy-roadmap">复制路线</button></div>`;
+        + `<button class="project-copy-roadmap" data-act="copy-roadmap" title="复制路线摘要到剪贴板">复制路线</button></div>`;
     }
     latest.querySelectorAll("button[data-target]").forEach(b => {
       b.onclick = () => setProjectDoc(b.dataset.target);

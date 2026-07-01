@@ -105,9 +105,9 @@ const TOOLS = [
         <label>输入</label>
         <textarea id="t-json-in" placeholder='{"a":1}'></textarea>
         <div class="tool-row">
-          <button class="btn" id="t-json-pretty">格式化</button>
-          <button class="btn" id="t-json-min">压缩</button>
-          <button class="btn" id="t-json-esc">转义</button>
+          <button class="btn" id="t-json-pretty" title="格式化 JSON（缩进 2 空格）">格式化</button>
+          <button class="btn" id="t-json-min" title="压缩 JSON（移除空白）">压缩</button>
+          <button class="btn" id="t-json-esc" title="将字符串转义为 JSON 安全格式">转义</button>
         </div>
         <label>输出</label>
         <textarea id="t-json-out" readonly></textarea>`;

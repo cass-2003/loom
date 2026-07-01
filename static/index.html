@@ -319,12 +319,12 @@
         <h1>Loom</h1>
         <p class="lead">轻量本地工作台</p>
         <div class="welcome-actions">
-          <button id="welcome-open" class="welcome-btn primary"><span class="i" data-icon="folderOpen"></span>打开文件夹</button>
-          <button id="welcome-new" class="welcome-btn"><span class="i" data-icon="plus"></span>新建文件夹</button>
+          <button id="welcome-open" class="welcome-btn primary" title="选择本地文件夹作为工作区"><span class="i" data-icon="folderOpen"></span>打开文件夹</button>
+          <button id="welcome-new" class="welcome-btn" title="在指定位置创建新文件夹并打开"><span class="i" data-icon="plus"></span>新建文件夹</button>
         </div>
         <div id="welcome-path-input" class="welcome-path hidden">
           <input id="welcome-path" type="text" placeholder="输入文件夹路径，多个用 ; 分隔" spellcheck="false" autocomplete="off" aria-label="工作区文件夹路径">
-          <button id="welcome-path-go" class="welcome-btn primary small">打开</button>
+          <button id="welcome-path-go" class="welcome-btn primary small" title="打开输入的路径">打开</button>
         </div>
         <div id="welcome-recent" class="welcome-recent hidden">
           <div class="welcome-recent-head">最近打开</div>
@@ -497,9 +497,9 @@
         <div class="set-row">
           <label>Tab 宽度</label>
           <div class="set-ctl seg" id="set-tabwidth">
-            <button data-v="2">2 空格</button>
-            <button data-v="4">4 空格</button>
-            <button data-v="tab">Tab</button>
+            <button data-v="2" title="使用 2 个空格缩进">2 空格</button>
+            <button data-v="4" title="使用 4 个空格缩进">4 空格</button>
+            <button data-v="tab" title="使用 Tab 字符缩进">Tab</button>
           </div>
         </div>
         <div class="set-row">
@@ -509,17 +509,17 @@
         <div class="set-row">
           <label>编辑器自动换行</label>
           <div class="set-ctl">
-            <button id="set-wrap" class="toggle" role="switch"><span class="knob"></span></button>
+            <button id="set-wrap" class="toggle" role="switch" title="切换编辑器自动换行"><span class="knob"></span></button>
           </div>
         </div>
         <div class="set-row">
           <label>自动保存<span class="set-hint">停止输入 1.2 秒后保存</span></label>
           <div class="set-ctl">
-            <button id="set-autosave" class="toggle" role="switch"><span class="knob"></span></button>
+            <button id="set-autosave" class="toggle" role="switch" title="切换自动保存"><span class="knob"></span></button>
           </div>
         </div>
         <div class="settings-foot">
-          <button id="set-reset" class="modal-btn">恢复默认</button>
+          <button id="set-reset" class="modal-btn" title="将所有设置恢复为默认值">恢复默认</button>
           <span id="set-version" style="font-size:11px;color:var(--muted);margin-left:auto">Loom v0.3.1</span>
         </div>
       </div>
