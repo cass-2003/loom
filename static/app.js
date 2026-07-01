@@ -3586,27 +3586,10 @@ function toggleTheme() {
   if (state.kind === "viewer" && state.viewer && typeof state.viewer.onTheme === "function") {
     try { state.viewer.onTheme(newTheme); } catch (e) { /* 主题回调失败不影响切换 */ }
   }
-  // Vditor 主题跟随（4.x：setTheme(theme, codeMirrorTheme) 只两参；editorTheme 另调）
+  // Vditor：只更新外壳深浅，不覆盖用户独立选择的 editorTheme/codeTheme/mermaidTheme
   if (vd.inst && vd.ready) {
     try {
-      // 1) 界面深浅 + 代码块主题
-      vd.inst.setTheme(vditorTheme(), vditorCodeTheme());
-      // 2) editorTheme：换 --bg-color/--front-color 等具体颜色变量（正文/标题/表格/代码可读性）
-      if (typeof vd.inst.setEditorTheme === "function") vd.inst.setEditorTheme(vditorEditorTheme());
-      // 3) mermaidTheme：切换内置命名主题，并重渲染图（mermaid 不会自动跟随，需强制重灌内容）
-      vd.inst.vditor.options.mermaidTheme = vditorMermaidTheme();
-      try {
-        const cur = document.getElementById("vditor");
-        if (cur) cur.setAttribute("data-mermaid-theme", vditorMermaidTheme());
-        document.documentElement.setAttribute("data-mermaid-theme", vditorMermaidTheme());
-      } catch {}
-      // 重灌内容触发 mermaid 用新主题重绘（保留脏标记，不影响 dirty 状态）
-      const wasDirty = state.dirty;
-      const t = tabByPath(state.activeTab);
-      const wasTabDirty = t && t.dirty;
-      vd.inst.setValue(vd.inst.getValue());
-      state.dirty = wasDirty;
-      if (t) t.dirty = !!wasTabDirty;
+      vd.inst.setTheme(vditorTheme());
     } catch {}
   }
 }
