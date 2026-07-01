@@ -973,7 +973,7 @@ function closeModal() {
   if (ov) ov.remove();
 }
 // 输入框模态。onSubmit(value) 返回错误字符串则不关闭并展示，返回 null 则关闭。
-function showModal({ title, sub, placeholder, value = "", okLabel = "确定", onSubmit }) {
+function showModal({ title, sub, placeholder, value = "", okLabel = "确定", allowEmpty = false, onSubmit }) {
   closeModal();
   const ov = buildOverlay();
   ov.innerHTML = `
@@ -998,7 +998,7 @@ function showModal({ title, sub, placeholder, value = "", okLabel = "确定", on
 
   const submit = async () => {
     const name = input.value.trim();
-    if (!name) { errEl.textContent = "名称不能为空"; return; }
+    if (!name && !allowEmpty) { errEl.textContent = "名称不能为空"; return; }
     const okBtn = ov.querySelector('[data-act="ok"]');
     okBtn.disabled = true;
     let err;
@@ -1370,6 +1370,7 @@ window.tabIconFor = tabIcon;
 window.highlightTreeRow = highlightTreeRow;
 window.setMsg = setMsg;
 window.fmtSize = fmtSize;
+window.showModal = showModal;
 
 // 激活某个标签：恢复其编辑器内容/视图模式，并渲染
 function activateTab(path) {

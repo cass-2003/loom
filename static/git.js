@@ -172,14 +172,21 @@ async function runGitPush() {
 }
 
 async function runGitStashSave() {
-  const msg = prompt("储藏说明（可留空）：", "");
-  if (msg === null) return false;
-  return withGitBusy("stash", async () => {
-    setGitOut("储藏中…");
-    const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg.trim() });
-    setGitOut(r.output || r.error || "", r.ok);
-    await refreshGit();
-    return !!r.ok;
+  showModal({
+    title: "储藏变更",
+    placeholder: "储藏说明（可留空）",
+    value: "",
+    okLabel: "储藏",
+    allowEmpty: true,
+    onSubmit: async (msg) => {
+      await withGitBusy("stash", async () => {
+        setGitOut("储藏中…");
+        const r = await gpost("/api/git/stash-save", { path: gitCurPath(), message: msg });
+        setGitOut(r.output || r.error || "", r.ok);
+        await refreshGit();
+      });
+      return null;
+    }
   });
 }
 
@@ -1081,14 +1088,21 @@ async function showBranchOps(anchor) {
   pop.style.top = (r.bottom + 4) + "px";
 
   const close = () => pop.remove();
-  pop.querySelector('[data-act="new"]').onclick = async () => {
+  pop.querySelector('[data-act="new"]').onclick = () => {
     close();
-    const name = prompt("新分支名（基于当前分支创建并切换）：", "");
-    if (!name) return;
-    const rr = await gpost("/api/git/branch-create", { path: gitCurPath(), name: name.trim() });
-    setGitOut(rr.output || rr.error || "", rr.ok);
-    gitState.ref = ""; branchesLoaded = "";
-    refreshGit();
+    showModal({
+      title: "新建分支",
+      sub: "基于当前分支创建并切换",
+      placeholder: "分支名",
+      okLabel: "创建",
+      onSubmit: async (name) => {
+        const rr = await gpost("/api/git/branch-create", { path: gitCurPath(), name });
+        setGitOut(rr.output || rr.error || "", rr.ok);
+        gitState.ref = ""; branchesLoaded = "";
+        refreshGit();
+        return rr.ok ? null : (rr.error || "创建失败");
+      }
+    });
   };
   pop.querySelectorAll('[data-act="checkout"]').forEach(b => {
     b.onclick = async () => {

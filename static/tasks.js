@@ -652,24 +652,28 @@
   }
 
   function promptTask() {
-    const title = prompt("任务标题：", "");
-    if (!title || !title.trim()) return;
-    const goal = prompt("任务目标 / 验收标准：", "") || "";
-    const plan = prompt("计划步骤（每行一条）：", "扫描现状\n实现最小闭环\n运行验证\n记录结果") || "";
-    const now = new Date().toISOString().slice(0, 19);
-    tasks.unshift({
-      id: nowId(),
-      title: title.trim(),
-      status: "todo",
-      goal: goal.trim(),
-      plan: lines(plan),
-      evidence: [],
-      log: [],
-      next: "",
-      createdAt: now,
-      updatedAt: now,
+    window.showModal({
+      title: "新建任务",
+      placeholder: "任务标题",
+      okLabel: "创建",
+      onSubmit: (title) => {
+        const now = new Date().toISOString().slice(0, 19);
+        tasks.unshift({
+          id: nowId(),
+          title,
+          status: "todo",
+          goal: "",
+          plan: lines("扫描现状\n实现最小闭环\n运行验证\n记录结果"),
+          evidence: [],
+          log: [],
+          next: "",
+          createdAt: now,
+          updatedAt: now,
+        });
+        saveTasks("已创建任务");
+        return null;
+      }
     });
-    saveTasks("已创建任务");
   }
 
   async function addWorkflowTask(seed) {
@@ -929,31 +933,35 @@
       if (window.setMsg) setMsg("没有可导入的任务或会话", "warn");
       return;
     }
-    const summary = prompt("粘贴外部 Agent / CLI 的执行摘要：", "");
-    if (!summary || !summary.trim()) return;
-    const evidence = lines(prompt("证据路径 / 验证命令（每行一条，可留空）：", "") || "");
-    const now = new Date().toISOString().slice(0, 19);
-    const short = compactText(summary, 420);
-    if (session) {
-      session.status = evidence.length ? "verified" : "running";
-      session.outputs = Array.isArray(session.outputs) ? session.outputs : [];
-      session.outputs.push(short);
-      session.evidence = Array.isArray(session.evidence) ? session.evidence : [];
-      session.evidence.push(...evidence);
-      session.log = Array.isArray(session.log) ? session.log : [];
-      session.log.push(`Imported Agent result at ${now}`);
-    }
-    if (t) {
-      t.status = evidence.length ? "verified" : "running";
-      t.log = Array.isArray(t.log) ? t.log : [];
-      t.log.push(`Agent result imported${session ? " from " + session.id : ""}: ${short}`);
-      t.evidence = Array.isArray(t.evidence) ? t.evidence : [];
-      t.evidence.push(...evidence);
-    }
-    const memoryOk = t ? await appendAgentResultToMemory(t, session, summary.trim(), evidence) : true;
-    const taskOk = t ? await saveTasks() : true;
-    const sessionOk = session ? await saveSessions() : true;
-    if (memoryOk && taskOk && sessionOk && window.setMsg) setMsg("已导入 Agent 结果", "ok");
+    window.showModal({
+      title: "导入 Agent 结果",
+      placeholder: "粘贴外部 Agent / CLI 的执行摘要",
+      okLabel: "导入",
+      onSubmit: async (summary) => {
+        const evidence = [];
+        const now = new Date().toISOString().slice(0, 19);
+        const short = compactText(summary, 420);
+        if (session) {
+          session.status = "running";
+          session.outputs = Array.isArray(session.outputs) ? session.outputs : [];
+          session.outputs.push(short);
+          session.evidence = Array.isArray(session.evidence) ? session.evidence : [];
+          session.log = Array.isArray(session.log) ? session.log : [];
+          session.log.push(`Imported Agent result at ${now}`);
+        }
+        if (t) {
+          t.status = "running";
+          t.log = Array.isArray(t.log) ? t.log : [];
+          t.log.push(`Agent result imported${session ? " from " + session.id : ""}: ${short}`);
+          t.evidence = Array.isArray(t.evidence) ? t.evidence : [];
+        }
+        const memoryOk = t ? await appendAgentResultToMemory(t, session, summary, evidence) : true;
+        const taskOk = t ? await saveTasks() : true;
+        const sessionOk = session ? await saveSessions() : true;
+        if (memoryOk && taskOk && sessionOk && window.setMsg) setMsg("已导入 Agent 结果", "ok");
+        return null;
+      }
+    });
   }
 
   async function createSessionFromTask(id) {
@@ -1007,12 +1015,18 @@
   function addTaskLine(id, field, label) {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
-    const text = prompt(label + "：", "");
-    if (!text || !text.trim()) return;
-    t[field] = Array.isArray(t[field]) ? t[field] : [];
-    t[field].push(text.trim());
-    if (field === "evidence" && t.status !== "verified") t.status = "running";
-    saveTasks("已更新任务");
+    window.showModal({
+      title: label,
+      placeholder: label,
+      okLabel: "添加",
+      onSubmit: (text) => {
+        t[field] = Array.isArray(t[field]) ? t[field] : [];
+        t[field].push(text);
+        if (field === "evidence" && t.status !== "verified") t.status = "running";
+        saveTasks("已更新任务");
+        return null;
+      }
+    });
   }
 
   function setTaskStatus(id, status) {
