@@ -2425,10 +2425,11 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   border-bottom: 1px solid var(--border-soft);
   background: #171717;
   gap: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
+  flex-wrap: wrap;
 }
-#vditor .vditor-toolbar::-webkit-scrollbar { height: 0; display: none; }
+#vditor .vditor-toolbar .vditor-hint,
+#vditor .vditor-toolbar .vditor-panel--arrow { z-index: 100; }
 #vditor .vditor-toolbar .vditor-toolbar__item {
   height: 26px;
   min-width: 25px;
