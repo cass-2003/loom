@@ -1369,7 +1369,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 /* ===== 项目记忆视图 ===== */
 #project-body {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
-  gap: 8px; padding: 8px 10px 12px; overflow: hidden;
+  gap: 8px; padding: 8px 10px 12px; overflow-y: auto; overflow-x: hidden;
 }
 .project-recovery {
   border: 1px solid color-mix(in srgb, var(--cyan) 21%, var(--border-soft));
@@ -1721,7 +1721,7 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 /* ===== Skills / Playbooks 视图 ===== */
 #eco-body {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
-  gap: 8px; padding: 8px 10px 12px; overflow: hidden;
+  gap: 8px; padding: 8px 10px 12px; overflow-y: auto; overflow-x: hidden;
 }
 .eco-note {
   padding: 9px 10px; border: 1px solid var(--border-soft); border-radius: 9px;
