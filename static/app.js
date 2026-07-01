@@ -3586,10 +3586,14 @@ function toggleTheme() {
   if (state.kind === "viewer" && state.viewer && typeof state.viewer.onTheme === "function") {
     try { state.viewer.onTheme(newTheme); } catch (e) { /* 主题回调失败不影响切换 */ }
   }
-  // Vditor：只更新外壳深浅，不覆盖用户独立选择的 editorTheme/codeTheme/mermaidTheme
+  // Vditor：外壳深浅切换时同步 editorTheme，保持一致
   if (vd.inst && vd.ready) {
     try {
-      vd.inst.setTheme(vditorTheme());
+      localStorage.removeItem("loom-vditor-editor-theme");
+      localStorage.removeItem("loom-vditor-code-theme");
+      localStorage.removeItem("loom-vditor-mermaid-theme");
+      vd.inst.setTheme(vditorTheme(), vditorCodeTheme());
+      if (typeof vd.inst.setEditorTheme === "function") vd.inst.setEditorTheme(vditorEditorTheme());
     } catch {}
   }
 }
