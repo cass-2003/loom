@@ -2545,14 +2545,14 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 #vditor .vditor-reset h1 {
   margin: .1em 0 .7em;
   padding-bottom: .28em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-color, #444c56);
   font-size: 1.8em;
   line-height: 1.25;
 }
 #vditor .vditor-reset h2 {
   margin: 1.35em 0 .68em;
   padding-bottom: .26em;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-color, #444c56);
   font-size: 1.42em;
   line-height: 1.3;
 }
@@ -2594,9 +2594,13 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   border-radius: 0;
   background: var(--table-body-bg, var(--bg-color));
 }
-#vditor .vditor-reset table th,
+#vditor .vditor-reset table th {
+  background: var(--table-header-bg, #21262d);
+  border-color: var(--table-border, var(--border-color, #444c56));
+  font-weight: 600;
+}
 #vditor .vditor-reset table td {
-  border-color: var(--table-border, var(--border-color, #333));
+  border-color: var(--table-border, var(--border-color, #444c56));
 }
 #vditor .vditor-reset hr {
   height: 1px;
