@@ -129,20 +129,23 @@ function vditorTheme() {
 // 这些 editor-theme 配色块（Light / Github Dark 等）已内联打包进 vditor/dist/index.css
 // （选择器形如 #vditor[data-editor-theme=Github\ Dark]{--bg-color:#0d1117;...}），无需额外引 CSS。
 function vditorEditorTheme() {
-  const saved = localStorage.getItem("loom-vditor-editor-theme");
+  const mode = isLightTheme() ? "light" : "dark";
+  const saved = localStorage.getItem("loom-vditor-editor-theme-" + mode);
   if (saved) return saved;
   return isLightTheme() ? "Light" : "Github Dark";
 }
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
 // 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
 function vditorMermaidTheme() {
-  const saved = localStorage.getItem("loom-vditor-mermaid-theme");
+  const mode = isLightTheme() ? "light" : "dark";
+  const saved = localStorage.getItem("loom-vditor-mermaid-theme-" + mode);
   if (saved) return saved;
   return isLightTheme() ? "Light" : "Dark";
 }
 // 代码块高亮主题（codeMirrorTheme 用于 ``` 块的代码主题）
 function vditorCodeTheme() {
-  const saved = localStorage.getItem("loom-vditor-code-theme");
+  const mode = isLightTheme() ? "light" : "dark";
+  const saved = localStorage.getItem("loom-vditor-code-theme-" + mode);
   if (saved) return saved;
   return isLightTheme() ? "Github" : "One Dark";
 }
@@ -420,9 +423,9 @@ function ensureVditor(initialValue, onReady) {
     placeholder: "开始书写 Markdown...",
     upload: { accept: "image/*", handler: vditorUploadHandler },
     hint: { extend: vditorLatexHints() },
-    changeEditorTheme(theme) { localStorage.setItem("loom-vditor-editor-theme", theme); },
-    changeCodeTheme(theme) { localStorage.setItem("loom-vditor-code-theme", theme); },
-    changeMermaidTheme(theme) { localStorage.setItem("loom-vditor-mermaid-theme", theme); },
+    changeEditorTheme(theme) { const m = isLightTheme() ? "light" : "dark"; localStorage.setItem("loom-vditor-editor-theme-" + m, theme); },
+    changeCodeTheme(theme) { const m = isLightTheme() ? "light" : "dark"; localStorage.setItem("loom-vditor-code-theme-" + m, theme); },
+    changeMermaidTheme(theme) { const m = isLightTheme() ? "light" : "dark"; localStorage.setItem("loom-vditor-mermaid-theme-" + m, theme); },
     changeEditMode(mode) { localStorage.setItem("loom-vditor-edit-mode", mode); },
     input() {
       // 标记当前 md 标签为脏（复用现有 dirty 机制）
@@ -3586,12 +3589,9 @@ function toggleTheme() {
   if (state.kind === "viewer" && state.viewer && typeof state.viewer.onTheme === "function") {
     try { state.viewer.onTheme(newTheme); } catch (e) { /* 主题回调失败不影响切换 */ }
   }
-  // Vditor：外壳深浅切换时同步 editorTheme，保持一致
+  // Vditor：外壳切换时同步，恢复该模式下用户上次选的主题
   if (vd.inst && vd.ready) {
     try {
-      localStorage.removeItem("loom-vditor-editor-theme");
-      localStorage.removeItem("loom-vditor-code-theme");
-      localStorage.removeItem("loom-vditor-mermaid-theme");
       vd.inst.setTheme(vditorTheme(), vditorCodeTheme());
       if (typeof vd.inst.setEditorTheme === "function") vd.inst.setEditorTheme(vditorEditorTheme());
     } catch {}
