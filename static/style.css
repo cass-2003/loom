@@ -21,6 +21,7 @@
   --hover: #1e1e22;
   --sel: #26262b;
   --code-bg: #050506;
+  --on-accent: #11131e;
   --radius: 8px;
 }
 /* ===== 浅色 ===== */
@@ -46,6 +47,7 @@
   --hover: #eef0f3;
   --sel: #e3efe7;
   --code-bg: #0d0d0f;  /* 代码块保持深底，配合语法高亮 */
+  --on-accent: #fff;
   --radius: 8px;
 }
 * { box-sizing: border-box; }
@@ -109,12 +111,12 @@ body.desktop.maximized #app { border: none; }
   padding: 6px 13px; border-radius: var(--radius); cursor: pointer;
   font-size: 13px; font-family: inherit; transition: background .12s, border-color .12s;
 }
-.btn:hover { background: var(--hover); border-color: #39406a; }
+.btn:hover { background: var(--hover); border-color: var(--border); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 .btn:disabled:hover { background: var(--panel); border-color: var(--border); }
 .btn .icn { opacity: .85; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #11131e; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-press); border-color: var(--accent-press); }
 .btn.primary .icn { opacity: 1; }
 .btn.ghost { background: transparent; }
@@ -159,7 +161,7 @@ body.desktop.maximized #app { border: none; }
 }
 .badge {
   position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px;
-  background: var(--accent); color: #11131e; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); border-radius: 8px;
   font-size: 10px; line-height: 16px; padding: 0 4px; font-weight: 700;
   box-shadow: 0 0 0 2px var(--bg3);
 }
@@ -296,7 +298,7 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
   background: var(--bg-soft); color: var(--text-dim);
 }
 .modal-box .modal-btn:hover { background: var(--hover); color: var(--text); }
-.modal-box .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #11131e; font-weight: 600; }
+.modal-box .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .modal-box .modal-btn.primary:hover { background: var(--accent-press); }
 .modal-box .modal-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 .modal-box .modal-btn.danger:hover { filter: brightness(1.08); }
@@ -433,7 +435,7 @@ body.sidebar-collapsed #act-sidebar-toggle .icn {
 }
 .welcome-btn:hover { background: var(--bg-soft); border-color: var(--accent); }
 .welcome-btn:active { transform: translateY(1px); }
-.welcome-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.welcome-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .welcome-btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
 .welcome-btn .i { display: flex; }
 .welcome-btn.small { padding: 6px 16px; font-size: 13px; }
@@ -771,7 +773,7 @@ body.markdown-active #btn-view-edit {
   transition: color .12s, background .12s;
 }
 .tool-tab:hover { color: var(--text); }
-.tool-tab.active { color: #11131e; background: var(--accent); font-weight: 600; }
+.tool-tab.active { color: var(--on-accent); background: var(--accent); font-weight: 600; }
 #tool-body { flex: 1; overflow: auto; padding: 14px; }
 #tool-body label, #git-body label { display: block; font-size: 12px;
   color: var(--muted); margin: 10px 0 5px; }
@@ -819,7 +821,7 @@ body.markdown-active #btn-view-edit {
 .td-stat { padding: 4px 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
 .td-stat-add { color: var(--accent2, #3fb950); }
 .td-stat-del { color: var(--danger); }
-mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; padding: 0 1px; }
+mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius: 2px; padding: 0 1px; }
 #t-re-out { padding: 8px; white-space: pre-wrap; word-break: break-word; }
 .color-preview { height: 46px; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
 .col-line { margin: 3px 0; }
@@ -845,7 +847,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 #git-msg:focus { outline: none; border-color: var(--accent); }
 .scm-commit { display: flex; align-items: center; justify-content: center; gap: 7px;
   width: calc(100% - 4px); margin: 7px 2px 4px; padding: 7px; cursor: pointer;
-  background: var(--accent); color: #07140c; border: none; border-radius: 6px;
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: 6px;
   font-family: inherit; font-size: 13px; font-weight: 600; transition: background .12s; }
 .scm-commit:hover { background: var(--accent-press); }
 .scm-commit:active { transform: translateY(1px); }
@@ -854,7 +856,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   background: var(--panel); transform: none;
 }
 .scm-commit:disabled:hover { background: var(--panel); }
-:root[data-theme="light"] .scm-commit { color: #fff; }
+:root[data-theme="light"] .scm-commit { color: var(--on-accent); }
 :root[data-theme="light"] .scm-commit:disabled { color: var(--muted); }
 
 /* 分区 */
@@ -1281,10 +1283,10 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 #todo-input:focus { border-color: var(--accent); }
 .notes-add-btn {
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 32px; height: 32px; cursor: pointer; color: #07140c;
+  width: 32px; height: 32px; cursor: pointer; color: var(--on-accent);
   background: var(--accent); border: none; border-radius: 7px; transition: background .12s;
 }
-:root[data-theme="light"] .notes-add-btn { color: #fff; }
+:root[data-theme="light"] .notes-add-btn { color: var(--on-accent); }
 .notes-add-btn:hover { background: var(--accent-press); }
 .notes-add-btn:active { transform: translateY(1px); }
 .notes-add-btn:disabled,
@@ -1327,9 +1329,9 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .todo-row.done .todo-check { background: var(--accent); border-color: var(--accent); }
 .todo-row.done .todo-check::after {
   content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
-  border: solid #07140c; border-width: 0 2px 2px 0; transform: rotate(45deg);
+  border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
-:root[data-theme="light"] .todo-row.done .todo-check::after { border-color: #fff; }
+:root[data-theme="light"] .todo-row.done .todo-check::after { border-color: var(--on-accent); }
 .todo-text { flex: 1; min-width: 0; cursor: text; word-break: break-word; line-height: 1.4; }
 .todo-row.done .todo-text { text-decoration: line-through; color: var(--muted); }
 .todo-edit {
@@ -2065,7 +2067,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 }
 .set-ctl.seg button:first-child { border-left: none; }
 .set-ctl.seg button:hover { background: var(--hover); color: var(--text); }
-.set-ctl.seg button.on { background: var(--accent); color: #11131e; font-weight: 600; }
+.set-ctl.seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .set-ctl.swatches { gap: 8px; }
 .swatch {
   width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
@@ -2149,7 +2151,7 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
   pointer-events: none;
 }
 .term-dock-hint-label {
-  color: #fff; font-size: 13px; font-weight: 600;
+  color: var(--on-accent); font-size: 13px; font-weight: 600;
   background: var(--accent); padding: 4px 11px; border-radius: 6px;
   box-shadow: 0 2px 10px rgba(0,0,0,.35);
 }
@@ -2338,12 +2340,12 @@ mark.re-hit { background: var(--accent); color: #11131e; border-radius: 2px; pad
 .tab-run-btn {
   position: absolute; top: 5px; right: 10px; z-index: 30;
   display: inline-flex; align-items: center; gap: 5px;
-  background: var(--accent); color: #11131e; border: none;
+  background: var(--accent); color: var(--on-accent); border: none;
   border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600;
   cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25);
 }
 .tab-run-btn:hover { background: var(--accent-press); }
-.tab-run-btn .icn { color: #11131e; }
+.tab-run-btn .icn { color: var(--on-accent); }
 
 /* ===== Workbench Markdown / Vditor：贴近 vscode-office 的编辑器布局 ===== */
 #vditor.vditor {
