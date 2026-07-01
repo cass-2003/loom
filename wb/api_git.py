@@ -101,8 +101,8 @@ class GitMixin:
         head_code, _, _ = run_git(["rev-parse", "--verify", "HEAD"], repo)
         # 唯一文件数（一个文件可能同时在两组）作为徽标计数
         changed = len({e["repoPath"] for e in staged + unstaged})
-        return self._json({"repo": repo_rel, "branch": branch,
-                           "hasHead": head_code == 0,
+        return self._json({"repo": repo_rel, "repoPath": str(repo),
+                           "branch": branch, "hasHead": head_code == 0,
                            "ahead": ahead, "behind": behind,
                            "staged": staged, "unstaged": unstaged, "changed": changed})
 

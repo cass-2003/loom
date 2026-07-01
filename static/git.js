@@ -374,6 +374,23 @@ async function refreshGit() {
     return;
   }
 
+  // 多仓库选择器
+  const repoSel = document.querySelector("#git-repo-selector");
+  if (repoSel) {
+    gjson("/api/git/repos").then(rd => {
+      if (!rd.repos || rd.repos.length <= 1) { repoSel.classList.add("hidden"); return; }
+      repoSel.classList.remove("hidden");
+      const curRepo = d.repoPath || d.repo || "";
+      repoSel.innerHTML = `<select id="git-repo-pick" title="切换仓库">`
+        + rd.repos.map(r => `<option value="${escapeHtml(r.abs)}"${r.abs === curRepo || curRepo.endsWith(r.path) ? " selected" : ""}>${escapeHtml(r.path)}</option>`).join("")
+        + `</select>`;
+      document.querySelector("#git-repo-pick").onchange = function () {
+        if (window.openFile) window.openFile(this.value + "/.");
+        setTimeout(refreshGit, 300);
+      };
+    }).catch(() => {});
+  }
+
   const branch = d.branch || "(无分支)";
   gitState.branch = branch;
   let chip = escapeHtml(branch);

@@ -838,6 +838,11 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 .head-actions { display: flex; gap: 2px; }
 #git-body { flex: 1; overflow: auto; padding: 10px 10px 14px; display: flex; flex-direction: column; }
 
+/* 仓库选择器 */
+.scm-repo-selector { padding: 4px 8px; }
+.scm-repo-selector select { width: 100%; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-size: 12px; cursor: pointer; }
+
 /* 提交输入 + 按钮 */
 .scm-input { margin: 0 2px; }
 #git-msg { width: 100%; min-height: 30px; background: var(--bg3); color: var(--text);
