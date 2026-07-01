@@ -2438,18 +2438,26 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
   display: inline-flex;
   align-items: center;
 }
+#vditor .vditor-toolbar .vditor-toolbar__item button,
+#vditor .vditor-toolbar .vditor-toolbar__item span,
+#vditor .vditor-toolbar .vditor-toolbar__item svg {
+  color: #b0b0b4;
+  fill: #b0b0b4;
+}
 #vditor .vditor-toolbar .vditor-toolbar__item button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 26px;
   padding: 0 5px;
-  color: #b0b0b4;
   border-radius: 4px;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item button svg { width: 15px; height: 15px; }
-:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item button {
+:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item button,
+:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item span,
+:root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item svg {
   color: #4b4f56;
+  fill: #4b4f56;
 }
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
   position: relative;
@@ -2466,8 +2474,10 @@ mark.re-hit { background: var(--accent); color: var(--on-accent); border-radius:
 :root[data-theme="light"] #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"] {
   color: #4b4f56;
 }
-#vditor .vditor-toolbar .vditor-toolbar__item button:hover {
-  color: var(--text);
+#vditor .vditor-toolbar .vditor-toolbar__item button:hover,
+#vditor .vditor-toolbar .vditor-toolbar__item button:hover span,
+#vditor .vditor-toolbar .vditor-toolbar__item button:hover svg {
+  color: var(--text); fill: var(--text);
   background: var(--hover);
 }
 #vditor .vditor-toolbar .vditor-toolbar__item > div[data-type="upload"]:hover {
