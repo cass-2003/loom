@@ -3601,3 +3601,53 @@ updateWorkspaceActionState();
   if (window.split && window.split.restore) { try { await window.split.restore(); } catch (_) {} }
   if (currentRoot && !state.tabs.length && !state.activeTab) showEmptyWorkspace(currentRoot);
 })();
+
+// --- Session snapshot auto-save & restore ---
+(function initSessionPersistence() {
+  const SESSION_KEY = "wb-session-snapshot";
+  let lastSnapshotJSON = "";
+
+  function saveSessionSnapshot() {
+    try {
+      const snap = getWorkspaceLayoutSnapshot();
+      const json = JSON.stringify({
+        workspaceId: snap.workspaceId,
+        activeFile: snap.activeFile,
+        main: snap.main,
+        ui: snap.ui,
+        savedAt: Date.now(),
+      });
+      if (json !== lastSnapshotJSON) {
+        localStorage.setItem(SESSION_KEY, json);
+        lastSnapshotJSON = json;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreSessionSnapshot() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (!snap || !snap.workspaceId) return;
+      const current = getWorkspaceLayoutSnapshot();
+      if (snap.workspaceId !== current.workspaceId) return;
+      if (snap.main && Array.isArray(snap.main.tabs)) {
+        const paths = snap.main.tabs.map(t => t.path).filter(Boolean);
+        if (paths.length && window.openFile) {
+          paths.forEach(p => window.openFile(p));
+          if (snap.main.active && window.openFile) {
+            setTimeout(() => window.openFile(snap.main.active), 100);
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  setInterval(saveSessionSnapshot, 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) saveSessionSnapshot();
+  });
+  window.addEventListener("beforeunload", saveSessionSnapshot);
+  setTimeout(restoreSessionSnapshot, 500);
+})();
