@@ -256,6 +256,7 @@ class Handler(FilesMixin, GitMixin, TerminalMixin, ProjectMixin, BaseHTTPRequest
             "/api/recent/remove": "_api_recent_remove",
             "/api/project-state/append": "_api_project_state_append",
             "/api/project-state/save": "_api_project_state_save",
+            "/api/playbook/run": "_api_playbook_run",
         }
         if parsed.path in post_routes:
             handler = getattr(self, post_routes[parsed.path], None)

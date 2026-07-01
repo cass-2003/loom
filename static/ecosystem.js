@@ -255,6 +255,7 @@
         ${actionButton("copy-preview", "复制预览包")}
         ${actionButton("task", "创建任务")}
         ${actionButton("copy", "复制验证命令")}
+        ${item.kind === "playbook" ? actionButton("run-step", "▶ 运行步骤") : ""}
       </div>
     </article>`;
   }
@@ -297,6 +298,9 @@
     }
     if (action === "open" && item && item.source !== "builtin" && !window.openFile) {
       return { enabled: false, reason: "文件打开能力尚未就绪" };
+    }
+    if (action === "run-step" && (!item || item.kind !== "playbook")) {
+      return { enabled: false, reason: "仅 Playbook 支持运行步骤" };
     }
     return { enabled: true, reason: "" };
   }
@@ -380,6 +384,40 @@
       const text = (item.verification || []).join("\n");
       await copyText(text, "已复制验证命令", "复制验证命令：");
       return true;
+    }
+    if (action === "run-step") {
+      const blocks = [];
+      const re = /```(?:bash|sh|shell|cmd|powershell)\s+name=(\S+)\s*\n[\s\S]*?```/g;
+      let m;
+      while ((m = re.exec(item.content || "")) !== null) blocks.push(m[1]);
+      if (!blocks.length) { if (window.setMsg) window.setMsg("该 Playbook 没有可执行的命名步骤", "warn"); return false; }
+      let stepName;
+      if (blocks.length === 1) {
+        stepName = blocks[0];
+      } else if (window.showModal) {
+        stepName = await window.showModal("选择要执行的步骤", blocks.join(", "));
+      } else {
+        stepName = prompt("输入步骤名: " + blocks.join(", "));
+      }
+      if (!stepName || !blocks.includes(stepName.trim())) {
+        if (stepName !== null && window.setMsg) window.setMsg("无效步骤名", "warn");
+        return false;
+      }
+      if (window.setMsg) window.setMsg(`正在执行步骤 ${stepName}...`, "ok");
+      try {
+        const resp = await fetch("/api/playbook/run", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: item.path, step: stepName.trim() })
+        });
+        const data = await resp.json();
+        if (data.error) { if (window.setMsg) window.setMsg(data.error, "error"); return false; }
+        const msg = data.ok ? `步骤 ${stepName} 成功 (exit ${data.code})` : `步骤 ${stepName} 失败 (exit ${data.code})`;
+        if (window.setMsg) window.setMsg(msg, data.ok ? "ok" : "error");
+        return data.ok;
+      } catch (e) {
+        if (window.setMsg) window.setMsg("执行请求失败: " + e.message, "error");
+        return false;
+      }
     }
     return false;
   }

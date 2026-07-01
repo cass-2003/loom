@@ -521,6 +521,52 @@ class ProjectMixin:
             "hasWorkspace": has_workspace(),
         })
 
+    # ---------- 段 8b: Playbook 执行 ----------
+
+    def _api_playbook_run(self, body):
+        """执行 Playbook 中的命名步骤。"""
+        path = str(body.get("path") or "").strip()
+        step_name = str(body.get("step") or "").strip()
+        if not path or not step_name:
+            return self._err("缺少 path 或 step")
+        target = None
+        for root in current_workspace_roots():
+            candidate = safe_resolve(root, path)
+            if candidate and candidate.is_file():
+                target = candidate
+                break
+        if not target:
+            candidate = (wb.state.BUNDLE_DIR / path).resolve()
+            if candidate.is_file() and wb.state.BUNDLE_DIR in candidate.parents:
+                target = candidate
+        if not target:
+            return self._err("Playbook 文件未找到")
+        try:
+            text = target.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            return self._err("读取 Playbook 失败")
+        blocks = re.findall(
+            r'```(?:bash|sh|shell|cmd|powershell)\s+name=(\S+)\s*\n(.*?)```',
+            text, re.DOTALL
+        )
+        cmd = None
+        for name, content in blocks:
+            if name == step_name:
+                cmd = content.strip()
+                break
+        if not cmd:
+            return self._err(f"未找到步骤: {step_name}")
+        from wb.run import run_shell
+        cwd = current_workspace_roots()[0] if current_workspace_roots() else wb.state.ROOT or Path(".")
+        code, stdout, stderr = run_shell(cmd, cwd, timeout=30)
+        return self._json({
+            "ok": code == 0,
+            "step": step_name,
+            "code": code,
+            "stdout": stdout[:8000],
+            "stderr": stderr[:4000],
+        })
+
     # ---------- 段 9: 工作区 API ----------
 
     def _resolve_workspace_root(self, raw, *, create=False):
