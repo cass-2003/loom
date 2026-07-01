@@ -136,6 +136,8 @@ function vditorEditorTheme() {
 // Vditor 4.x mermaidTheme：用 mermaid 内置命名主题（Light→default / Dark→dark），
 // 避免走 Auto 分支从空 CSS 变量取色导致 "Unsupported color format: ''"。
 function vditorMermaidTheme() {
+  const saved = localStorage.getItem("loom-vditor-mermaid-theme");
+  if (saved) return saved;
   return isLightTheme() ? "Light" : "Dark";
 }
 // 代码块高亮主题（codeMirrorTheme 用于 ``` 块的代码主题）
@@ -172,6 +174,35 @@ async function vditorUploadHandler(files) {
   return null;  // 阻止默认上传
 }
 
+// LaTeX 符号自动补全（输入 \ 触发，学习自 vscode-office hotKeys）
+function vditorLatexHints() {
+  const syms = [
+    { name: "alpha", value: "\\alpha" }, { name: "beta", value: "\\beta" },
+    { name: "delta", value: "\\delta" }, { name: "Delta", value: "\\Delta" },
+    { name: "epsilon", value: "\\epsilon" }, { name: "theta", value: "\\theta" },
+    { name: "lambda", value: "\\lambda" }, { name: "phi", value: "\\phi" },
+    { name: "omega", value: "\\omega" }, { name: "Omega", value: "\\Omega" },
+    { name: "pi", value: "\\pi" }, { name: "sigma", value: "\\sigma" },
+    { name: "sin", value: "\\sin" }, { name: "cos", value: "\\cos" }, { name: "tan", value: "\\tan" },
+    { name: "log", value: "\\log" }, { name: "sum", value: "\\sum_{i=0}^n" },
+    { name: "frac", value: "\\frac{}{}" }, { name: "sqrt", value: "\\sqrt{}" },
+    { name: "times", value: "\\times" }, { name: "pm", value: "\\pm" },
+    { name: "leq", value: "\\leq" }, { name: "geq", value: "\\geq" },
+    { name: "neq", value: "\\neq" }, { name: "approx", value: "\\approx" },
+    { name: "rightarrow", value: "\\rightarrow" }, { name: "leftarrow", value: "\\leftarrow" },
+    { name: "forall", value: "\\forall" }, { name: "exists", value: "\\exists" },
+    { name: "infty", value: "\\infty" }, { name: "int", value: "\\int" },
+  ];
+  return [{
+    key: "\\",
+    hint(key) {
+      if (document.getSelection()?.anchorNode?.parentElement?.getAttribute("data-type") !== "math-inline") return [];
+      const list = key ? syms.filter(s => s.name.toLowerCase().startsWith(key.toLowerCase())) : syms;
+      return list.map(s => ({ html: s.name, value: s.value }));
+    },
+  }];
+}
+
 // 双击/Ctrl+点击链接在新窗口打开（学习自 vscode-office）
 function vditorOpenLink() {
   const isCompose = (e) => e.ctrlKey || e.metaKey;
@@ -201,19 +232,49 @@ function vditorOpenLink() {
   });
 }
 
-// 自动配对括号/引号（学习自 vscode-office autoSymbol）
+// 自动配对 + 快捷键 + 粘贴修复（学习自 vscode-office autoSymbol）
 function vditorAutoSymbol() {
   const pairs = { "(": ")", "{": "}", '"': '"' };
-  const el = document.querySelector(".vditor-wysiwyg");
-  if (!el) return;
-  el.addEventListener("keydown", (e) => {
+  const isCompose = (e) => e.ctrlKey || e.metaKey;
+  // execCommand('delete') 延迟补丁——修复 Vditor 删除时序 bug
+  const _exec = document.execCommand.bind(document);
+  document.execCommand = (cmd, ...args) => {
+    if (cmd === "delete") { setTimeout(() => _exec(cmd, ...args)); }
+    else { return _exec(cmd, ...args); }
+  };
+  window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
+    // Ctrl+S → 触发保存
+    if (isCompose(e) && e.code === "KeyS") {
+      e.preventDefault(); e.stopPropagation();
+      document.getElementById("btn-save")?.click();
+      return;
+    }
+    // Ctrl+V → 修复 Vditor 粘贴（先删选中文本）
+    if (isCompose(e) && e.code === "KeyV") {
+      const wy = document.querySelector(".vditor-wysiwyg");
+      if (!wy?.contains(document.activeElement) && document.activeElement !== wy) return;
+      if (e.shiftKey) {
+        navigator.clipboard.readText().then(t => { if (t) document.execCommand("insertText", false, t.trim()); });
+        e.preventDefault(); e.stopPropagation();
+      } else if (document.getSelection()?.toString()) {
+        document.execCommand("delete");
+      }
+      return;
+    }
+    // 自动配对括号/引号
     const closing = pairs[e.key];
     if (!closing) return;
+    const wy = document.querySelector(".vditor-wysiwyg");
+    if (!wy?.contains(document.activeElement) && document.activeElement !== wy) return;
     const sel = document.getSelection();
     if (sel && sel.toString()) return;
     document.execCommand("insertText", false, closing);
     sel.modify("move", "left", "character");
+  });
+  window.addEventListener("resize", () => {
+    const el = document.getElementById("vditor");
+    if (el) el.style.height = "100%";
   });
 }
 
@@ -261,6 +322,9 @@ function vditorContextMenu() {
     } else if (act === "selectAll") {
       const reset = document.querySelector(".vditor-wysiwyg pre.vditor-reset");
       if (reset) { const r = document.createRange(); r.selectNodeContents(reset); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+    } else if (act === "insertImage") {
+      const input = document.querySelector('#vditor .vditor-toolbar input[type="file"]');
+      if (input) input.click();
     }
   });
   hydrateIcons(menu);
@@ -279,7 +343,7 @@ function ensureVditor(initialValue, onReady) {
   vd.pendingMount = onReady || null;
   vd.inst = new Vditor("vditor", {
     cdn: "/static/vendor/vditor",
-    mode: "wysiwyg",
+    mode: localStorage.getItem("loom-vditor-edit-mode") || "wysiwyg",
     height: "100%",
     value: initialValue || "",
     cache: { enable: false },
@@ -308,8 +372,11 @@ function ensureVditor(initialValue, onReady) {
     tab: "\t",
     placeholder: "开始书写 Markdown...",
     upload: { accept: "image/*", handler: vditorUploadHandler },
+    hint: { extend: vditorLatexHints() },
     changeEditorTheme(theme) { localStorage.setItem("loom-vditor-editor-theme", theme); },
     changeCodeTheme(theme) { localStorage.setItem("loom-vditor-code-theme", theme); },
+    changeMermaidTheme(theme) { localStorage.setItem("loom-vditor-mermaid-theme", theme); },
+    changeEditMode(mode) { localStorage.setItem("loom-vditor-edit-mode", mode); },
     input() {
       // 标记当前 md 标签为脏（复用现有 dirty 机制）
       if (!vd.ready) return;
